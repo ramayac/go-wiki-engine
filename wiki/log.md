@@ -2,6 +2,26 @@
 
 Append-only timeline of wiki maintenance activity.
 
+## [2026-04-17] ingest | AI entrypoint gap (shim files)
+
+Triggered by recognising that non-Copilot AI tools (Claude Code, cursor, etc.) have no path to the wiki without AGENTS.md/CLAUDE.md shims.
+
+**Added:**
+- `scaffold/AGENTS.md` and `scaffold/CLAUDE.md` — shim templates that redirect to `wiki/index.md`.
+- `syncShims()` internal helper in `internal/scaffold/scaffold.go` — create-only semantics, called by both `Init()` and `SyncPrompts()`.
+- 4 new tests in `internal/scaffold/scaffold_test.go` (9 total, all passing).
+- `wiki/lessons.md` — 4th entry: AI entrypoint gap.
+- `wiki/repo-map.md` — updated scaffold section, high-signal area, and init subcommand description.
+
+**Source changes that drove this entry:**
+- `scaffold/AGENTS.md` (new), `scaffold/CLAUDE.md` (new)
+- `internal/scaffold/scaffold.go` — `syncShims()` added, wired into `Init()` and `SyncPrompts()`
+- `cmd/wiki-engine/main.go` — init success message updated
+
+**Changed:** nothing removed.
+
+**Needs human review:** Run `wiki-engine sync-prompts` in Mana-world-shift to install the new shims there (AGENTS.md already exists as a stub — it will be preserved).
+
 ## [2026-04-16] ingest | sync-prompts gap, cold-start gap, external-docs gap
 
 Triggered by a full onboarding session on Mana-world-shift and the resulting improvements fed back into go-wiki-engine.

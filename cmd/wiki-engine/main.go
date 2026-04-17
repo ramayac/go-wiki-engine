@@ -67,7 +67,7 @@ func runInit() {
 	if err := scaffold.Init(dir, wikiDir); err != nil {
 		fatal(err)
 	}
-	fmt.Fprintf(os.Stderr, "initialized %s/ with wiki scaffold, .wikirc, prompts, and instructions\n", wikiDir)
+	fmt.Fprintf(os.Stderr, "initialized %s/ with wiki scaffold, .wikirc, prompts, instructions, and AGENTS.md/CLAUDE.md shims\n", wikiDir)
 	fmt.Fprintln(os.Stderr, "next steps:")
 	fmt.Fprintln(os.Stderr, "  1. Edit .wikirc to set your ignore patterns")
 	fmt.Fprintln(os.Stderr, "  2. Edit wiki/repo-map.md with your project's architecture")

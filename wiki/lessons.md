@@ -82,3 +82,33 @@ Added the same step to the `wiki-onboard` prompt (step 2) so cold-starts catch i
 ### Key design principle confirmed
 
 **The wiki is the single source of truth.** Any durable knowledge living outside `wiki/` will drift. The ingest loop must actively look for and absorb external knowledge files, not just react to git diffs of source code.
+
+---
+
+## 2026-04-17 — The AI entrypoint gap
+
+### What happened
+
+A repo initialized with `wiki-engine init` had a well-populated wiki. But when a developer opened the repo in a new AI tool (e.g., Claude Code or a different agent runtime), the agent had no idea the wiki existed. It would scan the file tree, find source code, and start reasoning from scratch — ignoring `wiki/index.md` entirely.
+
+The convention files that AI tools consult on startup (`AGENTS.md`, `CLAUDE.md`) were either missing or — as in the Mana-world-shift session — contained full hand-written documentation that duplicated or diverged from the wiki.
+
+### Why it matters
+
+The wiki has no value if agents never read it. The prompts and instructions in `.github/` only help tools that already know to look there (VS Code Copilot with the extension installed). Tools that use `AGENTS.md` or `CLAUDE.md` as their context entrypoint would completely bypass the wiki system.
+
+This compounds the external-docs problem: instead of one place for truth, you get three (wiki, AGENTS.md, CLAUDE.md) that drift independently.
+
+### The fix
+
+Added `AGENTS.md` and `CLAUDE.md` as **shim files** in the scaffold. Both files redirect to `wiki/index.md` with a single sentence. They are:
+
+- Created by `wiki-engine init` if they do not exist
+- Created by `wiki-engine sync-prompts` if they do not exist (so existing repos can get them without re-initing)
+- **Never overwritten** if they already exist — user-customised content is preserved
+
+The same create-only semantics that `Init` already used for `.wikirc` are now applied to these files via the internal `syncShims()` helper.
+
+### Key design principle confirmed
+
+**Match the conventions of every tool in the ecosystem.** Different AI tools look for context in different places. The scaffold should install shims for all known entrypoint conventions, each pointing back to the single source of truth.

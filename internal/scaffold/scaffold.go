@@ -14,6 +14,32 @@ import (
 //go:embed all:files
 var files embed.FS
 
+// shimFiles are root-level files created with create-only semantics: written
+// on init and sync-prompts only when they do not already exist. This prevents
+// overwriting user-customised entrypoint files.
+var shimFiles = []string{"AGENTS.md", "CLAUDE.md"}
+
+// syncShims copies the shim files (AGENTS.md, CLAUDE.md) into destDir only
+// when they do not already exist. Returns the names of files written.
+func syncShims(destDir string) ([]string, error) {
+	var created []string
+	for _, name := range shimFiles {
+		dest := filepath.Join(destDir, name)
+		if _, err := os.Stat(dest); err == nil {
+			continue // already exists — never overwrite user content
+		}
+		data, err := files.ReadFile("files/" + name)
+		if err != nil {
+			continue // not in embedded FS — skip silently
+		}
+		if err := os.WriteFile(dest, data, 0o644); err != nil {
+			return created, err
+		}
+		created = append(created, name)
+	}
+	return created, nil
+}
+
 // Init copies the scaffold into destDir. It refuses to overwrite an existing
 // wiki directory.
 func Init(destDir, wikiDir string) error {
@@ -22,7 +48,7 @@ func Init(destDir, wikiDir string) error {
 		return fmt.Errorf("%s already exists; refusing to overwrite", wikiDir)
 	}
 
-	return fs.WalkDir(files, "files", func(path string, d fs.DirEntry, err error) error {
+	if err := fs.WalkDir(files, "files", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -31,6 +57,13 @@ func Init(destDir, wikiDir string) error {
 		rel, _ := filepath.Rel("files", path)
 		if rel == "." {
 			return nil
+		}
+
+		// Shim files are handled separately with create-only semantics.
+		for _, shim := range shimFiles {
+			if rel == shim {
+				return nil
+			}
 		}
 
 		// Remap scaffold "wiki/" to the requested wikiDir name.
@@ -55,7 +88,12 @@ func Init(destDir, wikiDir string) error {
 			return err
 		}
 		return os.WriteFile(dest, data, 0o644)
-	})
+	}); err != nil {
+		return err
+	}
+
+	_, err := syncShims(destDir)
+	return err
 }
 
 // SyncPrompts overwrites the .github/prompts/ and .github/instructions/
@@ -91,6 +129,11 @@ func SyncPrompts(destDir string) ([]string, error) {
 		updated = append(updated, rel)
 		return nil
 	})
+	if err != nil {
+		return updated, err
+	}
 
+	shims, err := syncShims(destDir)
+	updated = append(updated, shims...)
 	return updated, err
 }

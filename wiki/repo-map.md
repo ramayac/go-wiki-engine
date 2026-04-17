@@ -18,16 +18,18 @@ internal/scaffold/      Init command — copies go:embed scaffold into a target 
 internal/upgrade/       Self-upgrade via `go install @latest`
 scaffold/               Human-readable reference copy of embedded templates
   wiki/                 Wiki pages: README, index, log, schema, phases, repo-map, operations/
-  .github/prompts/      VS Code slash command prompts: wiki-ingest, wiki-query, wiki-refresh
+  .github/prompts/      VS Code slash command prompts: wiki-ingest, wiki-query, wiki-refresh, wiki-onboard
   .github/instructions/ Copilot instruction: wiki-maintainer.instructions.md
   .wikirc               Default config template
+  AGENTS.md             Shim — redirects AI agent tools to wiki/index.md (create-only)
+  CLAUDE.md             Shim — redirects Claude Code to wiki/index.md (create-only)
 ```
 
 ## High-Signal Areas
 
 - `cmd/wiki-engine/main.go` — CLI dispatcher; version injected via `-ldflags`
 - `internal/engine/engine.go` — all read-only wiki operations; `Lint` tracks fenced code blocks to avoid false positives
-- `internal/scaffold/scaffold.go` — `Init()` walks the embedded FS and remaps `wiki/` to the user-specified dir name; `SyncPrompts()` overwrites only `.github/` files, leaving wiki content untouched
+- `internal/scaffold/scaffold.go` — `Init()` walks the embedded FS and remaps `wiki/` to the user-specified dir name; `SyncPrompts()` overwrites only `.github/` files; `syncShims()` creates `AGENTS.md`/`CLAUDE.md` only when absent (never overwrites user content); called by both Init and SyncPrompts
 - `internal/config/config.go` — parses `.wikirc` (key=value + array format, no external deps); returns defaults when file is absent
 - `scaffold/` — source of truth for scaffold templates; `make sync-scaffold` copies it to `internal/scaffold/files/`
 
@@ -35,7 +37,7 @@ scaffold/               Human-readable reference copy of embedded templates
 
 | Command | What it does |
 |---|---|
-| `init [wiki-dir]` | Scaffold wiki, .wikirc, prompts, and instructions into the current repo |
+| `init [wiki-dir]` | Scaffold wiki, .wikirc, prompts, instructions, and AGENTS.md/CLAUDE.md shims into the current repo |
 | `sync-prompts` | Overwrite `.github/prompts/` and `.github/instructions/` with the current embedded versions (safe to run after upgrade) |
 | `list` | List all files under `wiki_dir` |
 | `headings` | List all Markdown headings across wiki files |
