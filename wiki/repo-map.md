@@ -27,7 +27,7 @@ scaffold/               Human-readable reference copy of embedded templates
 
 - `cmd/wiki-engine/main.go` — CLI dispatcher; version injected via `-ldflags`
 - `internal/engine/engine.go` — all read-only wiki operations; `Lint` tracks fenced code blocks to avoid false positives
-- `internal/scaffold/scaffold.go` — `Init()` walks the embedded FS and remaps `wiki/` to the user-specified dir name
+- `internal/scaffold/scaffold.go` — `Init()` walks the embedded FS and remaps `wiki/` to the user-specified dir name; `SyncPrompts()` overwrites only `.github/` files, leaving wiki content untouched
 - `internal/config/config.go` — parses `.wikirc` (key=value + array format, no external deps); returns defaults when file is absent
 - `scaffold/` — source of truth for scaffold templates; `make sync-scaffold` copies it to `internal/scaffold/files/`
 
@@ -36,6 +36,7 @@ scaffold/               Human-readable reference copy of embedded templates
 | Command | What it does |
 |---|---|
 | `init [wiki-dir]` | Scaffold wiki, .wikirc, prompts, and instructions into the current repo |
+| `sync-prompts` | Overwrite `.github/prompts/` and `.github/instructions/` with the current embedded versions (safe to run after upgrade) |
 | `list` | List all files under `wiki_dir` |
 | `headings` | List all Markdown headings across wiki files |
 | `search <query>` | Case-insensitive full-text search across wiki files |
@@ -64,8 +65,9 @@ It also copies `.github/instructions/wiki-maintainer.instructions.md`, which VS 
 The workflow is:
 1. `wiki-engine init` — run once to scaffold
 2. Developer customizes `wiki/repo-map.md` and `.wikirc`
-3. Agent (via `/wiki-ingest` or `/wiki-refresh`) calls `wiki-engine changed` + `wiki-engine candidates` to discover what changed, then reads and writes wiki content itself
+3. Agent (via `/wiki-ingest`, `/wiki-refresh`, or `/wiki-onboard`) calls `wiki-engine changed` + `wiki-engine candidates` to discover what changed, then reads and writes wiki content itself
 4. Agent calls `wiki-engine lint` to validate hygiene before finishing
+5. After a binary upgrade, run `wiki-engine sync-prompts` in each repo to pull in new or updated prompts and instructions
 
 The prompts tell the agent *which subcommands to call* and in what order. The agent does all reading and writing; `wiki-engine` only surfaces facts.
 
