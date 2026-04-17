@@ -79,13 +79,22 @@ If `.wikirc` is absent, sensible defaults are used.
 
 ## How It Works with Copilot
 
-The wiki engine is a **read-only inspection tool**. It does not modify wiki content directly — that's the agent's job. The workflow is:
+The wiki engine is a **read-only inspection tool**. It never modifies wiki content — that's the agent's job.
 
-1. **You** run `wiki-engine init` once to scaffold the wiki.
-2. **Copilot** uses the slash commands (`/wiki-ingest`, `/wiki-query`, `/wiki-refresh`) to read, search, and update wiki content.
-3. **wiki-engine** provides the plumbing: listing files, searching, detecting changes, linting structure.
+`wiki-engine init` scaffolds three things into your repo:
 
-The slash commands call `wiki-engine` subcommands under the hood and tell the agent what to read, what to update, and when to write back.
+1. **`wiki/`** — required wiki pages and operations docs.
+2. **`.github/prompts/`** — VS Code slash commands (`/wiki-ingest`, `/wiki-query`, `/wiki-refresh`). Each prompt tells the agent which `wiki-engine` subcommands to run and in what order, then guides it through reading and writing wiki content.
+3. **`.github/instructions/wiki-maintainer.instructions.md`** — a persistent Copilot instruction file (applied to all files via `applyTo: "**"`) that keeps the agent wiki-aware across every conversation.
+
+The typical workflow:
+
+1. **You** run `wiki-engine init` once, then customize `wiki/repo-map.md` and `.wikirc`.
+2. **You** use `/wiki-refresh` or `/wiki-ingest` in VS Code Copilot Chat when you want the wiki updated.
+3. **Copilot** calls `wiki-engine changed` + `wiki-engine candidates` to see what changed, reads the affected source files, and writes durable facts back into the wiki.
+4. **Copilot** calls `wiki-engine lint` to validate wiki hygiene before finishing.
+
+`wiki-engine` provides the inspection facts. The agent does all the reading and writing.
 
 ## Wiki Contract
 
