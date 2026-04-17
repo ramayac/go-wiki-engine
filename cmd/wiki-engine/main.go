@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime/debug"
 	"strings"
 
@@ -56,6 +57,17 @@ func main() {
 
 func runSyncPrompts() {
 	dir, _ := os.Getwd()
+
+	// Capture which shim files already exist BEFORE syncing. syncShims uses
+	// create-only semantics, so any shim not yet present will be created fresh
+	// (already the standard template) and does not need a migration reminder.
+	var preExistingShims []string
+	for _, name := range []string{"AGENTS.md", "CLAUDE.md"} {
+		if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
+			preExistingShims = append(preExistingShims, name)
+		}
+	}
+
 	updated, err := scaffold.SyncPrompts(dir)
 	if err != nil {
 		fatal(err)
@@ -68,6 +80,12 @@ func runSyncPrompts() {
 		fmt.Fprintf(os.Stderr, "updated %s\n", f)
 	}
 	fmt.Fprintf(os.Stderr, "sync-prompts: %d file(s) updated\n", len(updated))
+
+	if len(preExistingShims) > 0 {
+		fmt.Fprintf(os.Stdout, "\ntip: %s already exist and were not modified.\n", strings.Join(preExistingShims, " and "))
+		fmt.Fprintln(os.Stdout, "     If they contain custom instructions, run /wiki-migrate-shims to migrate")
+		fmt.Fprintln(os.Stdout, "     that content into the wiki and replace the files with standard redirect shims.")
+	}
 }
 
 func runInit() {
