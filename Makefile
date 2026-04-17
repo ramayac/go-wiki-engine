@@ -1,10 +1,10 @@
 BINARY    := wiki-engine
 CMD_DIR   := ./cmd/wiki-engine
 BIN_DIR   := bin
-VERSION   ?= dev
+VERSION   ?= $(shell git describe --tags 2>/dev/null || echo dev)
 COMMIT    := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 BUILD_DATE := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
-LDFLAGS   := -s -w -X main.version=$(VERSION)-$(COMMIT)-$(BUILD_DATE)
+LDFLAGS   := -s -w -X main.version=$(VERSION)-$(BUILD_DATE)
 
 .DEFAULT_GOAL := help
 
