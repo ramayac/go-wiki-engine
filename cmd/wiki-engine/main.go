@@ -25,6 +25,8 @@ func main() {
 	switch cmd {
 	case "init":
 		runInit()
+	case "sync-prompts":
+		runSyncPrompts()
 	case "version":
 		fmt.Println(version)
 	case "upgrade":
@@ -38,6 +40,22 @@ func main() {
 		cfg, eng := loadEngine()
 		runEngine(cmd, cfg, eng)
 	}
+}
+
+func runSyncPrompts() {
+	dir, _ := os.Getwd()
+	updated, err := scaffold.SyncPrompts(dir)
+	if err != nil {
+		fatal(err)
+	}
+	if len(updated) == 0 {
+		fmt.Fprintln(os.Stderr, "sync-prompts: no .github files found in scaffold (unexpected)")
+		return
+	}
+	for _, f := range updated {
+		fmt.Fprintf(os.Stderr, "updated %s\n", f)
+	}
+	fmt.Fprintf(os.Stderr, "sync-prompts: %d file(s) updated\n", len(updated))
 }
 
 func runInit() {
@@ -177,6 +195,7 @@ Usage: wiki-engine <command> [arguments]
 
 Commands:
   init [wiki-dir]         Scaffold a new wiki into the current repo
+  sync-prompts            Update .github/prompts/ and .github/instructions/ to the latest version
   list                    List all wiki files
   headings                List all Markdown headings with file paths
   search <query>          Case-insensitive search across wiki files

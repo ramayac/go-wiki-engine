@@ -26,5 +26,6 @@ func Run() error {
 		return fmt.Errorf("upgrade failed: %w", err)
 	}
 	fmt.Fprintln(os.Stderr, "upgrade complete")
+	fmt.Fprintln(os.Stderr, "run `wiki-engine sync-prompts` in each repo to update prompts and instructions")
 	return nil
 }

@@ -7,6 +7,8 @@ agent: "agent"
 
 Ingest the current repository changes into the wiki.
 
+> **Cold-start check:** If `wiki-engine changed` returns no output AND `wiki/log.md` has no prior ingest entries, this is a first-time onboarding — switch to the **Wiki Onboard** prompt instead of continuing here.
+
 ## Required context
 
 - Read [wiki/index.md](../../wiki/index.md).
@@ -27,3 +29,4 @@ Ingest the current repository changes into the wiki.
 9. Run `wiki-engine lint`.
 
 Finish by summarizing what was added, what changed, and what still needs human review.
+

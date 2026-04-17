@@ -75,3 +75,65 @@ func TestInitCustomDir(t *testing.T) {
 		t.Error("missing .wikirc")
 	}
 }
+
+func TestSyncPrompts(t *testing.T) {
+	dest := t.TempDir()
+
+	// SyncPrompts should work even on a repo that has never had init run.
+	updated, err := SyncPrompts(dest)
+	if err != nil {
+		t.Fatalf("SyncPrompts failed: %v", err)
+	}
+	if len(updated) == 0 {
+		t.Fatal("SyncPrompts returned no updated files")
+	}
+
+	// Verify the canonical prompt files were written.
+	required := []string{
+		".github/prompts/wiki-ingest.prompt.md",
+		".github/prompts/wiki-query.prompt.md",
+		".github/prompts/wiki-refresh.prompt.md",
+		".github/prompts/wiki-onboard.prompt.md",
+		".github/instructions/wiki-maintainer.instructions.md",
+	}
+	for _, f := range required {
+		p := filepath.Join(dest, f)
+		if _, err := os.Stat(p); os.IsNotExist(err) {
+			t.Errorf("SyncPrompts missing expected file: %s", f)
+		}
+	}
+
+	// Wiki content and .wikirc should NOT have been created.
+	if _, err := os.Stat(filepath.Join(dest, "wiki")); !os.IsNotExist(err) {
+		t.Error("SyncPrompts should not create wiki/")
+	}
+	if _, err := os.Stat(filepath.Join(dest, ".wikirc")); !os.IsNotExist(err) {
+		t.Error("SyncPrompts should not create .wikirc")
+	}
+}
+
+func TestSyncPromptsOverwrites(t *testing.T) {
+	dest := t.TempDir()
+
+	// Write a stale version of the ingest prompt.
+	stale := filepath.Join(dest, ".github", "prompts", "wiki-ingest.prompt.md")
+	if err := os.MkdirAll(filepath.Dir(stale), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(stale, []byte("old content"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// SyncPrompts should overwrite it.
+	if _, err := SyncPrompts(dest); err != nil {
+		t.Fatalf("SyncPrompts failed: %v", err)
+	}
+
+	data, err := os.ReadFile(stale)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) == "old content" {
+		t.Error("SyncPrompts did not overwrite stale file")
+	}
+}
