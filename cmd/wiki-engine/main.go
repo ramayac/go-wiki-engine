@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"runtime/debug"
 	"strings"
 
 	"github.com/ramayac/go-wiki-engine/internal/config"
@@ -11,8 +12,19 @@ import (
 	"github.com/ramayac/go-wiki-engine/internal/upgrade"
 )
 
-// Set by -ldflags at build time.
+// Set by -ldflags at build time. Falls back to embedded module version when
+// installed via `go install` without ldflags (e.g. after `wiki-engine upgrade`).
 var version = "dev"
+
+func getVersion() string {
+	if version != "dev" {
+		return version
+	}
+	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
+		return info.Main.Version
+	}
+	return version
+}
 
 func main() {
 	if len(os.Args) < 2 {
@@ -28,7 +40,7 @@ func main() {
 	case "sync-prompts":
 		runSyncPrompts()
 	case "version":
-		fmt.Println(version)
+		fmt.Println(getVersion())
 	case "upgrade":
 		if err := upgrade.Run(); err != nil {
 			fatal(err)
