@@ -2,6 +2,38 @@
 
 Append-only timeline of wiki maintenance activity.
 
+## [2026-05-01] ingest | unified instruction layer for Claude Code
+
+Triggered by a gap analysis that revealed the intelligence layer (prompts, instructions) was Copilot-specific. Claude Code users had no guided workflows.
+
+**Added:**
+- `scaffold/.wiki-instructions/` — canonical workflow definitions. Six files: ingest, query, refresh, onboard, migrate-shims, wiki-maintainer.
+- `scaffold/.claude/commands/` — Claude Code custom slash commands (symlinks to `.wiki-instructions/`).
+- `syncEmbeddedDir()` helper in `internal/scaffold/scaffold.go` — extracted from `SyncPrompts()`, now syncs `.wiki-instructions/`, `.github/`, and `.claude/commands/`.
+- `Makefile` — `sync-scaffold` now uses `cp -rL` to dereference symlinks (go:embed resolves symlinks at build time, but `cp -rL` makes the embedded FS self-contained).
+- Tests updated: `TestInit` and `TestSyncPrompts` now verify `.wiki-instructions/` and `.claude/commands/` files.
+
+**Source changes that drove this entry:**
+- `scaffold/.wiki-instructions/*` (new), `scaffold/.claude/commands/*` (new)
+- `scaffold/.github/prompts/*` — regular files → symlinks to `.wiki-instructions/`
+- `scaffold/.github/instructions/*` — regular file → symlink
+- `scaffold/AGENTS.md`, `scaffold/CLAUDE.md` — updated shim text to reference both tools
+- `internal/scaffold/scaffold.go` — `SyncPrompts()` refactored
+- `internal/scaffold/scaffold_test.go` — expanded checks
+- `cmd/wiki-engine/main.go` — CLI messages updated
+- `internal/upgrade/upgrade.go` — post-upgrade message updated
+- `internal/config/config_test.go` — fixed duplicate `package config` bug
+- `README.md` — documented new structure and supported tools table
+
+**Changed:**
+- `.github/prompts/` and `.github/instructions/` are now symlinks in both scaffold/ and live project.
+- `cp -rL` replaces `cp -r` in make sync-scaffold.
+- `SyncPrompts` scope expanded from `.github/` only to all three instruction layers.
+
+**Key design principle:** Use symlinks for DRY, not duplicated files. `go:embed` follows symlinks at compile time so no runtime changes needed. Tool-specific directories are symlink shims pointing to a single canonical source.
+
+**Needs human review:** Verify that `make build` and `wiki-engine init` still produce correct output in a clean target repo.
+
 ## [2026-04-17] ingest | AI entrypoint gap (shim files)
 
 Triggered by recognising that non-Copilot AI tools (Claude Code, cursor, etc.) have no path to the wiki without AGENTS.md/CLAUDE.md shims.
