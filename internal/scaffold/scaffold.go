@@ -96,19 +96,47 @@ func Init(destDir, wikiDir string) error {
 	return err
 }
 
-// SyncPrompts overwrites the .github/prompts/ and .github/instructions/
-// files in destDir with the current embedded versions. It does not touch
-// wiki/ content or .wikirc. Safe to run after a wiki-engine upgrade to pick
-// up new or changed prompts and instructions.
+// SyncPrompts overwrites the .wiki-instructions/, .github/prompts/,
+// .github/instructions/, and .claude/commands/ files in destDir with the
+// current embedded versions. It does not touch wiki/ content or .wikirc.
+// Safe to run after a wiki-engine upgrade to pick up new or changed
+// prompts and instructions for all supported AI tools.
 func SyncPrompts(destDir string) ([]string, error) {
 	var updated []string
 
-	err := fs.WalkDir(files, "files/.github", func(path string, d fs.DirEntry, err error) error {
+	// Sync each instruction layer prefix. The embedded FS dereferences
+	// symlinks, so .github/prompts/ and .claude/commands/ contain regular
+	// file copies of the canonical .wiki-instructions/ files.
+	for _, prefix := range []string{
+		"files/.wiki-instructions",
+		"files/.github",
+		"files/.claude",
+	} {
+		err := syncEmbeddedDir(destDir, prefix, &updated)
+		if err != nil {
+			return updated, err
+		}
+	}
+
+	shims, err := syncShims(destDir)
+	updated = append(updated, shims...)
+	return updated, err
+}
+
+// syncEmbeddedDir walks an embedded directory and writes all files
+// (including those in subdirectories) to the corresponding destination
+// path, overwriting any existing files. Directory structure is created
+// as needed. Updated file rel paths are appended to updated.
+func syncEmbeddedDir(destDir, embedRoot string, updated *[]string) error {
+	return fs.WalkDir(files, embedRoot, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 		if d.IsDir() {
 			rel, _ := filepath.Rel("files", path)
+			if rel == "files" {
+				return nil
+			}
 			return os.MkdirAll(filepath.Join(destDir, rel), 0o755)
 		}
 
@@ -126,14 +154,7 @@ func SyncPrompts(destDir string) ([]string, error) {
 		if err := os.WriteFile(dest, data, 0o644); err != nil {
 			return err
 		}
-		updated = append(updated, rel)
+		*updated = append(*updated, rel)
 		return nil
 	})
-	if err != nil {
-		return updated, err
-	}
-
-	shims, err := syncShims(destDir)
-	updated = append(updated, shims...)
-	return updated, err
 }

@@ -88,18 +88,50 @@ func TestSyncPrompts(t *testing.T) {
 		t.Fatal("SyncPrompts returned no updated files")
 	}
 
-	// Verify the canonical prompt files were written.
-	required := []string{
+	// Verify canonical instruction files were written.
+	canonical := []string{
+		".wiki-instructions/ingest.md",
+		".wiki-instructions/query.md",
+		".wiki-instructions/refresh.md",
+		".wiki-instructions/onboard.md",
+		".wiki-instructions/migrate-shims.md",
+		".wiki-instructions/wiki-maintainer.md",
+	}
+	for _, f := range canonical {
+		p := filepath.Join(dest, f)
+		if _, err := os.Stat(p); os.IsNotExist(err) {
+			t.Errorf("SyncPrompts missing canonical file: %s", f)
+		}
+	}
+
+	// Verify Copilot prompt files were written.
+	copilot := []string{
 		".github/prompts/wiki-ingest.prompt.md",
 		".github/prompts/wiki-query.prompt.md",
 		".github/prompts/wiki-refresh.prompt.md",
 		".github/prompts/wiki-onboard.prompt.md",
+		".github/prompts/wiki-migrate-shims.prompt.md",
 		".github/instructions/wiki-maintainer.instructions.md",
 	}
-	for _, f := range required {
+	for _, f := range copilot {
 		p := filepath.Join(dest, f)
 		if _, err := os.Stat(p); os.IsNotExist(err) {
-			t.Errorf("SyncPrompts missing expected file: %s", f)
+			t.Errorf("SyncPrompts missing Copilot file: %s", f)
+		}
+	}
+
+	// Verify Claude Code command files were written.
+	claude := []string{
+		".claude/commands/wiki-ingest.md",
+		".claude/commands/wiki-query.md",
+		".claude/commands/wiki-refresh.md",
+		".claude/commands/wiki-onboard.md",
+		".claude/commands/wiki-migrate-shims.md",
+	}
+	for _, f := range claude {
+		p := filepath.Join(dest, f)
+		if _, err := os.Stat(p); os.IsNotExist(err) {
+			t.Errorf("SyncPrompts missing Claude Code file: %s", f)
 		}
 	}
 

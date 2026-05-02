@@ -77,24 +77,36 @@ ignore = [
 
 If `.wikirc` is absent, sensible defaults are used.
 
-## How It Works with Copilot
+## How It Works
 
 The wiki engine is a **read-only inspection tool**. It never modifies wiki content — that's the agent's job.
 
-`wiki-engine init` scaffolds three things into your repo:
+`wiki-engine init` scaffolds several layers into your repo:
 
 1. **`wiki/`** — required wiki pages and operations docs.
-2. **`.github/prompts/`** — VS Code slash commands (`/wiki-ingest`, `/wiki-query`, `/wiki-refresh`). Each prompt tells the agent which `wiki-engine` subcommands to run and in what order, then guides it through reading and writing wiki content.
-3. **`.github/instructions/wiki-maintainer.instructions.md`** — a persistent Copilot instruction file (applied to all files via `applyTo: "**"`) that keeps the agent wiki-aware across every conversation.
+2. **`.wiki-instructions/`** — canonical workflow definitions (single source of truth for all tools).
+3. **`.github/prompts/`** — GitHub Copilot slash commands (`/wiki-ingest`, `/wiki-query`, `/wiki-refresh`, `/wiki-onboard`). Symlinks to `.wiki-instructions/`.
+4. **`.github/instructions/`** — Copilot instruction file. Symlink to `.wiki-instructions/`.
+5. **`.claude/commands/`** — Claude Code custom slash commands. Symlinks to `.wiki-instructions/`.
+6. **`AGENTS.md`** and **`CLAUDE.md`** — Redirect shims that point AI tools to `wiki/index.md`.
 
 The typical workflow:
 
 1. **You** run `wiki-engine init` once, then customize `wiki/repo-map.md` and `.wikirc`.
-2. **You** use `/wiki-refresh` or `/wiki-ingest` in VS Code Copilot Chat when you want the wiki updated.
-3. **Copilot** calls `wiki-engine changed` + `wiki-engine candidates` to see what changed, reads the affected source files, and writes durable facts back into the wiki.
-4. **Copilot** calls `wiki-engine lint` to validate wiki hygiene before finishing.
+2. **You** use `/wiki-ingest`, `/wiki-query`, or `/wiki-refresh` in your AI tool of choice.
+3. **The agent** calls `wiki-engine changed` + `wiki-engine candidates` to see what changed, reads the affected source files, and writes durable facts back into the wiki.
+4. **The agent** calls `wiki-engine lint` to validate wiki hygiene before finishing.
 
 `wiki-engine` provides the inspection facts. The agent does all the reading and writing.
+
+### Supported AI Tools
+
+| Tool | Slash commands | Instructions | Context entrypoint |
+|------|---------------|-------------|-------------------|
+| GitHub Copilot | `.github/prompts/` | `.github/instructions/` | `AGENTS.md` shim |
+| Claude Code | `.claude/commands/` | — (commands are self-contained) | `CLAUDE.md` shim |
+
+All slash commands and instructions share a single canonical source in `.wiki-instructions/`. After upgrading the binary, run `wiki-engine sync-prompts` to update all tool layers at once.
 
 ## Wiki Contract
 

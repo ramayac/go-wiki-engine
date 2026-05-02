@@ -17,7 +17,12 @@ internal/
   upgrade/            # Self-upgrade via `go install`
 scaffold/             # Human-readable reference copy of embedded templates
   wiki/               # Wiki scaffold files (README, index, log, schema, phases, repo-map, operations/)
-  .github/            # Copilot prompts and instructions
+  .wiki-instructions/ # Canonical prompt/instruction files (single source of truth)
+  .github/prompts/    # GitHub Copilot slash commands (symlinks to .wiki-instructions/)
+  .github/instructions/ # Copilot instructions (symlink to .wiki-instructions/)
+  .claude/commands/   # Claude Code custom slash commands (symlinks to .wiki-instructions/)
+  AGENTS.md           # Shim redirect to wiki/index.md (create-only)
+  CLAUDE.md           # Shim redirect to wiki/index.md (create-only)
   .wikirc             # Default configuration
 ```
 
