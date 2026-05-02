@@ -33,7 +33,7 @@ vet: ## Run go vet on all packages
 clean: ## Remove build artifacts
 	rm -rf $(BIN_DIR)
 
-sync-scaffold: ## Copy scaffold/ into internal/scaffold/files/ for embedding
+sync-scaffold: ## Copy scaffold/ into internal/scaffold/files/ for embedding (follows symlinks)
 	rm -rf internal/scaffold/files
-	cp -r scaffold internal/scaffold/files
+	cp -rL scaffold internal/scaffold/files
 	@echo "synced scaffold → internal/scaffold/files"

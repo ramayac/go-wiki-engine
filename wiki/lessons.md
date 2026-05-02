@@ -4,6 +4,39 @@ Accumulated design insights from real usage sessions. Each entry records a gap t
 
 ---
 
+## 2026-05-01 — The prompt duplication trap
+
+### What happened
+
+The `.github/prompts/` files contained Copilot-specific YAML frontmatter. To add Claude Code support, the naive approach would be to duplicate each workflow file into `.claude/commands/`. But five workflows × two tools = drift. Every edit to a prompt would need to be manually mirrored.
+
+### Why it matters
+
+Duplicated workflow files **diverge**. One tool's version gets improved, the other stays stale. Or worse, a well-meaning contributor edits the copy in `.claude/` and now the two tools give different instructions to the agent.
+
+### The fix
+
+Created `.wiki-instructions/` as the **canonical home** for all workflow definitions. Each tool directory contains symlinks back to the canonical files:
+
+```
+.wiki-instructions/ingest.md     ← edit here
+.github/prompts/wiki-ingest.prompt.md  → symlink
+.claude/commands/wiki-ingest.md         → symlink
+```
+
+Tool compatibility is handled via frontmatter fields:
+- Both Copilot and Claude Code use `description`
+- Copilot-specific fields (`name`, `argument-hint`, `agent`) are silently ignored by Claude Code
+The filename difference gives each tool its preferred naming convention.
+
+Build integration: `go:embed` follows symlinks at compile time, embedding regular file content. `make sync-scaffold` uses `cp -rL` to dereference symlinks so the embedded FS is self-contained. No changes needed to `Init()` or the build pipeline.
+
+### Key design principle confirmed
+
+**Symlinks are the DRY mechanism for tool conventions.** Don't duplicate workflow files. Don't generate them. Just symlink from each tool's directory to a single canonical source. Every tool's convention is honored without maintaining parallel copies.
+
+---
+
 ## 2026-04-16 — The prompt-upgrade gap
 
 ### What happened

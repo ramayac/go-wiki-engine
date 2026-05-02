@@ -73,7 +73,7 @@ func runSyncPrompts() {
 		fatal(err)
 	}
 	if len(updated) == 0 {
-		fmt.Fprintln(os.Stderr, "sync-prompts: no .github files found in scaffold (unexpected)")
+		fmt.Fprintln(os.Stderr, "sync-prompts: no instruction files found in scaffold (unexpected)")
 		return
 	}
 	for _, f := range updated {
@@ -97,7 +97,7 @@ func runInit() {
 	if err := scaffold.Init(dir, wikiDir); err != nil {
 		fatal(err)
 	}
-	fmt.Fprintf(os.Stderr, "initialized %s/ with wiki scaffold, .wikirc, prompts, instructions, and AGENTS.md/CLAUDE.md shims\n", wikiDir)
+	fmt.Fprintf(os.Stderr, "initialized %s/ with wiki scaffold, .wikirc, prompts, instructions, AGENTS.md/CLAUDE.md shims, and .claude/commands/\n", wikiDir)
 	fmt.Fprintln(os.Stderr, "next steps:")
 	fmt.Fprintln(os.Stderr, "  1. Edit .wikirc to set your ignore patterns")
 	fmt.Fprintln(os.Stderr, "  2. Edit wiki/repo-map.md with your project's architecture")
@@ -225,7 +225,7 @@ Usage: wiki-engine <command> [arguments]
 
 Commands:
   init [wiki-dir]         Scaffold a new wiki into the current repo
-  sync-prompts            Update .github/prompts/ and .github/instructions/ to the latest version
+  sync-prompts            Update .wiki-instructions/, .github/prompts/, .github/instructions/, and .claude/commands/ to the latest version
   list                    List all wiki files
   headings                List all Markdown headings with file paths
   search <query>          Case-insensitive search across wiki files

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-go-wiki-engine is a global CLI tool for managing repo-local wikis. It provides the plumbing layer (file listing, search, diff-driven change detection, structure linting, and scaffolding) while GitHub Copilot slash commands handle the intelligence layer (reading context, deciding what to update, writing wiki content).
+go-wiki-engine is a global CLI tool for managing repo-local wikis. It provides the plumbing layer (file listing, search, diff-driven change detection, structure linting, and scaffolding) while AI agent slash commands handle the intelligence layer (reading context, deciding what to update, writing wiki content). Supports GitHub Copilot and Claude Code out of the box.
 
 It ships as a single statically-compiled Go binary with no external dependencies, distributed via `go install`.
 
@@ -18,8 +18,10 @@ internal/scaffold/      Init command — copies go:embed scaffold into a target 
 internal/upgrade/       Self-upgrade via `go install @latest`
 scaffold/               Human-readable reference copy of embedded templates
   wiki/                 Wiki pages: README, index, log, schema, phases, repo-map, operations/
-  .github/prompts/      VS Code slash command prompts: wiki-ingest, wiki-query, wiki-refresh, wiki-onboard
-  .github/instructions/ Copilot instruction: wiki-maintainer.instructions.md
+  .wiki-instructions/   Canonical workflow definitions (single source of truth for all tools)
+  .github/prompts/      GitHub Copilot slash commands → symlinks to .wiki-instructions/
+  .github/instructions/ Copilot instructions → symlink to .wiki-instructions/
+  .claude/commands/     Claude Code custom slash commands → symlinks to .wiki-instructions/
   .wikirc               Default config template
   AGENTS.md             Shim — redirects AI agent tools to wiki/index.md (create-only)
   CLAUDE.md             Shim — redirects Claude Code to wiki/index.md (create-only)
@@ -29,7 +31,7 @@ scaffold/               Human-readable reference copy of embedded templates
 
 - `cmd/wiki-engine/main.go` — CLI dispatcher; version injected via `-ldflags`
 - `internal/engine/engine.go` — all read-only wiki operations; `Lint` tracks fenced code blocks to avoid false positives
-- `internal/scaffold/scaffold.go` — `Init()` walks the embedded FS and remaps `wiki/` to the user-specified dir name; `SyncPrompts()` overwrites only `.github/` files; `syncShims()` creates `AGENTS.md`/`CLAUDE.md` only when absent (never overwrites user content); called by both Init and SyncPrompts
+- `internal/scaffold/scaffold.go` — `Init()` walks the embedded FS and remaps `wiki/` to the user-specified dir name; `SyncPrompts()` overwrites `.wiki-instructions/`, `.github/`, and `.claude/commands/` via `syncEmbeddedDir()` helper; `syncShims()` creates `AGENTS.md`/`CLAUDE.md` only when absent (never overwrites user content)
 - `internal/config/config.go` — parses `.wikirc` (key=value + array format, no external deps); returns defaults when file is absent
 - `scaffold/` — source of truth for scaffold templates; `make sync-scaffold` copies it to `internal/scaffold/files/`
 
@@ -37,8 +39,8 @@ scaffold/               Human-readable reference copy of embedded templates
 
 | Command | What it does |
 |---|---|
-| `init [wiki-dir]` | Scaffold wiki, .wikirc, prompts, instructions, and AGENTS.md/CLAUDE.md shims into the current repo |
-| `sync-prompts` | Overwrite `.github/prompts/` and `.github/instructions/` with the current embedded versions (safe to run after upgrade) |
+| `init [wiki-dir]` | Scaffold wiki, .wikirc, prompts for all tools, instructions, and AGENTS.md/CLAUDE.md shims into the current repo |
+| `sync-prompts` | Overwrite `.wiki-instructions/`, `.github/`, and `.claude/commands/` with current embedded versions (safe to run after upgrade) |
 | `list` | List all files under `wiki_dir` |
 | `headings` | List all Markdown headings across wiki files |
 | `search <query>` | Case-insensitive full-text search across wiki files |
@@ -50,28 +52,31 @@ scaffold/               Human-readable reference copy of embedded templates
 | `upgrade` | Re-runs `go install github.com/ramayac/go-wiki-engine/cmd/wiki-engine@latest` |
 | `version` | Print the version set by -ldflags at build time |
 
-## How the Copilot Integration Works
+## How the Multi-Tool Integration Works
 
 The CLI is **read-only plumbing**. It never writes wiki content.
 
-`wiki-engine init` copies three VS Code prompt files into `.github/prompts/`:
+Workflows are defined once in `.wiki-instructions/` (canonical). Tool-specific directories contain symlinks:
 
-| File | VS Code slash command | Purpose |
+| Canonical source | Copilot path | Claude Code path |
 |---|---|---|
-| `wiki-ingest.prompt.md` | `/wiki-ingest` | Absorb recent repo changes into the wiki |
-| `wiki-refresh.prompt.md` | `/wiki-refresh` | Run the full maintenance snapshot |
-| `wiki-query.prompt.md` | `/wiki-query` | Answer questions from the wiki first |
+| `.wiki-instructions/ingest.md` | `.github/prompts/wiki-ingest.prompt.md` | `.claude/commands/wiki-ingest.md` |
+| `.wiki-instructions/query.md` | `.github/prompts/wiki-query.prompt.md` | `.claude/commands/wiki-query.md` |
+| `.wiki-instructions/refresh.md` | `.github/prompts/wiki-refresh.prompt.md` | `.claude/commands/wiki-refresh.md` |
+| `.wiki-instructions/onboard.md` | `.github/prompts/wiki-onboard.prompt.md` | `.claude/commands/wiki-onboard.md` |
+| `.wiki-instructions/migrate-shims.md` | `.github/prompts/wiki-migrate-shims.prompt.md` | `.claude/commands/wiki-migrate-shims.md` |
+| `.wiki-instructions/wiki-maintainer.md` | `.github/instructions/wiki-maintainer.instructions.md` | — (instructions are self-contained) |
 
-It also copies `.github/instructions/wiki-maintainer.instructions.md`, which VS Code Copilot picks up automatically (via `applyTo: "**"`) and injects as persistent agent context — telling the agent to read the wiki before broad analysis and to write durable findings back into it.
+Frontmatter is compatible: both tools use `description`. Copilot-specific fields (`name`, `argument-hint`, `agent`) are ignored by Claude Code.
 
 The workflow is:
 1. `wiki-engine init` — run once to scaffold
 2. Developer customizes `wiki/repo-map.md` and `.wikirc`
 3. Agent (via `/wiki-ingest`, `/wiki-refresh`, or `/wiki-onboard`) calls `wiki-engine changed` + `wiki-engine candidates` to discover what changed, then reads and writes wiki content itself
 4. Agent calls `wiki-engine lint` to validate hygiene before finishing
-5. After a binary upgrade, run `wiki-engine sync-prompts` in each repo to pull in new or updated prompts and instructions
+5. After a binary upgrade, run `wiki-engine sync-prompts` in each repo to pull in new or updated prompts and instructions for all tools
 
-The prompts tell the agent *which subcommands to call* and in what order. The agent does all reading and writing; `wiki-engine` only surfaces facts.
+`go:embed` follows symlinks at build time, so the embedded FS contains regular files. `make sync-scaffold` uses `cp -rL` to dereference symlinks when copying the scaffold into `internal/scaffold/files/`.
 
 ## Configuration — .wikirc
 
@@ -104,5 +109,6 @@ Go module: `github.com/ramayac/go-wiki-engine`. No external dependencies — sta
 ## Exclusions
 
 - `scaffold/` is human-readable reference; only `internal/scaffold/files/` is embedded. Always run `make sync-scaffold` after editing templates.
+- `.wiki-instructions/` is the canonical source — edit here, not in the symlinked tool directories.
 - `bin/` is gitignored.
 - The wiki itself (`wiki/`) is excluded from candidate filtering.
