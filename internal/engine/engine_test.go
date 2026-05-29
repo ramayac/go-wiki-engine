@@ -257,7 +257,7 @@ func TestStats(t *testing.T) {
 func TestContext(t *testing.T) {
 	root := setupWiki(t)
 	eng := newTestEngine(root)
-	cr, err := eng.Context(false)
+	cr, err := eng.Context(false, false)
 	if err != nil {
 		t.Fatalf("Context failed: %v", err)
 	}
@@ -275,7 +275,7 @@ func TestContext(t *testing.T) {
 func TestContextMinimal(t *testing.T) {
 	root := setupWiki(t)
 	eng := newTestEngine(root)
-	cr, err := eng.Context(true)
+	cr, err := eng.Context(true, false)
 	if err != nil {
 		t.Fatalf("Context(minimal) failed: %v", err)
 	}

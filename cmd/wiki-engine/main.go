@@ -303,12 +303,16 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 
 	case "context":
 		minimal := false
+		summarize := false
 		for _, a := range args[2:] {
-			if a == "--minimal" {
+			switch a {
+			case "--minimal":
 				minimal = true
+			case "--summarize":
+				summarize = true
 			}
 		}
-		cr, err := eng.Context(minimal)
+		cr, err := eng.Context(minimal, summarize)
 		if err != nil {
 			fatal(err)
 		}
@@ -505,7 +509,7 @@ Commands:
   changed [diff-range]    List non-wiki files changed in a git diff range
   candidates [diff-range] Filter changed files to ingest-worthy candidates
   stats                   Show aggregate wiki statistics
-  context [--minimal]     Condensed wiki snapshot for agent context loading
+  context [--minimal] [--summarize] Condensed wiki snapshot for agent context loading
   summary <page>          Show first heading and paragraph of a page
   relevant <query> [n]    Rank wiki pages by relevance to a query
   impact <file...>        Show which wiki pages mention changed files (or pipe from changed)

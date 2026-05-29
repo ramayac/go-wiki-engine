@@ -16,6 +16,7 @@ type Config struct {
 	Ignore             []string
 	DuplicateThreshold float64 // 0.0-1.0, similarity above which pages are flagged as duplicates
 	StaleDays          int     // days after which an unchanged wiki page is flagged as stale
+	ContextSummarize   bool    // enable --summarize on wiki-engine context
 	WatchInterval      int     // seconds between watch polls (0 = disabled)
 	CacheEnabled       bool    // use .wiki/.cache.json for faster lookups
 }
@@ -28,6 +29,7 @@ func DefaultConfig() *Config {
 		LogLines:           10,
 		DuplicateThreshold: 0.7,
 		StaleDays:          30,
+		ContextSummarize:   false,
 		WatchInterval:      0, // disabled by default
 		CacheEnabled:       true,
 		Ignore: []string{
@@ -107,6 +109,8 @@ func Load(dir string) (*Config, error) {
 			cfg.DuplicateThreshold = parseFloat(val, 0.7)
 		case "stale_days":
 			cfg.StaleDays = parsePositiveInt(val, 30)
+		case "context_summarize":
+			cfg.ContextSummarize = parseBool(val, false)
 		case "watch_interval":
 			cfg.WatchInterval = parsePositiveInt(val, 0)
 		case "cache_enabled":

@@ -304,7 +304,8 @@ func (e *Engine) Stats() (*StatsResult, error) {
 type ContextEntry struct {
 	File        string `json:"file"`
 	Description string `json:"description"`
-	SizeBytes   int64  `json:"size_bytes"`
+	Summary     string `json:"summary,omitempty"`  // first ~3 paragraphs when --summarize
+	LineCount   int    `json:"line_count"`
 }
 
 // ContextResult holds a condensed wiki snapshot for agent context loading.
@@ -315,12 +316,15 @@ type ContextResult struct {
 	Catalog       []ContextEntry `json:"catalog"`
 	RecentLog     []string       `json:"recent_log"`
 	HeadingCount  int            `json:"heading_count"`
+	Summarized    bool           `json:"summarized"`
 }
 
 // Context returns a condensed snapshot of the wiki — enough for an agent
-// to understand what's in the wiki without reading every file. When minimal
-// is true, only the catalog and recent log are returned.
-func (e *Engine) Context(minimal bool) (*ContextResult, error) {
+// to understand what's in the wiki without reading every file.
+// When minimal is true, only the catalog and recent log are returned.
+// When summarize is true, each catalog entry includes a page summary
+// (first heading and first few paragraphs) plus line count.
+func (e *Engine) Context(minimal, summarize bool) (*ContextResult, error) {
 	cr := &ContextResult{}
 
 	// Build catalog from index.md.
@@ -342,12 +346,39 @@ func (e *Engine) Context(minimal bool) (*ContextResult, error) {
 		cr.RecentLog = tail
 	}
 
+	// Populate summaries if requested.
+	if summarize {
+		cr.Summarized = true
+		for i, entry := range cr.Catalog {
+			sr, err := e.Summary(entry.File)
+			if err != nil {
+				continue
+			}
+			cr.Catalog[i].Summary = pageSummaryText(sr)
+			cr.Catalog[i].LineCount = sr.LineCount
+		}
+	}
+
 	// Phase status.
 	if !minimal {
 		cr.Phase = e.currentPhase()
 	}
 
 	return cr, nil
+}
+
+// pageSummaryText builds a compact summary string from a SummaryResult.
+// Format: "# Heading\n\nFirst paragraph. ..."
+func pageSummaryText(sr *SummaryResult) string {
+	var b strings.Builder
+	if sr.FirstHeader != "" {
+		b.WriteString(sr.FirstHeader)
+		b.WriteString("\n")
+	}
+	if sr.FirstPara != "" {
+		b.WriteString(sr.FirstPara)
+	}
+	return strings.TrimSpace(b.String())
 }
 
 // parseIndexCatalog extracts page file + description from index.md content.
@@ -409,6 +440,7 @@ type SummaryResult struct {
 	File        string `json:"file"`
 	FirstHeader string `json:"first_header"`
 	FirstPara   string `json:"first_para"`
+	Preview     string `json:"preview"` // first heading + up to 3 paragraphs
 	LineCount   int    `json:"line_count"`
 }
 
@@ -425,8 +457,11 @@ func (e *Engine) Summary(page string) (*SummaryResult, error) {
 
 	sr := &SummaryResult{File: page}
 	scanner := bufio.NewScanner(f)
-	inPara := false
 	lineNo := 0
+	paragraphCount := 0
+	var previewLines []string
+	inPara := false
+
 	for scanner.Scan() {
 		lineNo++
 		text := scanner.Text()
@@ -435,20 +470,41 @@ func (e *Engine) Summary(page string) (*SummaryResult, error) {
 		// Capture first heading.
 		if sr.FirstHeader == "" && headingRe.MatchString(text) {
 			sr.FirstHeader = text
+			previewLines = append(previewLines, text)
 			continue
 		}
 
-		// Capture first non-empty paragraph after frontmatter.
-		if sr.FirstPara == "" && trimmed != "" && !strings.HasPrefix(trimmed, "---") && !strings.HasPrefix(trimmed, "#") && !strings.HasPrefix(trimmed, "|") && !strings.HasPrefix(trimmed, "```") {
-			inPara = true
-			sr.FirstPara = text
+		// Skip frontmatter, headings, tables, code blocks.
+		if trimmed == "" || strings.HasPrefix(trimmed, "---") ||
+			strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, "|") ||
+			strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "[") && strings.HasSuffix(trimmed, "]") {
+			if inPara && trimmed == "" {
+				inPara = false
+			}
 			continue
 		}
-		if inPara && trimmed == "" {
-			inPara = false
+
+		// Capture paragraphs (up to 3).
+		if paragraphCount < 3 && !strings.HasPrefix(trimmed, ">") && !strings.HasPrefix(trimmed, "-") && !strings.HasPrefix(trimmed, "*") {
+			if sr.FirstPara == "" {
+				sr.FirstPara = text
+			}
+			inPara = true
+			previewLines = append(previewLines, text)
+			// Count paragraphs when we hit a blank line after content.
+			paragraphCount++
+			// Skip ahead to next blank line to avoid capturing same paragraph multiple times.
+			for scanner.Scan() {
+				lineNo++
+				n := scanner.Text()
+				if strings.TrimSpace(n) == "" {
+					break
+				}
+			}
 		}
 	}
 	sr.LineCount = lineNo
+	sr.Preview = strings.TrimSpace(strings.Join(previewLines, "\n"))
 	return sr, nil
 }
 
