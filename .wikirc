@@ -1,6 +1,7 @@
 wiki_dir = "wiki"
 default_diff = "master...HEAD"
 log_lines = 10
+cache_enabled = true
 
 ignore = [
   "wiki/",

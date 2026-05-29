@@ -94,6 +94,16 @@ cache_enabled = true
 | Default | `true` |
 |--------:|-------|
 
+### `cache_max_mb`
+Maximum cache file size in megabytes. When the serialized cache JSON exceeds this limit, the cache is not written. Use this to prevent `.wiki/.cache.json` from growing too large in repos with hundreds of wiki pages or when `context_summarize` stores per-page previews.
+
+```
+cache_max_mb = 0
+```
+| Default | `0` (unlimited) |
+|--------:|-------------------|
+| Typical | `5`–`50` |
+
 The cache file is gitignored and recreated on demand.
 
 ## Ignored Paths

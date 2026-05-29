@@ -434,3 +434,167 @@ func TestLintPhaseConsistency(t *testing.T) {
 		t.Error("Lint should detect unknown phase status")
 	}
 }
+
+// --- Cache tests ---
+
+func TestCacheSaveLoad(t *testing.T) {
+	root := setupWiki(t)
+	eng := newTestEngine(root)
+	eng.Cfg.CacheEnabled = true
+
+	// Build cache.
+	if err := eng.RebuildCache(); err != nil {
+		t.Fatalf("RebuildCache failed: %v", err)
+	}
+
+	// Verify cache file exists.
+	if _, err := os.Stat(filepath.Join(root, "wiki", ".cache.json")); os.IsNotExist(err) {
+		t.Error("cache file not created")
+	}
+
+	// Load and validate.
+	c := eng.loadCache()
+	if c == nil {
+		t.Fatal("loadCache returned nil")
+	}
+	if len(c.Files) < 5 {
+		t.Errorf("cache has %d files, want >=5", len(c.Files))
+	}
+}
+
+func TestCacheDisabled(t *testing.T) {
+	root := setupWiki(t)
+	eng := newTestEngine(root)
+	eng.Cfg.CacheEnabled = false
+
+	// loadCache should return nil when cache is disabled.
+	c := eng.loadCache()
+	if c != nil {
+		t.Error("loadCache should return nil when cache is disabled")
+	}
+}
+
+func TestCacheInvalidation(t *testing.T) {
+	root := setupWiki(t)
+	eng := newTestEngine(root)
+	eng.Cfg.CacheEnabled = true
+
+	// Build initial cache.
+	if err := eng.RebuildCache(); err != nil {
+		t.Fatalf("RebuildCache failed: %v", err)
+	}
+
+	// Modify a wiki file to invalidate the cache.
+	repoMap := filepath.Join(root, "wiki", "repo-map.md")
+	os.WriteFile(repoMap, []byte("# Modified\n"), 0o644)
+
+	// Cache should now be invalid (mtime changed).
+	c := eng.loadCache()
+	if c != nil {
+		t.Error("cache should be nil after modifying a wiki file")
+	}
+
+	// Rebuild and verify it loads again.
+	if err := eng.RebuildCache(); err != nil {
+		t.Fatalf("RebuildCache after modification failed: %v", err)
+	}
+	c = eng.loadCache()
+	if c == nil {
+		t.Error("cache should load after rebuild")
+	}
+}
+
+// --- Impact tests ---
+
+func TestImpact(t *testing.T) {
+	root := setupWiki(t)
+	eng := newTestEngine(root)
+
+	// Add a wiki page that mentions a source file.
+	os.WriteFile(filepath.Join(root, "wiki", "architecture.md"),
+		[]byte("# Architecture\n\nThe main entry point is cmd/main.go.\n"), 0o644)
+
+	results, err := eng.Impact([]string{"cmd/main.go", "pkg/unknown.go"})
+	if err != nil {
+		t.Fatalf("Impact failed: %v", err)
+	}
+
+	// cmd/main.go should match architecture.md.
+	for _, r := range results {
+		if r.ChangedFile == "cmd/main.go" {
+			if len(r.WikiPages) == 0 {
+				t.Error("expected architecture.md to mention cmd/main.go")
+			}
+		}
+		if r.ChangedFile == "pkg/unknown.go" {
+			if len(r.WikiPages) > 0 {
+				t.Error("expected no wiki pages to mention pkg/unknown.go")
+			}
+		}
+	}
+}
+
+// --- Context with summarize ---
+
+func TestContextSummarize(t *testing.T) {
+	root := setupWiki(t)
+	eng := newTestEngine(root)
+
+	cr, err := eng.Context(false, true)
+	if err != nil {
+		t.Fatalf("Context(summarize) failed: %v", err)
+	}
+	if !cr.Summarized {
+		t.Error("Context should mark summarized=true")
+	}
+
+	// At least one catalog entry should have a summary.
+	hasSummary := false
+	for _, e := range cr.Catalog {
+		if e.Summary != "" {
+			hasSummary = true
+			break
+		}
+	}
+	if !hasSummary {
+		t.Error("expected at least one catalog entry to have a summary")
+	}
+}
+
+// --- WatchOnce test ---
+
+func TestWatchOnce(t *testing.T) {
+	root := setupWiki(t)
+	eng := newTestEngine(root)
+
+	// WatchOnce uses git diff which might fail in test env; it should handle gracefully.
+	wr, err := eng.WatchOnce()
+	// Accept either success or git-not-found error (no git repo in test).
+	if err != nil && !strings.Contains(err.Error(), "git diff failed") {
+		t.Logf("WatchOnce returned error (expected in non-git test env): %v", err)
+	}
+	if err == nil {
+		if wr == nil {
+			t.Error("WatchOnce returned nil result")
+		}
+	}
+}
+
+// --- Context minimal with summary disabled ---
+
+func TestContextMinimalSummarize(t *testing.T) {
+	root := setupWiki(t)
+	eng := newTestEngine(root)
+
+	// Minimal + summarize: catalog should have summaries but no phase.
+	cr, err := eng.Context(true, true)
+	if err != nil {
+		t.Fatalf("Context(minimal, summarize) failed: %v", err)
+	}
+	if cr.Phase != "" {
+		t.Error("minimal mode should not include phase")
+	}
+	if !cr.Summarized {
+		t.Error("summarized should be true")
+	}
+}

@@ -112,3 +112,84 @@ func TestParseLogLines(t *testing.T) {
 		}
 	}
 }
+
+func TestLoadNewKeys(t *testing.T) {
+	dir := t.TempDir()
+	content := `wiki_dir = "docs"
+duplicate_threshold = 0.5
+stale_days = 14
+context_summarize = true
+cache_enabled = false
+cache_max_mb = 10
+watch_interval = 120
+`
+	if err := os.WriteFile(filepath.Join(dir, ".wikirc"), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.DuplicateThreshold != 0.5 {
+		t.Errorf("DuplicateThreshold = %f, want 0.5", cfg.DuplicateThreshold)
+	}
+	if cfg.StaleDays != 14 {
+		t.Errorf("StaleDays = %d, want 14", cfg.StaleDays)
+	}
+	if !cfg.ContextSummarize {
+		t.Error("ContextSummarize should be true")
+	}
+	if cfg.CacheEnabled {
+		t.Error("CacheEnabled should be false")
+	}
+	if cfg.CacheMaxMB != 10 {
+		t.Errorf("CacheMaxMB = %d, want 10", cfg.CacheMaxMB)
+	}
+	if cfg.WatchInterval != 120 {
+		t.Errorf("WatchInterval = %d, want 120", cfg.WatchInterval)
+	}
+}
+
+func TestParseBool(t *testing.T) {
+	tests := []struct {
+		input    string
+		fallback bool
+		want     bool
+	}{
+		{"true", false, true},
+		{"yes", false, true},
+		{"1", false, true},
+		{"false", true, false},
+		{"no", true, false},
+		{"0", true, false},
+		{"garbage", true, true},   // fallback
+		{"garbage", false, false}, // fallback
+	}
+	for _, tt := range tests {
+		got := parseBool(tt.input, tt.fallback)
+		if got != tt.want {
+			t.Errorf("parseBool(%q, %v) = %v, want %v", tt.input, tt.fallback, got, tt.want)
+		}
+	}
+}
+
+func TestParseFloat(t *testing.T) {
+	tests := []struct {
+		input    string
+		fallback float64
+		want     float64
+	}{
+		{"0.7", 0.5, 0.7},
+		{"1.0", 0.5, 1.0},
+		{"0.0", 0.5, 0.5},     // <=0 falls back
+		{"2.0", 0.5, 0.5},     // >1 falls back
+		{"abc", 0.3, 0.3},     // non-numeric falls back
+		{"0.555", 0.5, 0.555},
+	}
+	for _, tt := range tests {
+		got := parseFloat(tt.input, tt.fallback)
+		if got != tt.want {
+			t.Errorf("parseFloat(%q, %f) = %f, want %f", tt.input, tt.fallback, got, tt.want)
+		}
+	}
+}

@@ -2,6 +2,7 @@ package engine
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -55,11 +56,17 @@ func (e *Engine) saveCache() error {
 		if err != nil || d.IsDir() {
 			return nil
 		}
+		rel, _ := filepath.Rel(wikiDir, path)
+
+		// Skip the cache file itself.
+		if rel == ".cache.json" {
+			return nil
+		}
+
 		info, err := d.Info()
 		if err != nil {
 			return nil
 		}
-		rel, _ := filepath.Rel(wikiDir, path)
 		c.Files = append(c.Files, rel)
 		c.MTimes[rel] = info.ModTime().UnixNano()
 
@@ -84,6 +91,12 @@ func (e *Engine) saveCache() error {
 	if err != nil {
 		return err
 	}
+
+	// Enforce cache size limit if configured.
+	if e.Cfg.CacheMaxMB > 0 && len(data) > e.Cfg.CacheMaxMB*1024*1024 {
+		return fmt.Errorf("cache size %d bytes exceeds limit of %d MB", len(data), e.Cfg.CacheMaxMB)
+	}
+
 	return os.WriteFile(e.cachePath(), data, 0o644)
 }
 
@@ -97,6 +110,12 @@ func (e *Engine) cacheValid(c *wikiCache) bool {
 			return nil
 		}
 		rel, _ := filepath.Rel(wikiDir, path)
+
+		// Skip the cache file itself.
+		if rel == ".cache.json" {
+			return nil
+		}
+
 		currentFiles[rel] = true
 
 		info, err := d.Info()

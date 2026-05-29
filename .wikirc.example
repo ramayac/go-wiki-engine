@@ -44,7 +44,9 @@ watch_interval = 0
 # Use .wiki/.cache.json to speed up searches, context, and relevant lookups.
 # Cache is mtime-validated — auto-invalidates when any wiki file changes.
 # Run wiki-engine lint --rebuild-cache to force a rebuild.
+# Set cache_max_mb to limit cache file size (0 = unlimited).
 cache_enabled = true
+cache_max_mb = 0
 
 # --- Ignored paths ---
 
