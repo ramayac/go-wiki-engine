@@ -1,6 +1,15 @@
 wiki_dir = "wiki"
 default_diff = "main...HEAD"
 log_lines = 10
+duplicate_threshold = 0.7
+stale_days = 30
+watch_interval = 0
+cache_enabled = true
+
+# Duplicate detection: pages with similarity above this threshold (0.0-1.0) are flagged.
+# Stale detection: wiki pages unchanged for this many days despite active source changes are flagged.
+# Watch: polling interval in seconds for wiki-engine watch (0 = disabled).
+# Cache: use .wiki/.cache.json to speed up searches and context lookups.
 
 ignore = [
   "wiki/",

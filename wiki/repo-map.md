@@ -47,7 +47,11 @@ scaffold/               Human-readable reference copy of embedded templates
 | `log-tail [n]` | Show last N log headings from `log.md` |
 | `changed [diff]` | `git diff --name-only` filtered to non-wiki, non-ignored files |
 | `candidates [diff]` | Same as changed, further filtered by `.wikirc` ignore rules |
-| `lint` | Check required files, broken index links, log heading format, open markers |
+| `lint` | Check required files, broken links (index + cross-page), log heading format and chronology, open markers, orphans, heading hierarchy, phase consistency |
+| `stats` | Aggregate statistics: file count, heading count, total lines, last-updated date |
+| `context [--minimal]` | Condensed wiki snapshot for agent context loading (~500 tokens) |
+| `summary <page>` | First heading + first paragraph preview of a page |
+| `relevant <query> [n]` | Rank wiki pages by relevance to a query |
 | `refresh [diff]` | Run list + log-tail + changed + candidates + lint as a maintenance snapshot |
 | `upgrade` | Re-runs `go install github.com/ramayac/go-wiki-engine/cmd/wiki-engine@latest` |
 | `version` | Print the version set by -ldflags at build time |
@@ -58,14 +62,16 @@ The CLI is **read-only plumbing**. It never writes wiki content.
 
 Workflows are defined once in `.wiki-instructions/` (canonical). Tool-specific directories contain symlinks:
 
-| Canonical source | Copilot path | Claude Code path |
-|---|---|---|
-| `.wiki-instructions/ingest.md` | `.github/prompts/wiki-ingest.prompt.md` | `.claude/commands/wiki-ingest.md` |
-| `.wiki-instructions/query.md` | `.github/prompts/wiki-query.prompt.md` | `.claude/commands/wiki-query.md` |
-| `.wiki-instructions/refresh.md` | `.github/prompts/wiki-refresh.prompt.md` | `.claude/commands/wiki-refresh.md` |
-| `.wiki-instructions/onboard.md` | `.github/prompts/wiki-onboard.prompt.md` | `.claude/commands/wiki-onboard.md` |
-| `.wiki-instructions/migrate-shims.md` | `.github/prompts/wiki-migrate-shims.prompt.md` | `.claude/commands/wiki-migrate-shims.md` |
-| `.wiki-instructions/wiki-maintainer.md` | `.github/instructions/wiki-maintainer.instructions.md` | — (instructions are self-contained) |
+| Canonical source | Copilot path | Claude Code path | pi.dev path |
+|---|---|---|---|
+| `.wiki-instructions/ingest.md` | `.github/prompts/wiki-ingest.prompt.md` | `.claude/commands/wiki-ingest.md` | `.pi/skills/wiki/SKILL.md` (via /skill:wiki) |
+| `.wiki-instructions/query.md` | `.github/prompts/wiki-query.prompt.md` | `.claude/commands/wiki-query.md` | (included in wiki skill) |
+| `.wiki-instructions/refresh.md` | `.github/prompts/wiki-refresh.prompt.md` | `.claude/commands/wiki-refresh.md` | (included in wiki skill) |
+| `.wiki-instructions/onboard.md` | `.github/prompts/wiki-onboard.prompt.md` | `.claude/commands/wiki-onboard.md` | (included in wiki skill) |
+| `.wiki-instructions/migrate-shims.md` | `.github/prompts/wiki-migrate-shims.prompt.md` | `.claude/commands/wiki-migrate-shims.md` | (included in wiki skill) |
+| `.wiki-instructions/wiki-maintainer.md` | `.github/instructions/wiki-maintainer.instructions.md` | — | — |
+
+The pi.dev integration uses an Agent Skills standard `SKILL.md` at `.pi/skills/wiki/SKILL.md` — a self-contained skill file that bundles all workflows into one entrypoint invoked via `/skill:wiki`.
 
 Frontmatter is compatible: both tools use `description`. Copilot-specific fields (`name`, `argument-hint`, `agent`) are ignored by Claude Code.
 

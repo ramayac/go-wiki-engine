@@ -8,6 +8,7 @@
 - [repo-map.md](repo-map.md) | Current repo architecture, subcommands, multi-tool integration model, config, build path.
 - [log.md](log.md) | Append-only timeline of wiki maintenance.
 - [lessons.md](lessons.md) | Design insights and gap post-mortems from real usage sessions.
+- [todo.md](todo.md) | Improvement backlog ranked by difficulty.
 
 ## Operations
 

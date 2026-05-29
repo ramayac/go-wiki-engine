@@ -10,10 +10,14 @@ import (
 
 // Config holds the parsed .wikirc settings.
 type Config struct {
-	WikiDir     string
-	DefaultDiff string
-	LogLines    int
-	Ignore      []string
+	WikiDir            string
+	DefaultDiff        string
+	LogLines           int
+	Ignore             []string
+	DuplicateThreshold float64 // 0.0-1.0, similarity above which pages are flagged as duplicates
+	StaleDays          int     // days after which an unchanged wiki page is flagged as stale
+	WatchInterval      int     // seconds between watch polls (0 = disabled)
+	CacheEnabled       bool    // use .wiki/.cache.json for faster lookups
 }
 
 // DefaultConfig returns a Config with sensible defaults.
@@ -21,7 +25,11 @@ func DefaultConfig() *Config {
 	return &Config{
 		WikiDir:     "wiki",
 		DefaultDiff: "main...HEAD",
-		LogLines:    10,
+		LogLines:           10,
+		DuplicateThreshold: 0.7,
+		StaleDays:          30,
+		WatchInterval:      0, // disabled by default
+		CacheEnabled:       true,
 		Ignore: []string{
 			"wiki/",
 			"bin/",
@@ -95,20 +103,69 @@ func Load(dir string) (*Config, error) {
 			cfg.DefaultDiff = val
 		case "log_lines":
 			cfg.LogLines = parseLogLines(val)
+		case "duplicate_threshold":
+			cfg.DuplicateThreshold = parseFloat(val, 0.7)
+		case "stale_days":
+			cfg.StaleDays = parsePositiveInt(val, 30)
+		case "watch_interval":
+			cfg.WatchInterval = parsePositiveInt(val, 0)
+		case "cache_enabled":
+			cfg.CacheEnabled = parseBool(val, true)
 		}
 	}
 	return cfg, scanner.Err()
 }
 
 func parseLogLines(s string) int {
+	return parsePositiveInt(s, 10)
+}
+
+func parsePositiveInt(s string, fallback int) int {
 	n := 0
 	for _, c := range s {
 		if c >= '0' && c <= '9' {
 			n = n*10 + int(c-'0')
 		}
 	}
-	if n == 0 {
-		return 10
+	if n <= 0 {
+		return fallback
 	}
 	return n
+}
+
+func parseFloat(s string, fallback float64) float64 {
+	// Simple parser: extract digits and one decimal point.
+	var result float64
+	decimal := false
+	divisor := 1.0
+	for _, c := range s {
+		if c == '.' && !decimal {
+			decimal = true
+			continue
+		}
+		if c >= '0' && c <= '9' {
+			d := float64(c - '0')
+			if decimal {
+				divisor *= 10
+				result += d / divisor
+			} else {
+				result = result*10 + d
+			}
+		}
+	}
+	if result <= 0 || result > 1 {
+		return fallback
+	}
+	return result
+}
+
+func parseBool(s string, fallback bool) bool {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "true", "yes", "1":
+		return true
+	case "false", "no", "0":
+		return false
+	default:
+		return fallback
+	}
 }

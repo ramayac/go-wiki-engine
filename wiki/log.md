@@ -2,7 +2,31 @@
 
 Append-only timeline of wiki maintenance activity.
 
-## [2026-05-01] ingest | unified instruction layer for Claude Code
+## [2026-05-28] ingest | smart context, enhanced lint, pi.dev support, new commands
+
+Major feature batch: composable lint checker system (9 checkers), four new CLI commands (stats, context, summary, relevant), pi.dev Agent Skills integration, and `--json` output support across all commands.
+
+**Added:**
+- `internal/engine/engine_lint.go` — Checker interface with 9 implementations: required-files, index-links, cross-page-links, orphans, heading-hierarchy, log-headings, log-chronology, markers, phase-consistency. `Lint()` now composes checkers, reports with severity levels (error/warn/info), and returns structured `Issue` objects.
+- `internal/engine/engine.go` — new types and methods: `Stats()`, `Context()`, `Summary()`, `Relevant()`, `JSONOutput` helpers.
+- `cmd/wiki-engine/main.go` — 5 new subcommands: `stats`, `context [--minimal]`, `summary <page>`, `relevant <query> [n]`. `--json` flag support on all commands.
+- `scaffold/.pi/skills/wiki/SKILL.md` — pi.dev Agent Skills standard skill wrapping all wiki workflows.
+- `scaffold/.wiki-instructions/*` — updated all workflow prompts to use `wiki-engine context` instead of listing 4+ files to read (reduces context tokens ~80%).
+- `.github/workflows/test.yml` — CI pipeline: vet, test, build on push/PR.
+- `wiki/todo.md` — 32-task improvement backlog ranked by difficulty.
+
+**Source changes:**
+- `internal/engine/engine.go` — removed monolithic `Lint()`, added `Context()`, `Summary()`, `Relevant()`, `Stats()`
+- `internal/engine/engine_lint.go` (new)
+- `cmd/wiki-engine/main.go` — JSON output, new commands
+- `internal/scaffold/scaffold.go` — added `files/.pi` to `SyncPrompts`
+- `internal/scaffold/scaffold_test.go` — pi skill verification
+- `scaffold/.pi/skills/wiki/SKILL.md` (new)
+- `scaffold/.wiki-instructions/*` — updated context sections
+
+**Changed:** `Lint()` now returns `LintResult{OK, Messages, Issues}` — backward compatible via `Messages` field. Cross-page link checker strips inline code to avoid false positives.
+
+**Needs human review:** agy CLI integration (deferred — needs research on agy's command format).
 
 Triggered by a gap analysis that revealed the intelligence layer (prompts, instructions) was Copilot-specific. Claude Code users had no guided workflows.
 

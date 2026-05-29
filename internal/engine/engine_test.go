@@ -235,3 +235,202 @@ func TestIsIgnored(t *testing.T) {
 		}
 	}
 }
+
+func TestStats(t *testing.T) {
+	root := setupWiki(t)
+	eng := newTestEngine(root)
+	st, err := eng.Stats()
+	if err != nil {
+		t.Fatalf("Stats failed: %v", err)
+	}
+	if st.Files != 9 {
+		t.Errorf("Stats Files = %d, want 9", st.Files)
+	}
+	if st.Headings == 0 {
+		t.Error("Stats should have headings > 0")
+	}
+	if st.TotalLines == 0 {
+		t.Error("Stats should have lines > 0")
+	}
+}
+
+func TestContext(t *testing.T) {
+	root := setupWiki(t)
+	eng := newTestEngine(root)
+	cr, err := eng.Context(false)
+	if err != nil {
+		t.Fatalf("Context failed: %v", err)
+	}
+	if cr.Files == 0 {
+		t.Error("Context should have files > 0")
+	}
+	if len(cr.Catalog) == 0 {
+		t.Error("Context should have catalog entries from index.md")
+	}
+	if len(cr.RecentLog) == 0 {
+		t.Error("Context should have recent log entries")
+	}
+}
+
+func TestContextMinimal(t *testing.T) {
+	root := setupWiki(t)
+	eng := newTestEngine(root)
+	cr, err := eng.Context(true)
+	if err != nil {
+		t.Fatalf("Context(minimal) failed: %v", err)
+	}
+	if cr.Phase != "" {
+		t.Error("Context(minimal) should not include phase")
+	}
+}
+
+func TestSummary(t *testing.T) {
+	root := setupWiki(t)
+	eng := newTestEngine(root)
+	sr, err := eng.Summary("README.md")
+	if err != nil {
+		t.Fatalf("Summary failed: %v", err)
+	}
+	if sr.FirstHeader == "" {
+		t.Error("Summary should return first header")
+	}
+	if sr.File != "README.md" {
+		t.Errorf("Summary File = %q, want README.md", sr.File)
+	}
+}
+
+func TestSummaryNotFound(t *testing.T) {
+	root := setupWiki(t)
+	eng := newTestEngine(root)
+	_, err := eng.Summary("nonexistent.md")
+	if err == nil {
+		t.Error("Summary should error for nonexistent page")
+	}
+}
+
+func TestRelevant(t *testing.T) {
+	root := setupWiki(t)
+	eng := newTestEngine(root)
+	results, err := eng.Relevant("schema", 3)
+	if err != nil {
+		t.Fatalf("Relevant failed: %v", err)
+	}
+	if len(results) == 0 {
+		t.Error("Relevant should find matches for 'schema'")
+	}
+	// First result should be schema.md itself.
+	if len(results) > 0 && !strings.Contains(results[0].File, "schema.md") {
+		t.Logf("first result is %s (expected schema.md to rank high)", results[0].File)
+	}
+}
+
+func TestRelevantEmpty(t *testing.T) {
+	root := setupWiki(t)
+	eng := newTestEngine(root)
+	_, err := eng.Relevant("", 3)
+	if err == nil {
+		t.Error("Relevant should error for empty query")
+	}
+}
+
+func TestLintIssues(t *testing.T) {
+	root := setupWiki(t)
+	eng := newTestEngine(root)
+	result := eng.Lint()
+	if !result.OK {
+		t.Errorf("Lint failed on valid wiki: %v", result.Messages)
+	}
+	if result.Issues == nil {
+		t.Error("Lint should populate Issues field")
+	}
+}
+
+func TestLintOrphans(t *testing.T) {
+	root := setupWiki(t)
+	// Add an extra page not in index.md.
+	extraPath := filepath.Join(root, "wiki", "extra.md")
+	os.WriteFile(extraPath, []byte("# Extra\n"), 0o644)
+	eng := newTestEngine(root)
+	result := eng.Lint()
+	found := false
+	for _, iss := range result.Issues {
+		if iss.Check == "orphans" && strings.Contains(iss.File, "extra.md") {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("Lint should detect orphan page extra.md")
+	}
+}
+
+func TestLintCrossPageLink(t *testing.T) {
+	root := setupWiki(t)
+	// Add a broken link in a non-index page.
+	phasesPath := filepath.Join(root, "wiki", "phases.md")
+	os.WriteFile(phasesPath, []byte("# Phases\n\nSee [nowhere.md](nowhere.md)\n"), 0o644)
+	eng := newTestEngine(root)
+	result := eng.Lint()
+	found := false
+	for _, iss := range result.Issues {
+		if iss.Check == "cross-page-links" && strings.Contains(iss.Message, "nowhere.md") {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("Lint should detect cross-page broken link")
+	}
+}
+
+func TestLintHeadingHierarchy(t *testing.T) {
+	root := setupWiki(t)
+	// Create a page with a skipped heading level.
+	testPath := filepath.Join(root, "wiki", "repo-map.md")
+	os.WriteFile(testPath, []byte("# Title\n\n### Skipped h2\n"), 0o644)
+	eng := newTestEngine(root)
+	result := eng.Lint()
+	found := false
+	for _, iss := range result.Issues {
+		if iss.Check == "heading-hierarchy" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("Lint should detect heading level skip (h1 -> h3)")
+	}
+}
+
+func TestLintLogChronology(t *testing.T) {
+	root := setupWiki(t)
+	// Write log with wrong order.
+	logPath := filepath.Join(root, "wiki", "log.md")
+	os.WriteFile(logPath, []byte("# Log\n\n## [2026-04-15] ingest | first\n\n## [2026-04-16] ingest | second\n"), 0o644)
+	eng := newTestEngine(root)
+	result := eng.Lint()
+	found := false
+	for _, iss := range result.Issues {
+		if iss.Check == "log-chronology" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("Lint should detect log entries not in descending order")
+	}
+}
+
+func TestLintPhaseConsistency(t *testing.T) {
+	root := setupWiki(t)
+	// Write phases.md with invalid status.
+	phasesPath := filepath.Join(root, "wiki", "phases.md")
+	os.WriteFile(phasesPath, []byte("# Phases\n\n| 1 | Test | bad-status |\n"), 0o644)
+	eng := newTestEngine(root)
+	result := eng.Lint()
+	found := false
+	for _, iss := range result.Issues {
+		if iss.Check == "phase-consistency" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("Lint should detect unknown phase status")
+	}
+}

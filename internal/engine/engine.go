@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/ramayac/go-wiki-engine/internal/config"
 )
@@ -236,71 +237,247 @@ func (e *Engine) isIgnored(path string) bool {
 	return false
 }
 
-// LintResult holds the outcome of a wiki lint check.
-type LintResult struct {
-	OK       bool
-	Messages []string
+// JSONOutput is the standard JSON envelope for all commands.
+type JSONOutput struct {
+	OK    bool        `json:"ok"`
+	Data  interface{} `json:"data,omitempty"`
+	Error string      `json:"error,omitempty"`
 }
 
-var requiredFiles = []string{
-	"README.md",
-	"index.md",
-	"log.md",
-	"schema.md",
-	"phases.md",
-	"repo-map.md",
-	"operations/ingest.md",
-	"operations/query.md",
-	"operations/lint.md",
+func jsonOK(data interface{}) JSONOutput {
+	return JSONOutput{OK: true, Data: data}
 }
 
-var logHeadingValidRe = regexp.MustCompile(`^## \[\d{4}-\d{2}-\d{2}\] [^|]+ \| .+$`)
-var markerRe = regexp.MustCompile(`(?i)(TODO:|TBD:|UNKNOWN:)`)
+func jsonErr(err error) JSONOutput {
+	return JSONOutput{OK: false, Error: err.Error()}
+}
 
-// Lint checks the wiki for structural issues.
-func (e *Engine) Lint() LintResult {
-	var msgs []string
-	wikiDir := e.WikiPath()
+// StatsResult holds aggregate wiki statistics.
+type StatsResult struct {
+	Files       int    `json:"files"`
+	Headings    int    `json:"headings"`
+	TotalLines  int    `json:"total_lines"`
+	LastUpdated string `json:"last_updated"`
+}
 
-	// Check required files.
-	for _, req := range requiredFiles {
-		p := filepath.Join(wikiDir, req)
-		if _, err := os.Stat(p); os.IsNotExist(err) {
-			msgs = append(msgs, fmt.Sprintf("missing required wiki file: %s/%s", e.Cfg.WikiDir, req))
-		}
+// Stats returns aggregate statistics about the wiki.
+func (e *Engine) Stats() (*StatsResult, error) {
+	files, err := e.List()
+	if err != nil {
+		return nil, err
 	}
+	sr := &StatsResult{Files: len(files)}
 
-	// Check index links.
-	indexPath := filepath.Join(wikiDir, "index.md")
-	if data, err := os.ReadFile(indexPath); err == nil {
-		linkRe := regexp.MustCompile(`\]\(([^)]+)\)`)
-		for _, match := range linkRe.FindAllStringSubmatch(string(data), -1) {
-			target := match[1]
-			if strings.HasPrefix(target, "http://") || strings.HasPrefix(target, "https://") || strings.HasPrefix(target, "#") {
+	var latest time.Time
+	for _, rel := range files {
+		abs := filepath.Join(e.RootDir, rel)
+		info, err := os.Stat(abs)
+		if err != nil {
+			continue
+		}
+		if info.ModTime().After(latest) {
+			latest = info.ModTime()
+		}
+		// Count lines.
+		if strings.HasSuffix(rel, ".md") {
+			f, err := os.Open(abs)
+			if err != nil {
 				continue
 			}
-			linked := filepath.Join(wikiDir, target)
-			if _, err := os.Stat(linked); os.IsNotExist(err) {
-				msgs = append(msgs, fmt.Sprintf("broken index link: %s", target))
+			scanner := bufio.NewScanner(f)
+			for scanner.Scan() {
+				sr.TotalLines++
+				if headingRe.MatchString(scanner.Text()) {
+					sr.Headings++
+				}
 			}
+			f.Close()
 		}
 	}
+	if !latest.IsZero() {
+		sr.LastUpdated = latest.Format("2006-01-02")
+	}
+	return sr, nil
+}
 
-	// Check log heading format.
-	logPath := filepath.Join(wikiDir, "log.md")
-	if f, err := os.Open(logPath); err == nil {
-		scanner := bufio.NewScanner(f)
-		for scanner.Scan() {
-			line := scanner.Text()
-			if logHeadingRe.MatchString(line) && !logHeadingValidRe.MatchString(line) {
-				msgs = append(msgs, fmt.Sprintf("invalid log heading: %s", line))
-			}
-		}
-		f.Close()
+// ContextEntry is a single entry in the context catalog.
+type ContextEntry struct {
+	File        string `json:"file"`
+	Description string `json:"description"`
+	SizeBytes   int64  `json:"size_bytes"`
+}
+
+// ContextResult holds a condensed wiki snapshot for agent context loading.
+type ContextResult struct {
+	Files         int            `json:"files"`
+	LastUpdated   string         `json:"last_updated"`
+	Phase         string         `json:"phase"`
+	Catalog       []ContextEntry `json:"catalog"`
+	RecentLog     []string       `json:"recent_log"`
+	HeadingCount  int            `json:"heading_count"`
+}
+
+// Context returns a condensed snapshot of the wiki — enough for an agent
+// to understand what's in the wiki without reading every file. When minimal
+// is true, only the catalog and recent log are returned.
+func (e *Engine) Context(minimal bool) (*ContextResult, error) {
+	cr := &ContextResult{}
+
+	// Build catalog from index.md.
+	wikiDir := e.WikiPath()
+	indexPath := filepath.Join(wikiDir, "index.md")
+	if data, err := os.ReadFile(indexPath); err == nil {
+		cr.Catalog = parseIndexCatalog(string(data))
 	}
 
-	// Check for markers.
-	files, _ := e.List()
+	// Stats.
+	if st, err := e.Stats(); err == nil {
+		cr.Files = st.Files
+		cr.LastUpdated = st.LastUpdated
+		cr.HeadingCount = st.Headings
+	}
+
+	// Recent log.
+	if tail, err := e.LogTail(3); err == nil {
+		cr.RecentLog = tail
+	}
+
+	// Phase status.
+	if !minimal {
+		cr.Phase = e.currentPhase()
+	}
+
+	return cr, nil
+}
+
+// parseIndexCatalog extracts page file + description from index.md content.
+func parseIndexCatalog(content string) []ContextEntry {
+	var entries []ContextEntry
+	// Match entries with descriptions: - [text](file) | description
+	catalogRe := regexp.MustCompile(`-\s+\[([^\]]+)\]\(([^)]+)\)\s*\|\s*(.+)`)
+	for _, match := range catalogRe.FindAllStringSubmatch(content, -1) {
+		if len(match) >= 4 {
+			entries = append(entries, ContextEntry{
+				File:        match[2],
+				Description: strings.TrimSpace(match[3]),
+			})
+		}
+	}
+	// Also match entries without descriptions: - [text](file)
+	simpleRe := regexp.MustCompile(`-\s+\[([^\]]+)\]\(([^)]+)\)`)
+	seen := make(map[string]bool)
+	for _, e := range entries {
+		seen[e.File] = true
+	}
+	for _, match := range simpleRe.FindAllStringSubmatch(content, -1) {
+		if len(match) >= 3 && !seen[match[2]] {
+			entries = append(entries, ContextEntry{
+				File:        match[2],
+				Description: "",
+			})
+		}
+	}
+	return entries
+}
+
+// currentPhase reads the active phase status from phases.md.
+func (e *Engine) currentPhase() string {
+	phasesPath := filepath.Join(e.WikiPath(), "phases.md")
+	f, err := os.Open(phasesPath)
+	if err != nil {
+		return "unknown"
+	}
+	defer f.Close()
+
+	phaseRowRe := regexp.MustCompile(`^\|\s*(\d+)\s*\|\s*(.+?)\s*\|\s*(\S+)\s*\|`)
+	var last string
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		m := phaseRowRe.FindStringSubmatch(scanner.Text())
+		if m != nil {
+			last = fmt.Sprintf("Phase %s: %s — %s", m[1], strings.TrimSpace(m[2]), strings.TrimSpace(m[3]))
+		}
+	}
+	if last == "" {
+		return "unknown"
+	}
+	return last
+}
+
+// SummaryResult holds a concise page preview.
+type SummaryResult struct {
+	File        string `json:"file"`
+	FirstHeader string `json:"first_header"`
+	FirstPara   string `json:"first_para"`
+	LineCount   int    `json:"line_count"`
+}
+
+// Summary returns a preview of a single wiki page: its first heading,
+// first paragraph, and line count. Useful for agents to preview a page
+// before loading it fully.
+func (e *Engine) Summary(page string) (*SummaryResult, error) {
+	abs := filepath.Join(e.WikiPath(), page)
+	f, err := os.Open(abs)
+	if err != nil {
+		return nil, fmt.Errorf("page not found: %s", page)
+	}
+	defer f.Close()
+
+	sr := &SummaryResult{File: page}
+	scanner := bufio.NewScanner(f)
+	inPara := false
+	lineNo := 0
+	for scanner.Scan() {
+		lineNo++
+		text := scanner.Text()
+		trimmed := strings.TrimSpace(text)
+
+		// Capture first heading.
+		if sr.FirstHeader == "" && headingRe.MatchString(text) {
+			sr.FirstHeader = text
+			continue
+		}
+
+		// Capture first non-empty paragraph after frontmatter.
+		if sr.FirstPara == "" && trimmed != "" && !strings.HasPrefix(trimmed, "---") && !strings.HasPrefix(trimmed, "#") && !strings.HasPrefix(trimmed, "|") && !strings.HasPrefix(trimmed, "```") {
+			inPara = true
+			sr.FirstPara = text
+			continue
+		}
+		if inPara && trimmed == "" {
+			inPara = false
+		}
+	}
+	sr.LineCount = lineNo
+	return sr, nil
+}
+
+// RelevanceResult is a ranked page match for a query.
+type RelevanceResult struct {
+	File  string  `json:"file"`
+	Score float64 `json:"score"`
+	Why   string  `json:"why"`
+}
+
+// Relevant ranks wiki pages by relevance to a query. It scores each page
+// by heading-match count plus body-match count, weighted by heading
+// proximity (matches near headings score higher).
+func (e *Engine) Relevant(query string, topN int) ([]RelevanceResult, error) {
+	if query == "" {
+		return nil, fmt.Errorf("query is empty")
+	}
+	if topN <= 0 {
+		topN = 5
+	}
+
+	files, err := e.List()
+	if err != nil {
+		return nil, err
+	}
+
+	lowerQ := strings.ToLower(query)
+	var results []RelevanceResult
+
 	for _, rel := range files {
 		if !strings.HasSuffix(rel, ".md") {
 			continue
@@ -310,31 +487,233 @@ func (e *Engine) Lint() LintResult {
 		if err != nil {
 			continue
 		}
+
+		var score float64
+		headingHits := 0
+		bodyHits := 0
+		var matchedHeadings []string
+
 		scanner := bufio.NewScanner(f)
-		lineNo := 0
-		inCodeBlock := false
 		for scanner.Scan() {
-			lineNo++
 			text := scanner.Text()
-			// Track fenced code blocks.
-			if strings.HasPrefix(strings.TrimSpace(text), "```") {
-				inCodeBlock = !inCodeBlock
+			lower := strings.ToLower(text)
+
+			if headingRe.MatchString(text) {
+				if strings.Contains(lower, lowerQ) {
+					headingHits++
+					matchedHeadings = append(matchedHeadings, text)
+				}
 				continue
 			}
-			if inCodeBlock {
-				continue
-			}
-			if markerRe.MatchString(text) {
-				msgs = append(msgs, fmt.Sprintf("marker in %s:%d: %s", rel, lineNo, strings.TrimSpace(text)))
+
+			if strings.Contains(lower, lowerQ) {
+				bodyHits++
 			}
 		}
 		f.Close()
+
+		// Score: heading matches are worth 3× body matches.
+		score = float64(headingHits)*3.0 + float64(bodyHits)
+
+		if score > 0 {
+			why := fmt.Sprintf("%d heading match(es), %d body match(es)", headingHits, bodyHits)
+			if len(matchedHeadings) > 0 {
+				why += fmt.Sprintf(" under %s", strings.Join(matchedHeadings, ", "))
+			}
+			results = append(results, RelevanceResult{
+				File:  rel,
+				Score: score,
+				Why:   why,
+			})
+		}
 	}
 
-	return LintResult{
-		OK:       len(msgs) == 0,
-		Messages: msgs,
+	// Sort descending by score.
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].Score > results[j].Score
+	})
+
+	if len(results) > topN {
+		results = results[:topN]
 	}
+	return results, nil
+}
+
+// ImpactResult reports which wiki pages mention a changed file.
+type ImpactResult struct {
+	ChangedFile  string   `json:"changed_file"`
+	WikiPages    []string `json:"wiki_pages"`
+}
+
+// Impact maps changed files to wiki pages that mention them.
+// For each changed file, it searches wiki content for the file's basename
+// and returns which wiki pages are likely impacted.
+func (e *Engine) Impact(changedFiles []string) ([]ImpactResult, error) {
+	files, err := e.List()
+	if err != nil {
+		return nil, err
+	}
+
+	// Build a map of basename → changed file(s).
+	basenameToFiles := make(map[string][]string)
+	for _, cf := range changedFiles {
+		base := filepath.Base(cf)
+		basenameToFiles[base] = append(basenameToFiles[base], cf)
+	}
+
+	// For each changed file, search wiki content.
+	var results []ImpactResult
+	seen := make(map[string]map[string]bool) // changed file → set of wiki pages
+
+	for _, cf := range changedFiles {
+		seen[cf] = make(map[string]bool)
+	}
+
+	for _, rel := range files {
+		if !strings.HasSuffix(rel, ".md") {
+			continue
+		}
+		abs := filepath.Join(e.RootDir, rel)
+		data, err := os.ReadFile(abs)
+		if err != nil {
+			continue
+		}
+		content := string(data)
+		lower := strings.ToLower(content)
+
+		for base, cfs := range basenameToFiles {
+			if strings.Contains(lower, strings.ToLower(base)) {
+				for _, cf := range cfs {
+					seen[cf][rel] = true
+				}
+			}
+		}
+	}
+
+	for _, cf := range changedFiles {
+		var pages []string
+		for p := range seen[cf] {
+			pages = append(pages, p)
+		}
+		sort.Strings(pages)
+		results = append(results, ImpactResult{
+			ChangedFile: cf,
+			WikiPages:   pages,
+		})
+	}
+	return results, nil
+}
+
+// DiffResult holds the output of wiki-engine diff.
+type DiffResult struct {
+	From    string   `json:"from"`
+	To      string   `json:"to"`
+	Added   []string `json:"added"`
+	Removed []string `json:"removed"`
+	Changed []string `json:"changed"`
+}
+
+// Diff shows wiki file changes between two git refs using git diff.
+func (e *Engine) Diff(from, to string) (*DiffResult, error) {
+	dr := &DiffResult{From: from, To: to}
+
+	// List wiki files at <from>.
+	fromFiles, _ := e.filesAtRef(from)
+	toFiles, _ := e.filesAtRef(to)
+
+	fromSet := make(map[string]bool)
+	toSet := make(map[string]bool)
+	for _, f := range fromFiles {
+		fromSet[f] = true
+	}
+	for _, f := range toFiles {
+		toSet[f] = true
+	}
+
+	// Added in <to> but not in <from>.
+	for _, f := range toFiles {
+		if !fromSet[f] {
+			dr.Added = append(dr.Added, f)
+		}
+	}
+	// Removed from <from>.
+	for _, f := range fromFiles {
+		if !toSet[f] {
+			dr.Removed = append(dr.Removed, f)
+		}
+	}
+	// Changed (present in both, but modified).
+	changedOut, err := e.changedWikiFiles(from + ".." + to)
+	if err == nil {
+		dr.Changed = changedOut
+	}
+
+	return dr, nil
+}
+
+// filesAtRef lists wiki files at a given git ref.
+func (e *Engine) filesAtRef(ref string) ([]string, error) {
+	cmd := exec.Command("git", "ls-tree", "-r", "--name-only", ref, e.Cfg.WikiDir+"/")
+	cmd.Dir = e.RootDir
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+	var files []string
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if line != "" {
+			files = append(files, line)
+		}
+	}
+	return files, nil
+}
+
+// changedWikiFiles returns wiki files changed in a diff range.
+func (e *Engine) changedWikiFiles(diffRange string) ([]string, error) {
+	cmd := exec.Command("git", "diff", "--name-only", diffRange, "--", e.Cfg.WikiDir+"/")
+	cmd.Dir = e.RootDir
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+	var files []string
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if line != "" {
+			files = append(files, line)
+		}
+	}
+	return files, nil
+}
+
+// WatchResult holds the output of one watch cycle.
+type WatchResult struct {
+	Changed    []string       `json:"changed"`
+	Candidates []string       `json:"candidates"`
+	LintOK     bool           `json:"lint_ok"`
+	LintIssues []Issue        `json:"lint_issues,omitempty"`
+}
+
+// WatchOnce runs a single watch cycle: changed + candidates + lint.
+func (e *Engine) WatchOnce() (*WatchResult, error) {
+	wr := &WatchResult{}
+
+	changed, err := e.Changed(e.Cfg.DefaultDiff)
+	if err != nil {
+		return nil, err
+	}
+	wr.Changed = changed
+
+	candidates, err := e.Candidates(e.Cfg.DefaultDiff)
+	if err != nil {
+		return nil, err
+	}
+	wr.Candidates = candidates
+
+	lint := e.Lint()
+	wr.LintOK = lint.OK
+	wr.LintIssues = lint.Issues
+
+	return wr, nil
 }
 
 // Refresh runs the full maintenance snapshot and returns a formatted report.

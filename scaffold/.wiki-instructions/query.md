@@ -9,10 +9,10 @@ Answer the user's repository question from the wiki first.
 
 ## Required context
 
-- Read [wiki/index.md](../../wiki/index.md).
-- Read recent entries in [wiki/log.md](../../wiki/log.md).
-- Read [wiki/operations/query.md](../../wiki/operations/query.md).
-- Search the wiki before widening to source files.
+- Run `wiki-engine context` to get the current wiki snapshot.
+- Search the wiki with `wiki-engine search <term>` or `wiki-engine relevant <term>`.
+- Read only the wiki pages needed to answer the question.
+- If wiki-engine is not installed, read [wiki/index.md](../../wiki/index.md) and [wiki/log.md](../../wiki/log.md) instead.
 
 ## Execution steps
 
