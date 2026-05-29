@@ -261,9 +261,23 @@ func (c *headingHierarchyChecker) Check(e *Engine) ([]Issue, error) {
 		lineNo := 0
 		lastLevel := 0
 		h1Count := 0
+		inHTMLComment := false
 		for scanner.Scan() {
 			lineNo++
 			text := scanner.Text()
+			trimmed := strings.TrimSpace(text)
+
+			// Track HTML comments (<!-- ... -->).
+			if strings.Contains(trimmed, "<!--") {
+				inHTMLComment = true
+			}
+			if inHTMLComment {
+				if strings.Contains(trimmed, "-->") {
+					inHTMLComment = false
+				}
+				continue
+			}
+
 			m := headingLevelRe.FindStringSubmatch(text)
 			if m == nil {
 				continue

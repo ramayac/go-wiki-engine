@@ -44,8 +44,8 @@ Ranked by implementation difficulty within each tier. Effort assumes familiarity
 | 19 | **`wiki-engine impact <changed-files>` command** | 1d | ⬜ Not started — maps changed files to wiki pages that need updating |
 | 20 | **Refactor lint to composable checker pattern** | 1d | ✅ `Checker` interface, 9 implementations, `allCheckers()`, severity levels |
 | 21 | **`--json` flag on all commands** | 1d | ✅ Consistent JSON envelope on `list`, `headings`, `search`, `log-tail`, `changed`, `candidates`, `lint`, `stats`, `context`, `summary`, `relevant` |
-| 22 | **Integration tests** | 1.5d | ⬜ Not started — end-to-end test with temp repo |
-| 23 | **Dead link detection to external files** | 1d | ⬜ Not started — validate links from wiki to source files |
+| 22 | **Integration tests** | 1.5d | ✅ `test/integration_test.sh` — 14 end-to-end tests covering init, list, search, lint, stats, context, summary, relevant, json, diff, watch, impact, cache, duplicate detection |
+| 23 | **Dead link detection to external files** | 1d | ✅ `externalLinksChecker` — validates wiki→source-file links, part of lint |
 
 ---
 
@@ -53,9 +53,9 @@ Ranked by implementation difficulty within each tier. Effort assumes familiarity
 
 | # | Task | Effort | Status |
 |---|------|--------|--------|
-| 24 | **Wiki cache: `.wiki/.cache.json`** | 2d | ⬜ |
-| 25 | **Recursive `.wikirc` lookup** | 2d | ⬜ |
-| 26 | **`wiki-engine diff <from> <to>` command** | 2d | ⬜ |
+| 24 | **Wiki cache: `.wiki/.cache.json`** | 2d | ✅ `engine_cache.go` — mtime-validated cache, `--rebuild-cache` flag, `cache_enabled` config |
+| 25 | **Recursive `.wikirc` lookup** | 2d | ⬜ Deferred |
+| 26 | **`wiki-engine diff <from> <to>` command** | 2d | ✅ `engine.Diff()` — added/removed/changed wiki files between two git refs |
 | 27 | **Severity levels in lint** | 1.5d | ✅ Already done — `SevInfo`, `SevWarn`, `SevError` |
 
 ---
@@ -64,8 +64,8 @@ Ranked by implementation difficulty within each tier. Effort assumes familiarity
 
 | # | Task | Effort | Status |
 |---|------|--------|--------|
-| 28 | **Duplicate content detection** | 3d | ⬜ |
-| 29 | **Stale content signal** | 2d | ⬜ |
-| 30 | **`wiki-engine watch` mode** | 3d | ⬜ |
+| 28 | **Duplicate content detection** | 3d | ✅ `duplicateContentChecker` — Jaccard similarity, `duplicate_threshold` config |
+| 29 | **Stale content signal** | 2d | ✅ `staleContentChecker` — mtime threshold, `stale_days` config, source-change-aware |
+| 30 | **`wiki-engine watch` mode** | 3d | ✅ `engine.WatchOnce()` + `watch` command with `--once` and continuous modes, `watch_interval` config |
 | 31 | **Wiki template system** | 3d | ⬜ |
 | 32 | **Multi-repo wiki aggregation** | 4d | ⬜ |

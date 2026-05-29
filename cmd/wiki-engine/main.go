@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime/debug"
 	"strings"
+	"time"
 
 	"github.com/ramayac/go-wiki-engine/internal/config"
 	"github.com/ramayac/go-wiki-engine/internal/engine"
@@ -508,7 +509,9 @@ Commands:
   summary <page>          Show first heading and paragraph of a page
   relevant <query> [n]    Rank wiki pages by relevance to a query
   impact <file...>        Show which wiki pages mention changed files (or pipe from changed)
-  lint                    Check wiki structure, links, and markers
+  lint [--rebuild-cache] Check wiki structure, links, and markers
+  diff <from> <to>        Show wiki file changes between two git refs
+  watch [--once]          Poll for changes and lint issues (interval from .wikirc)
   refresh [diff-range]    Run the full maintenance snapshot
   upgrade                 Self-upgrade to the latest version via go install
   version                 Print the version
