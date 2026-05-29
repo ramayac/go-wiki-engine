@@ -36,10 +36,10 @@ This scaffolds:
 | `wiki/` | Required pages + operations docs |
 | `.wikirc` | Per-repo config (wiki dir, diff base, ignore patterns, detection thresholds) |
 | `.wiki-instructions/` | **Canonical workflow definitions** — single source of truth for all tools |
+| `.pi/skills/wiki/` | pi.dev Agent Skills standard skill |
+| `.claude/commands/` | Claude Code slash commands |
 | `.github/prompts/` | GitHub Copilot slash commands (`/wiki-ingest`, `/wiki-query`, `/wiki-refresh`, `/wiki-onboard`) |
 | `.github/instructions/` | Copilot instruction file |
-| `.claude/commands/` | Claude Code slash commands |
-| `.pi/skills/wiki/` | pi.dev Agent Skills standard skill |
 | `AGENTS.md` / `CLAUDE.md` | Redirect shims pointing AI tools to `wiki/index.md` |
 
 ## Slash Commands
