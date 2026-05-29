@@ -9,10 +9,9 @@ Run the repository wiki refresh workflow.
 
 ## Required context
 
-- Read [wiki/index.md](../../wiki/index.md).
-- Read recent entries in [wiki/log.md](../../wiki/log.md).
-- Read [wiki/operations/ingest.md](../../wiki/operations/ingest.md), [wiki/operations/query.md](../../wiki/operations/query.md), and [wiki/operations/lint.md](../../wiki/operations/lint.md).
-- Use [wiki/repo-map.md](../../wiki/repo-map.md) for repo-specific exclusions and architecture facts.
+- Run `wiki-engine context` to get the current wiki snapshot.
+- Use `wiki-engine refresh` for the full maintenance report.
+- If wiki-engine is not installed, read [wiki/index.md](../../wiki/index.md) and [wiki/repo-map.md](../../wiki/repo-map.md).
 
 ## Execution steps
 

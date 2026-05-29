@@ -1,0 +1,63 @@
+# wiki-engine configuration — copy to .wikirc and edit
+# See: wiki/config.md for full documentation
+
+# --- Paths ---
+
+# Directory name for the wiki (relative to repo root).
+wiki_dir = "wiki"
+
+# Default git diff range used by changed, candidates, refresh, watch.
+default_diff = "main...HEAD"
+
+# Number of log entries shown by log-tail.
+log_lines = 10
+
+# --- Detection thresholds ---
+
+# Jaccard similarity threshold for duplicate page detection.
+# Pages above this threshold are flagged as potential duplicates.
+# Range: 0.0–1.0. Set to 0 to disable.
+duplicate_threshold = 0.7
+
+# Days before an unchanged wiki page is flagged as stale.
+# When the repo has active source changes, severity upgrades from info to warn.
+# Set to 0 to disable.
+stale_days = 30
+
+# --- Context loading ---
+
+# Enable --summarize flag on wiki-engine context.
+# When true, context output includes per-page previews (first heading + paragraph + line count).
+# Useful for large wikis where reading every page would waste tokens.
+# When false (default), context returns lightweight one-line catalog entries.
+context_summarize = false
+
+# --- Watch mode ---
+
+# Polling interval in seconds for wiki-engine watch.
+# When > 0, watch runs changed + candidates + lint on every tick.
+# Set to 0 to disable.
+watch_interval = 0
+
+# --- Performance ---
+
+# Use .wiki/.cache.json to speed up searches, context, and relevant lookups.
+# Cache is mtime-validated — auto-invalidates when any wiki file changes.
+# Run wiki-engine lint --rebuild-cache to force a rebuild.
+# Set cache_max_mb to limit cache file size (0 = unlimited).
+cache_enabled = true
+cache_max_mb = 0
+
+# --- Ignored paths ---
+
+# Paths excluded from candidate filtering (wiki-engine candidates).
+# Directory prefixes (trailing /): match any path starting with the prefix.
+# Glob patterns (*): match against the file basename.
+# Exact paths: match only the exact path.
+ignore = [
+  "wiki/",
+  "bin/",
+  "vendor/",
+  "*.log",
+  "*.tmp",
+]

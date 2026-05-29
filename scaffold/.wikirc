@@ -2,6 +2,24 @@ wiki_dir = "wiki"
 default_diff = "main...HEAD"
 log_lines = 10
 
+# Detection thresholds
+duplicate_threshold = 0.7
+stale_days = 30
+
+# Context loading: enable --summarize flag on wiki-engine context
+context_summarize = false
+
+# Watch mode
+watch_interval = 0
+
+# Performance
+cache_enabled = true
+
+# Duplicate detection: pages with similarity above this threshold (0.0-1.0) are flagged.
+# Stale detection: wiki pages unchanged for this many days despite active source changes are flagged.
+# Watch: polling interval in seconds for wiki-engine watch (0 = disabled).
+# Cache: use .wiki/.cache.json to speed up searches and context lookups.
+
 ignore = [
   "wiki/",
   "bin/",

@@ -2,7 +2,57 @@
 
 Append-only timeline of wiki maintenance activity.
 
-## [2026-05-01] ingest | unified instruction layer for Claude Code
+## [2026-05-28] ingest | summarize mode, config docs, coverage, cache limit
+
+- Added `--summarize` flag to `wiki-engine context` for progressive disclosure (opt-in via `context_summarize`)
+- Added `.wiki-instructions/summarize.md` — separate agent prompt for large wikis
+- Added `wiki/config.md` — full `.wikirc` configuration reference page
+- Added `.wikirc.example` with all 10 config keys documented
+- Added `cache_max_mb` to cap `.wiki/.cache.json` size
+- Coverage: config 63→97%, engine 54→68%, scaffold 82%
+- Fixed cache self-invalidation bug (`.cache.json` mtime skew)
+
+## [2026-05-28] ingest | hardening — duplicate detection, stale content, watch mode, cache, diff, integration tests
+
+- Added `duplicate-content` and `stale-content` lint checkers (configurable via `.wikirc`)
+- Added `external-links` checker to validate wiki→source-file references
+- Added `wiki-engine diff <from> <to>` — git-aware wiki change report
+- Added `wiki-engine watch [--once]` — polling change detection + lint
+- Added `wiki-engine impact <file...>` — maps changed files to wiki pages
+- Added `.wiki/.cache.json` with mtime-based invalidation (`cache_enabled` config)
+- Added `duplicate_threshold`, `stale_days`, `watch_interval`, `cache_enabled` to `.wikirc`
+- Added watch agent prompt (`.wiki-instructions/watch.md`)
+- Added 14-scenario integration test suite (`test/integration_test.sh`)
+- Bootstrap: created `.pi/skills/wiki/SKILL.md` via `wiki-engine sync-prompts`
+- Updated `wiki/repo-map.md` with new commands, config keys, architecture entries
+- Fixed heading hierarchy checker to skip HTML comments
+- Updated README.md for all commands, config keys, pi.dev support
+
+## [2026-05-28] ingest | smart context, enhanced lint, pi.dev support, new commands
+
+Major feature batch: composable lint checker system (9 checkers), four new CLI commands (stats, context, summary, relevant), pi.dev Agent Skills integration, and `--json` output support across all commands.
+
+**Added:**
+- `internal/engine/engine_lint.go` — Checker interface with 9 implementations: required-files, index-links, cross-page-links, orphans, heading-hierarchy, log-headings, log-chronology, markers, phase-consistency. `Lint()` now composes checkers, reports with severity levels (error/warn/info), and returns structured `Issue` objects.
+- `internal/engine/engine.go` — new types and methods: `Stats()`, `Context()`, `Summary()`, `Relevant()`, `JSONOutput` helpers.
+- `cmd/wiki-engine/main.go` — 5 new subcommands: `stats`, `context [--minimal]`, `summary <page>`, `relevant <query> [n]`. `--json` flag support on all commands.
+- `scaffold/.pi/skills/wiki/SKILL.md` — pi.dev Agent Skills standard skill wrapping all wiki workflows.
+- `scaffold/.wiki-instructions/*` — updated all workflow prompts to use `wiki-engine context` instead of listing 4+ files to read (reduces context tokens ~80%).
+- `.github/workflows/test.yml` — CI pipeline: vet, test, build on push/PR.
+- `wiki/todo.md` — 32-task improvement backlog ranked by difficulty.
+
+**Source changes:**
+- `internal/engine/engine.go` — removed monolithic `Lint()`, added `Context()`, `Summary()`, `Relevant()`, `Stats()`
+- `internal/engine/engine_lint.go` (new)
+- `cmd/wiki-engine/main.go` — JSON output, new commands
+- `internal/scaffold/scaffold.go` — added `files/.pi` to `SyncPrompts`
+- `internal/scaffold/scaffold_test.go` — pi skill verification
+- `scaffold/.pi/skills/wiki/SKILL.md` (new)
+- `scaffold/.wiki-instructions/*` — updated context sections
+
+**Changed:** `Lint()` now returns `LintResult{OK, Messages, Issues}` — backward compatible via `Messages` field. Cross-page link checker strips inline code to avoid false positives.
+
+**Needs human review:** agy CLI integration (deferred — needs research on agy's command format).
 
 Triggered by a gap analysis that revealed the intelligence layer (prompts, instructions) was Copilot-specific. Claude Code users had no guided workflows.
 

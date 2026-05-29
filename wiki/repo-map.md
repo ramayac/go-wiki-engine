@@ -12,7 +12,10 @@ It ships as a single statically-compiled Go binary with no external dependencies
 cmd/wiki-engine/        CLI entry point — dispatches all subcommands
 internal/config/        .wikirc parser — DefaultConfig(), Load(dir)
 internal/engine/        Core operations: List, Headings, Search, LogTail,
-                        Changed, Candidates, Lint, Refresh
+                        Changed, Candidates, Lint, Refresh, Stats,
+                        Context, Summary, Relevant, Impact, Diff, Watch
+internal/engine/engine_cache.go  Memoized file index at .wiki/.cache.json
+internal/engine/engine_lint.go   Composable Checker interface + 10 implementations
 internal/scaffold/      Init command — copies go:embed scaffold into a target repo
   files/                go:embed source (mirror of scaffold/)
 internal/upgrade/       Self-upgrade via `go install @latest`
@@ -29,9 +32,11 @@ scaffold/               Human-readable reference copy of embedded templates
 
 ## High-Signal Areas
 
-- `cmd/wiki-engine/main.go` — CLI dispatcher; version injected via `-ldflags`
-- `internal/engine/engine.go` — all read-only wiki operations; `Lint` tracks fenced code blocks to avoid false positives
-- `internal/scaffold/scaffold.go` — `Init()` walks the embedded FS and remaps `wiki/` to the user-specified dir name; `SyncPrompts()` overwrites `.wiki-instructions/`, `.github/`, and `.claude/commands/` via `syncEmbeddedDir()` helper; `syncShims()` creates `AGENTS.md`/`CLAUDE.md` only when absent (never overwrites user content)
+- `cmd/wiki-engine/main.go` — CLI dispatcher; version injected via `-ldflags`; `--json` flag support on all commands
+- `internal/engine/engine.go` — all read-only wiki operations plus Diff, Watch, Impact; `Lint` delegates to composable checkers
+- `internal/engine/engine_lint.go` — `Checker` interface + 10 implementations: required-files, index-links, cross-page-links, orphans, heading-hierarchy, log-headings, log-chronology, markers, phase-consistency, external-links, duplicate-content, stale-content
+- `internal/engine/engine_cache.go` — mtime-validated JSON cache at `.wiki/.cache.json` for faster searches and context
+- `internal/scaffold/scaffold.go` — `Init()` walks the embedded FS and remaps `wiki/` to the user-specified dir name; `SyncPrompts()` overwrites `.wiki-instructions/`, `.github/`, `.claude/commands/`, and `.pi/skills/` via `syncEmbeddedDir()` helper; `syncShims()` creates `AGENTS.md`/`CLAUDE.md` only when absent (never overwrites user content)
 - `internal/config/config.go` — parses `.wikirc` (key=value + array format, no external deps); returns defaults when file is absent
 - `scaffold/` — source of truth for scaffold templates; `make sync-scaffold` copies it to `internal/scaffold/files/`
 
@@ -47,7 +52,14 @@ scaffold/               Human-readable reference copy of embedded templates
 | `log-tail [n]` | Show last N log headings from `log.md` |
 | `changed [diff]` | `git diff --name-only` filtered to non-wiki, non-ignored files |
 | `candidates [diff]` | Same as changed, further filtered by `.wikirc` ignore rules |
-| `lint` | Check required files, broken index links, log heading format, open markers |
+| `lint [--rebuild-cache]` | Check required files, broken links (index + cross-page), log heading format and chronology, open markers, orphans, heading hierarchy, phase consistency, external links to source files, duplicate content, stale content |
+| `stats` | Aggregate statistics: file count, heading count, total lines, last-updated date |
+| `context [--minimal]` | Condensed wiki snapshot for agent context loading (~500 tokens) |
+| `summary <page>` | First heading + first paragraph preview of a page |
+| `relevant <query> [n]` | Rank wiki pages by relevance to a query |
+| `impact <file...>` | Show which wiki pages mention changed source files (or pipe from `changed`) |
+| `diff <from> <to>` | Show wiki files added/removed/changed between two git refs |
+| `watch [--once]` | Poll for changes + lint issues at interval from `.wikirc`; `--once` for one-shot check |
 | `refresh [diff]` | Run list + log-tail + changed + candidates + lint as a maintenance snapshot |
 | `upgrade` | Re-runs `go install github.com/ramayac/go-wiki-engine/cmd/wiki-engine@latest` |
 | `version` | Print the version set by -ldflags at build time |
@@ -58,14 +70,16 @@ The CLI is **read-only plumbing**. It never writes wiki content.
 
 Workflows are defined once in `.wiki-instructions/` (canonical). Tool-specific directories contain symlinks:
 
-| Canonical source | Copilot path | Claude Code path |
-|---|---|---|
-| `.wiki-instructions/ingest.md` | `.github/prompts/wiki-ingest.prompt.md` | `.claude/commands/wiki-ingest.md` |
-| `.wiki-instructions/query.md` | `.github/prompts/wiki-query.prompt.md` | `.claude/commands/wiki-query.md` |
-| `.wiki-instructions/refresh.md` | `.github/prompts/wiki-refresh.prompt.md` | `.claude/commands/wiki-refresh.md` |
-| `.wiki-instructions/onboard.md` | `.github/prompts/wiki-onboard.prompt.md` | `.claude/commands/wiki-onboard.md` |
-| `.wiki-instructions/migrate-shims.md` | `.github/prompts/wiki-migrate-shims.prompt.md` | `.claude/commands/wiki-migrate-shims.md` |
-| `.wiki-instructions/wiki-maintainer.md` | `.github/instructions/wiki-maintainer.instructions.md` | — (instructions are self-contained) |
+| Canonical source | Copilot path | Claude Code path | pi.dev path |
+|---|---|---|---|
+| `.wiki-instructions/ingest.md` | `.github/prompts/wiki-ingest.prompt.md` | `.claude/commands/wiki-ingest.md` | `.pi/skills/wiki/SKILL.md` (via /skill:wiki) |
+| `.wiki-instructions/query.md` | `.github/prompts/wiki-query.prompt.md` | `.claude/commands/wiki-query.md` | (included in wiki skill) |
+| `.wiki-instructions/refresh.md` | `.github/prompts/wiki-refresh.prompt.md` | `.claude/commands/wiki-refresh.md` | (included in wiki skill) |
+| `.wiki-instructions/onboard.md` | `.github/prompts/wiki-onboard.prompt.md` | `.claude/commands/wiki-onboard.md` | (included in wiki skill) |
+| `.wiki-instructions/migrate-shims.md` | `.github/prompts/wiki-migrate-shims.prompt.md` | `.claude/commands/wiki-migrate-shims.md` | (included in wiki skill) |
+| `.wiki-instructions/wiki-maintainer.md` | `.github/instructions/wiki-maintainer.instructions.md` | — | — |
+
+The pi.dev integration uses an Agent Skills standard `SKILL.md` at `.pi/skills/wiki/SKILL.md` — a self-contained skill file that bundles all workflows into one entrypoint invoked via `/skill:wiki`.
 
 Frontmatter is compatible: both tools use `description`. Copilot-specific fields (`name`, `argument-hint`, `agent`) are ignored by Claude Code.
 
@@ -85,12 +99,18 @@ The workflow is:
 | `wiki_dir` | `wiki` | Directory name for the wiki |
 | `default_diff` | `main...HEAD` | Git diff range for changed/candidates/refresh |
 | `log_lines` | `10` | Number of log entries shown by log-tail |
+| `duplicate_threshold` | `0.7` | Similarity above which pages are flagged as duplicates (0.0-1.0, 0 disables) |
+| `stale_days` | `30` | Days before an unchanged wiki page is flagged as stale (0 disables) |
+| `watch_interval` | `0` | Seconds between watch polls (0 disables) |
+| `cache_enabled` | `true` | Use `.wiki/.cache.json` for faster lookups |
 | `ignore` | `["wiki/", "bin/", "*.log", "*.tmp"]` | Paths excluded from candidate filtering |
 
 ## Generated Artifacts
 
 - `bin/wiki-engine` — compiled binary (gitignored)
 - `internal/scaffold/files/` — synced from `scaffold/` via `make sync-scaffold`; embedded into the binary
+- `wiki/.cache.json` — memoized file index (gitignored, auto-rebuilt via `lint --rebuild-cache`)
+- `test/integration_test.sh` — 14-scenario end-to-end test suite
 
 ## Build and Release Path
 

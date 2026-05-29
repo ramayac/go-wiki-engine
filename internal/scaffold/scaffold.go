@@ -97,10 +97,10 @@ func Init(destDir, wikiDir string) error {
 }
 
 // SyncPrompts overwrites the .wiki-instructions/, .github/prompts/,
-// .github/instructions/, and .claude/commands/ files in destDir with the
-// current embedded versions. It does not touch wiki/ content or .wikirc.
-// Safe to run after a wiki-engine upgrade to pick up new or changed
-// prompts and instructions for all supported AI tools.
+// .github/instructions/, .claude/commands/, and .pi/skills/ files in
+// destDir with the current embedded versions. It does not touch wiki/
+// content or .wikirc. Safe to run after a wiki-engine upgrade to pick
+// up new or changed prompts and instructions for all supported AI tools.
 func SyncPrompts(destDir string) ([]string, error) {
 	var updated []string
 
@@ -111,6 +111,7 @@ func SyncPrompts(destDir string) ([]string, error) {
 		"files/.wiki-instructions",
 		"files/.github",
 		"files/.claude",
+		"files/.pi",
 	} {
 		err := syncEmbeddedDir(destDir, prefix, &updated)
 		if err != nil {

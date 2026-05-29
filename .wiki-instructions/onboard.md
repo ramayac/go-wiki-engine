@@ -9,9 +9,10 @@ Run a full-project wiki onboarding. This is a **cold-start** survey — do not r
 
 ## Required context
 
-- Read [wiki/index.md](../../wiki/index.md) — check whether it still has template content.
+- Run `wiki-engine context` to check whether the wiki has been populated.
 - Read [wiki/phases.md](../../wiki/phases.md) — check which phases are still `not-started`.
-- Skim the top-level directory to understand what kind of project this is before reading any source.
+- Skim the top-level directory to understand what kind of project this is.
+- If wiki-engine is not installed, read [wiki/index.md](../../wiki/index.md) instead.
 
 ## Execution steps
 

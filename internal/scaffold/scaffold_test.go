@@ -135,6 +135,17 @@ func TestSyncPrompts(t *testing.T) {
 		}
 	}
 
+	// Verify pi.dev skill files were written.
+	piSkills := []string{
+		".pi/skills/wiki/SKILL.md",
+	}
+	for _, f := range piSkills {
+		p := filepath.Join(dest, f)
+		if _, err := os.Stat(p); os.IsNotExist(err) {
+			t.Errorf("SyncPrompts missing pi.dev skill file: %s", f)
+		}
+	}
+
 	// Wiki content and .wikirc should NOT have been created.
 	if _, err := os.Stat(filepath.Join(dest, "wiki")); !os.IsNotExist(err) {
 		t.Error("SyncPrompts should not create wiki/")

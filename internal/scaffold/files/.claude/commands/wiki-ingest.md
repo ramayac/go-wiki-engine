@@ -11,10 +11,9 @@ Ingest the current repository changes into the wiki.
 
 ## Required context
 
-- Read [wiki/index.md](../../wiki/index.md).
-- Read recent entries in [wiki/log.md](../../wiki/log.md).
-- Read [wiki/operations/ingest.md](../../wiki/operations/ingest.md).
-- Read [wiki/repo-map.md](../../wiki/repo-map.md).
+- Run `wiki-engine context` to get the current wiki snapshot (catalog, recent log, phase status).
+- Read only the pages from the catalog needed for this task.
+- If wiki-engine is not installed, read [wiki/index.md](../../wiki/index.md) and [wiki/repo-map.md](../../wiki/repo-map.md) instead.
 
 ## Execution steps
 

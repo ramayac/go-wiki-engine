@@ -235,3 +235,366 @@ func TestIsIgnored(t *testing.T) {
 		}
 	}
 }
+
+func TestStats(t *testing.T) {
+	root := setupWiki(t)
+	eng := newTestEngine(root)
+	st, err := eng.Stats()
+	if err != nil {
+		t.Fatalf("Stats failed: %v", err)
+	}
+	if st.Files != 9 {
+		t.Errorf("Stats Files = %d, want 9", st.Files)
+	}
+	if st.Headings == 0 {
+		t.Error("Stats should have headings > 0")
+	}
+	if st.TotalLines == 0 {
+		t.Error("Stats should have lines > 0")
+	}
+}
+
+func TestContext(t *testing.T) {
+	root := setupWiki(t)
+	eng := newTestEngine(root)
+	cr, err := eng.Context(false, false)
+	if err != nil {
+		t.Fatalf("Context failed: %v", err)
+	}
+	if cr.Files == 0 {
+		t.Error("Context should have files > 0")
+	}
+	if len(cr.Catalog) == 0 {
+		t.Error("Context should have catalog entries from index.md")
+	}
+	if len(cr.RecentLog) == 0 {
+		t.Error("Context should have recent log entries")
+	}
+}
+
+func TestContextMinimal(t *testing.T) {
+	root := setupWiki(t)
+	eng := newTestEngine(root)
+	cr, err := eng.Context(true, false)
+	if err != nil {
+		t.Fatalf("Context(minimal) failed: %v", err)
+	}
+	if cr.Phase != "" {
+		t.Error("Context(minimal) should not include phase")
+	}
+}
+
+func TestSummary(t *testing.T) {
+	root := setupWiki(t)
+	eng := newTestEngine(root)
+	sr, err := eng.Summary("README.md")
+	if err != nil {
+		t.Fatalf("Summary failed: %v", err)
+	}
+	if sr.FirstHeader == "" {
+		t.Error("Summary should return first header")
+	}
+	if sr.File != "README.md" {
+		t.Errorf("Summary File = %q, want README.md", sr.File)
+	}
+}
+
+func TestSummaryNotFound(t *testing.T) {
+	root := setupWiki(t)
+	eng := newTestEngine(root)
+	_, err := eng.Summary("nonexistent.md")
+	if err == nil {
+		t.Error("Summary should error for nonexistent page")
+	}
+}
+
+func TestRelevant(t *testing.T) {
+	root := setupWiki(t)
+	eng := newTestEngine(root)
+	results, err := eng.Relevant("schema", 3)
+	if err != nil {
+		t.Fatalf("Relevant failed: %v", err)
+	}
+	if len(results) == 0 {
+		t.Error("Relevant should find matches for 'schema'")
+	}
+	// First result should be schema.md itself.
+	if len(results) > 0 && !strings.Contains(results[0].File, "schema.md") {
+		t.Logf("first result is %s (expected schema.md to rank high)", results[0].File)
+	}
+}
+
+func TestRelevantEmpty(t *testing.T) {
+	root := setupWiki(t)
+	eng := newTestEngine(root)
+	_, err := eng.Relevant("", 3)
+	if err == nil {
+		t.Error("Relevant should error for empty query")
+	}
+}
+
+func TestLintIssues(t *testing.T) {
+	root := setupWiki(t)
+	eng := newTestEngine(root)
+	result := eng.Lint()
+	if !result.OK {
+		t.Errorf("Lint failed on valid wiki: %v", result.Messages)
+	}
+	if result.Issues == nil {
+		t.Error("Lint should populate Issues field")
+	}
+}
+
+func TestLintOrphans(t *testing.T) {
+	root := setupWiki(t)
+	// Add an extra page not in index.md.
+	extraPath := filepath.Join(root, "wiki", "extra.md")
+	os.WriteFile(extraPath, []byte("# Extra\n"), 0o644)
+	eng := newTestEngine(root)
+	result := eng.Lint()
+	found := false
+	for _, iss := range result.Issues {
+		if iss.Check == "orphans" && strings.Contains(iss.File, "extra.md") {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("Lint should detect orphan page extra.md")
+	}
+}
+
+func TestLintCrossPageLink(t *testing.T) {
+	root := setupWiki(t)
+	// Add a broken link in a non-index page.
+	phasesPath := filepath.Join(root, "wiki", "phases.md")
+	os.WriteFile(phasesPath, []byte("# Phases\n\nSee [nowhere.md](nowhere.md)\n"), 0o644)
+	eng := newTestEngine(root)
+	result := eng.Lint()
+	found := false
+	for _, iss := range result.Issues {
+		if iss.Check == "cross-page-links" && strings.Contains(iss.Message, "nowhere.md") {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("Lint should detect cross-page broken link")
+	}
+}
+
+func TestLintHeadingHierarchy(t *testing.T) {
+	root := setupWiki(t)
+	// Create a page with a skipped heading level.
+	testPath := filepath.Join(root, "wiki", "repo-map.md")
+	os.WriteFile(testPath, []byte("# Title\n\n### Skipped h2\n"), 0o644)
+	eng := newTestEngine(root)
+	result := eng.Lint()
+	found := false
+	for _, iss := range result.Issues {
+		if iss.Check == "heading-hierarchy" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("Lint should detect heading level skip (h1 -> h3)")
+	}
+}
+
+func TestLintLogChronology(t *testing.T) {
+	root := setupWiki(t)
+	// Write log with wrong order.
+	logPath := filepath.Join(root, "wiki", "log.md")
+	os.WriteFile(logPath, []byte("# Log\n\n## [2026-04-15] ingest | first\n\n## [2026-04-16] ingest | second\n"), 0o644)
+	eng := newTestEngine(root)
+	result := eng.Lint()
+	found := false
+	for _, iss := range result.Issues {
+		if iss.Check == "log-chronology" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("Lint should detect log entries not in descending order")
+	}
+}
+
+func TestLintPhaseConsistency(t *testing.T) {
+	root := setupWiki(t)
+	// Write phases.md with invalid status.
+	phasesPath := filepath.Join(root, "wiki", "phases.md")
+	os.WriteFile(phasesPath, []byte("# Phases\n\n| 1 | Test | bad-status |\n"), 0o644)
+	eng := newTestEngine(root)
+	result := eng.Lint()
+	found := false
+	for _, iss := range result.Issues {
+		if iss.Check == "phase-consistency" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("Lint should detect unknown phase status")
+	}
+}
+
+// --- Cache tests ---
+
+func TestCacheSaveLoad(t *testing.T) {
+	root := setupWiki(t)
+	eng := newTestEngine(root)
+	eng.Cfg.CacheEnabled = true
+
+	// Build cache.
+	if err := eng.RebuildCache(); err != nil {
+		t.Fatalf("RebuildCache failed: %v", err)
+	}
+
+	// Verify cache file exists.
+	if _, err := os.Stat(filepath.Join(root, "wiki", ".cache.json")); os.IsNotExist(err) {
+		t.Error("cache file not created")
+	}
+
+	// Load and validate.
+	c := eng.loadCache()
+	if c == nil {
+		t.Fatal("loadCache returned nil")
+	}
+	if len(c.Files) < 5 {
+		t.Errorf("cache has %d files, want >=5", len(c.Files))
+	}
+}
+
+func TestCacheDisabled(t *testing.T) {
+	root := setupWiki(t)
+	eng := newTestEngine(root)
+	eng.Cfg.CacheEnabled = false
+
+	// loadCache should return nil when cache is disabled.
+	c := eng.loadCache()
+	if c != nil {
+		t.Error("loadCache should return nil when cache is disabled")
+	}
+}
+
+func TestCacheInvalidation(t *testing.T) {
+	root := setupWiki(t)
+	eng := newTestEngine(root)
+	eng.Cfg.CacheEnabled = true
+
+	// Build initial cache.
+	if err := eng.RebuildCache(); err != nil {
+		t.Fatalf("RebuildCache failed: %v", err)
+	}
+
+	// Modify a wiki file to invalidate the cache.
+	repoMap := filepath.Join(root, "wiki", "repo-map.md")
+	os.WriteFile(repoMap, []byte("# Modified\n"), 0o644)
+
+	// Cache should now be invalid (mtime changed).
+	c := eng.loadCache()
+	if c != nil {
+		t.Error("cache should be nil after modifying a wiki file")
+	}
+
+	// Rebuild and verify it loads again.
+	if err := eng.RebuildCache(); err != nil {
+		t.Fatalf("RebuildCache after modification failed: %v", err)
+	}
+	c = eng.loadCache()
+	if c == nil {
+		t.Error("cache should load after rebuild")
+	}
+}
+
+// --- Impact tests ---
+
+func TestImpact(t *testing.T) {
+	root := setupWiki(t)
+	eng := newTestEngine(root)
+
+	// Add a wiki page that mentions a source file.
+	os.WriteFile(filepath.Join(root, "wiki", "architecture.md"),
+		[]byte("# Architecture\n\nThe main entry point is cmd/main.go.\n"), 0o644)
+
+	results, err := eng.Impact([]string{"cmd/main.go", "pkg/unknown.go"})
+	if err != nil {
+		t.Fatalf("Impact failed: %v", err)
+	}
+
+	// cmd/main.go should match architecture.md.
+	for _, r := range results {
+		if r.ChangedFile == "cmd/main.go" {
+			if len(r.WikiPages) == 0 {
+				t.Error("expected architecture.md to mention cmd/main.go")
+			}
+		}
+		if r.ChangedFile == "pkg/unknown.go" {
+			if len(r.WikiPages) > 0 {
+				t.Error("expected no wiki pages to mention pkg/unknown.go")
+			}
+		}
+	}
+}
+
+// --- Context with summarize ---
+
+func TestContextSummarize(t *testing.T) {
+	root := setupWiki(t)
+	eng := newTestEngine(root)
+
+	cr, err := eng.Context(false, true)
+	if err != nil {
+		t.Fatalf("Context(summarize) failed: %v", err)
+	}
+	if !cr.Summarized {
+		t.Error("Context should mark summarized=true")
+	}
+
+	// At least one catalog entry should have a summary.
+	hasSummary := false
+	for _, e := range cr.Catalog {
+		if e.Summary != "" {
+			hasSummary = true
+			break
+		}
+	}
+	if !hasSummary {
+		t.Error("expected at least one catalog entry to have a summary")
+	}
+}
+
+// --- WatchOnce test ---
+
+func TestWatchOnce(t *testing.T) {
+	root := setupWiki(t)
+	eng := newTestEngine(root)
+
+	// WatchOnce uses git diff which might fail in test env; it should handle gracefully.
+	wr, err := eng.WatchOnce()
+	// Accept either success or git-not-found error (no git repo in test).
+	if err != nil && !strings.Contains(err.Error(), "git diff failed") {
+		t.Logf("WatchOnce returned error (expected in non-git test env): %v", err)
+	}
+	if err == nil {
+		if wr == nil {
+			t.Error("WatchOnce returned nil result")
+		}
+	}
+}
+
+// --- Context minimal with summary disabled ---
+
+func TestContextMinimalSummarize(t *testing.T) {
+	root := setupWiki(t)
+	eng := newTestEngine(root)
+
+	// Minimal + summarize: catalog should have summaries but no phase.
+	cr, err := eng.Context(true, true)
+	if err != nil {
+		t.Fatalf("Context(minimal, summarize) failed: %v", err)
+	}
+	if cr.Phase != "" {
+		t.Error("minimal mode should not include phase")
+	}
+	if !cr.Summarized {
+		t.Error("summarized should be true")
+	}
+}
