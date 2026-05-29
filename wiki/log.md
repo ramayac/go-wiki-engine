@@ -2,6 +2,22 @@
 
 Append-only timeline of wiki maintenance activity.
 
+## [2026-05-28] ingest | hardening — duplicate detection, stale content, watch mode, cache, diff, integration tests
+
+- Added `duplicate-content` and `stale-content` lint checkers (configurable via `.wikirc`)
+- Added `external-links` checker to validate wiki→source-file references
+- Added `wiki-engine diff <from> <to>` — git-aware wiki change report
+- Added `wiki-engine watch [--once]` — polling change detection + lint
+- Added `wiki-engine impact <file...>` — maps changed files to wiki pages
+- Added `.wiki/.cache.json` with mtime-based invalidation (`cache_enabled` config)
+- Added `duplicate_threshold`, `stale_days`, `watch_interval`, `cache_enabled` to `.wikirc`
+- Added watch agent prompt (`.wiki-instructions/watch.md`)
+- Added 14-scenario integration test suite (`test/integration_test.sh`)
+- Bootstrap: created `.pi/skills/wiki/SKILL.md` via `wiki-engine sync-prompts`
+- Updated `wiki/repo-map.md` with new commands, config keys, architecture entries
+- Fixed heading hierarchy checker to skip HTML comments
+- Updated README.md for all commands, config keys, pi.dev support
+
 ## [2026-05-28] ingest | smart context, enhanced lint, pi.dev support, new commands
 
 Major feature batch: composable lint checker system (9 checkers), four new CLI commands (stats, context, summary, relevant), pi.dev Agent Skills integration, and `--json` output support across all commands.
