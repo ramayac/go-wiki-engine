@@ -2,6 +2,16 @@
 
 Append-only timeline of wiki maintenance activity.
 
+## [2026-05-28] ingest | summarize mode, config docs, coverage, cache limit
+
+- Added `--summarize` flag to `wiki-engine context` for progressive disclosure (opt-in via `context_summarize`)
+- Added `.wiki-instructions/summarize.md` — separate agent prompt for large wikis
+- Added `wiki/config.md` — full `.wikirc` configuration reference page
+- Added `.wikirc.example` with all 10 config keys documented
+- Added `cache_max_mb` to cap `.wiki/.cache.json` size
+- Coverage: config 63→97%, engine 54→68%, scaffold 82%
+- Fixed cache self-invalidation bug (`.cache.json` mtime skew)
+
 ## [2026-05-28] ingest | hardening — duplicate detection, stale content, watch mode, cache, diff, integration tests
 
 - Added `duplicate-content` and `stale-content` lint checkers (configurable via `.wikirc`)
