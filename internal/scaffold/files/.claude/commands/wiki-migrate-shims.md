@@ -24,6 +24,7 @@ Migrate any custom AI-agent instructions from `AGENTS.md` and `CLAUDE.md` into t
    - Architecture or component notes → add to [wiki/repo-map.md](../../wiki/repo-map.md).
    - Broad AI guidance (how the agent should behave in this repo) → add a dedicated **AI Agent Guidance** section in [wiki/README.md](../../wiki/README.md).
    - Skip generic boilerplate that adds no project-specific value.
+   - Ensure all links in the migrated content are standard relative Markdown links (e.g., `[Text](file.md)`).
 
 4. Replace `AGENTS.md` with the standard shim (adjust `wiki/` path if the repo uses a custom wiki dir name from `.wikirc`):
 

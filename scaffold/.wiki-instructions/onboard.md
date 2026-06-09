@@ -63,11 +63,11 @@ Decide what the first wiki topic pages should be based on what you found. Common
 | `api.md` | Projects with a public API |
 | `data-model.md` | Projects with a significant schema |
 
-Read only the source files needed to populate each page. Write durable facts only — not implementation details that change every PR.
+Read only the source files needed to populate each page. Write durable facts only — not implementation details that change every PR. Ensure all pages use standard relative Markdown links (e.g., `[Text](file.md)`) to connect topics and source references.
 
 ### 5. Update wiki/index.md
 
-Add a section for every new page created. Keep the index as the entry point — it should describe every page in one line.
+Add a section for every new page created using standard relative Markdown links. Keep the index as the entry point — it should describe every page in one line.
 
 ### 6. Advance wiki/phases.md
 

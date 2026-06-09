@@ -19,7 +19,7 @@ Answer the user's repository question from the wiki first.
 1. Search the wiki using `wiki-engine search <term>` or equivalent targeted reads.
 2. Read only the wiki pages needed to answer the question.
 3. Use source files only if the wiki lacks enough evidence.
-4. If the answer reveals a durable repo fact that is missing or stale in the wiki, update the relevant page.
+4. If the answer reveals a durable repo fact that is missing or stale in the wiki, update the relevant page. Always link using standard relative Markdown links (e.g., `[Text](file.md)`).
 5. If durable wiki content changed, append a dated entry to [wiki/log.md](../../wiki/log.md) and run `wiki-engine lint`.
 
 In the final response:

@@ -435,6 +435,114 @@ func TestLintPhaseConsistency(t *testing.T) {
 	}
 }
 
+func TestLintMarkdownFormatWikiLinks(t *testing.T) {
+	root := setupWiki(t)
+	repoMap := filepath.Join(root, "wiki", "repo-map.md")
+	os.WriteFile(repoMap, []byte("# Repo Map\n\nThis is a [[wiki-style-link]]\n"), 0o644)
+	eng := newTestEngine(root)
+	result := eng.Lint()
+	found := false
+	for _, iss := range result.Issues {
+		if iss.Check == "markdown-format" && strings.Contains(iss.Message, "non-standard wiki link format") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("Lint should detect non-standard wiki link [[...]]")
+	}
+}
+
+func TestLintMarkdownFormatSpacedLinks(t *testing.T) {
+	root := setupWiki(t)
+	repoMap := filepath.Join(root, "wiki", "repo-map.md")
+	os.WriteFile(repoMap, []byte("# Repo Map\n\nThis is a [spaced link] (repo-map.md)\n"), 0o644)
+	eng := newTestEngine(root)
+	result := eng.Lint()
+	found := false
+	for _, iss := range result.Issues {
+		if iss.Check == "markdown-format" && strings.Contains(iss.Message, "malformed markdown link with spaces") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("Lint should detect spaced markdown link [text] (link)")
+	}
+}
+
+func TestLintMarkdownFormatEmptyLink(t *testing.T) {
+	root := setupWiki(t)
+	repoMap := filepath.Join(root, "wiki", "repo-map.md")
+	os.WriteFile(repoMap, []byte("# Repo Map\n\nEmpty target: [link]()\nEmpty text: [](repo-map.md)\n"), 0o644)
+	eng := newTestEngine(root)
+	result := eng.Lint()
+	foundTarget := false
+	foundText := false
+	for _, iss := range result.Issues {
+		if iss.Check == "markdown-format" {
+			if strings.Contains(iss.Message, "empty link target") {
+				foundTarget = true
+			}
+			if strings.Contains(iss.Message, "empty link text") {
+				foundText = true
+			}
+		}
+	}
+	if !foundTarget {
+		t.Error("Lint should detect empty link target [link]()")
+	}
+	if !foundText {
+		t.Error("Lint should detect empty link text [](link)")
+	}
+}
+
+func TestLintMarkdownFormatUnclosedLink(t *testing.T) {
+	root := setupWiki(t)
+	repoMap := filepath.Join(root, "wiki", "repo-map.md")
+	os.WriteFile(repoMap, []byte("# Repo Map\n\nUnclosed link: [link](repo-map.md\n"), 0o644)
+	eng := newTestEngine(root)
+	result := eng.Lint()
+	found := false
+	for _, iss := range result.Issues {
+		if iss.Check == "markdown-format" && strings.Contains(iss.Message, "unclosed markdown link parenthesis") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("Lint should detect unclosed markdown link [text](link")
+	}
+}
+
+func TestLintAnchorInLinks(t *testing.T) {
+	root := setupWiki(t)
+	repoMap := filepath.Join(root, "wiki", "repo-map.md")
+	os.WriteFile(repoMap, []byte("# Repo Map\n\nSee [schema](schema.md#user-table) or [main](cmd/main.go#L10)\n"), 0o644)
+	// Create cmd/main.go in root to satisfy external link check
+	os.MkdirAll(filepath.Join(root, "cmd"), 0o755)
+	os.WriteFile(filepath.Join(root, "cmd", "main.go"), []byte("package main\n"), 0o644)
+
+	eng := newTestEngine(root)
+	result := eng.Lint()
+	// Filter out "duplicate-content" warnings or other warnings to verify cross-page and external-links pass
+	crossPageFailed := false
+	externalFailed := false
+	for _, iss := range result.Issues {
+		if iss.Check == "cross-page-links" {
+			crossPageFailed = true
+			t.Errorf("cross-page-links check failed unexpectedly: %s", iss.Message)
+		}
+		if iss.Check == "external-links" {
+			externalFailed = true
+			t.Errorf("external-links check failed unexpectedly: %s", iss.Message)
+		}
+	}
+	if crossPageFailed || externalFailed {
+		t.Error("Lint should pass cross-page-links and external-links with anchors/fragments")
+	}
+}
+
 // --- Cache tests ---
 
 func TestCacheSaveLoad(t *testing.T) {
