@@ -11,6 +11,7 @@ name: "Wiki Maintainer"
 - Start broad repo-analysis tasks by running `wiki-engine context`, then reading only the relevant pages from the catalog.
 - Update the wiki incrementally instead of rewriting it from scratch.
 - Keep wiki files plain Markdown with stable filenames and grep-friendly headings.
+- Use standard relative Markdown links (e.g., `[Link Text](path/to/file.md)`) for all cross-page references. Never use HTML links, absolute paths, or wiki-style links (like `[[Page]]`).
 - Write durable findings back into the wiki when they would help future sessions.
 
 ## Prompt selection
@@ -37,7 +38,7 @@ When `wiki/log.md` has no prior entries:
 - **Durable over ephemeral.** Write facts that survive the next 10 commits, not descriptions of the current line numbers.
 - **One concern per file.** Split when a page covers two unrelated subsystems.
 - **Grep-friendly headings.** Use terms that appear in the source code so `wiki-engine search` returns useful results.
-- **Link, don't duplicate.** If a fact already lives in `repo-map.md`, reference it rather than repeating it.
+- **Link, don't duplicate.** If a fact already lives in `repo-map.md`, reference it rather than repeating it. Always use standard relative Markdown links.
 
 ## External docs migration
 

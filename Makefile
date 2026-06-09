@@ -8,7 +8,7 @@ LDFLAGS   := -s -w -X main.version=$(VERSION)-$(BUILD_DATE)
 
 .DEFAULT_GOAL := help
 
-.PHONY: help build install test lint vet clean sync-scaffold
+.PHONY: help build install test lint vet clean sync-scaffold wiki-lint
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-18s %s\n", $$1, $$2}'
@@ -25,10 +25,13 @@ install: ## Install globally via go install
 test: ## Run all tests
 	go test ./...
 
-lint: vet ## Run go vet (alias: lint)
+lint: vet wiki-lint ## Run go vet and wiki-engine lint
 
 vet: ## Run go vet on all packages
 	go vet ./...
+
+wiki-lint: build ## Run wiki-engine lint on the repository wiki
+	./bin/wiki-engine lint
 
 clean: ## Remove build artifacts
 	rm -rf $(BIN_DIR)

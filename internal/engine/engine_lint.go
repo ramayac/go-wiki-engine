@@ -117,7 +117,14 @@ func (c *indexLinksChecker) Check(e *Engine) ([]Issue, error) {
 		if strings.HasPrefix(target, "http://") || strings.HasPrefix(target, "https://") || strings.HasPrefix(target, "#") {
 			continue
 		}
-		linked := filepath.Join(wikiDir, target)
+		baseTarget := target
+		if idx := strings.Index(target, "#"); idx != -1 {
+			baseTarget = target[:idx]
+		}
+		if baseTarget == "" {
+			continue
+		}
+		linked := filepath.Join(wikiDir, baseTarget)
 		if _, err := os.Stat(linked); os.IsNotExist(err) {
 			issues = append(issues, Issue{
 				Severity: SevError,
@@ -160,10 +167,21 @@ func (c *crossPageLinksChecker) Check(e *Engine) ([]Issue, error) {
 					continue
 				}
 				pageDir := filepath.Dir(abs)
-				linked := filepath.Clean(filepath.Join(pageDir, target))
+				baseTarget := target
+				if idx := strings.Index(target, "#"); idx != -1 {
+					baseTarget = target[:idx]
+				}
+				if baseTarget == "" {
+					continue
+				}
+				// Only check cross-page markdown links here.
+				if !strings.HasSuffix(baseTarget, ".md") {
+					continue
+				}
+				linked := filepath.Clean(filepath.Join(pageDir, baseTarget))
 				if _, err := os.Stat(linked); os.IsNotExist(err) {
 					// Also try relative to wiki dir.
-					linked2 := filepath.Join(wikiDir, target)
+					linked2 := filepath.Join(wikiDir, baseTarget)
 					if _, err2 := os.Stat(linked2); os.IsNotExist(err2) {
 						issues = append(issues, Issue{
 							Severity: SevError,
@@ -173,6 +191,134 @@ func (c *crossPageLinksChecker) Check(e *Engine) ([]Issue, error) {
 							Message:  fmt.Sprintf("broken link: %s", target),
 						})
 					}
+				}
+			}
+		}
+	}
+	return issues, nil
+}
+
+func isInsideInlineCode(line string, start, end int) bool {
+	before := line[:start]
+	after := line[end:]
+	return strings.Count(before, "`")%2 != 0 && strings.Count(after, "`")%2 != 0
+}
+
+// markdownFormatChecker detects malformed markdown links or non-standard link formats (like wiki-style [[links]]).
+type markdownFormatChecker struct{}
+
+func (c *markdownFormatChecker) Name() string { return "markdown-format" }
+
+var (
+	wikiLinkRe   = regexp.MustCompile(`\[\[([^\]]+)\]\]`)
+	spacedLinkRe = regexp.MustCompile(`\[([^\]]*)\]\s+\(([^)]*)\)`)
+	emptyLinkRe  = regexp.MustCompile(`\[([^\]]*)\]\(\s*\)`) // empty target like `[text]()`
+	emptyTextRe  = regexp.MustCompile(`\[\s*\]\(([^)]+)\)`)  // empty link text like `[](target)`
+	linkOpenRe   = regexp.MustCompile(`\[([^\]]+)\]\(([^)]*)`)
+)
+
+func (c *markdownFormatChecker) Check(e *Engine) ([]Issue, error) {
+	var issues []Issue
+	files, err := e.List()
+	if err != nil {
+		return nil, err
+	}
+	for _, rel := range files {
+		if !strings.HasSuffix(rel, ".md") {
+			continue
+		}
+		abs := filepath.Join(e.RootDir, rel)
+		data, err := os.ReadFile(abs)
+		if err != nil {
+			continue
+		}
+		lines := strings.Split(string(data), "\n")
+		inCodeBlock := false
+		for lineNo, line := range lines {
+			trimmed := strings.TrimSpace(line)
+			if strings.HasPrefix(trimmed, "```") {
+				inCodeBlock = !inCodeBlock
+				continue
+			}
+			if inCodeBlock {
+				continue
+			}
+
+			// 1. Check for wiki-style links [[...]]
+			for _, loc := range wikiLinkRe.FindAllStringIndex(line, -1) {
+				if isInsideInlineCode(line, loc[0], loc[1]) {
+					continue
+				}
+				m := line[loc[0]:loc[1]]
+				issues = append(issues, Issue{
+					Severity: SevError,
+					Check:    c.Name(),
+					File:     rel,
+					Line:     lineNo + 1,
+					Message:  fmt.Sprintf("non-standard wiki link format: %s (use [text](path) instead)", m),
+				})
+			}
+
+			// 2. Check for spaced markdown links [text] (path)
+			for _, loc := range spacedLinkRe.FindAllStringIndex(line, -1) {
+				if isInsideInlineCode(line, loc[0], loc[1]) {
+					continue
+				}
+				m := line[loc[0]:loc[1]]
+				issues = append(issues, Issue{
+					Severity: SevError,
+					Check:    c.Name(),
+					File:     rel,
+					Line:     lineNo + 1,
+					Message:  fmt.Sprintf("malformed markdown link with spaces: %s", m),
+				})
+			}
+
+			// 3. Check for empty link targets [text]()
+			for _, loc := range emptyLinkRe.FindAllStringIndex(line, -1) {
+				if isInsideInlineCode(line, loc[0], loc[1]) {
+					continue
+				}
+				m := line[loc[0]:loc[1]]
+				issues = append(issues, Issue{
+					Severity: SevError,
+					Check:    c.Name(),
+					File:     rel,
+					Line:     lineNo + 1,
+					Message:  fmt.Sprintf("empty link target: %s", m),
+				})
+			}
+
+			// 4. Check for empty link text [](target)
+			for _, loc := range emptyTextRe.FindAllStringIndex(line, -1) {
+				if isInsideInlineCode(line, loc[0], loc[1]) {
+					continue
+				}
+				m := line[loc[0]:loc[1]]
+				issues = append(issues, Issue{
+					Severity: SevError,
+					Check:    c.Name(),
+					File:     rel,
+					Line:     lineNo + 1,
+					Message:  fmt.Sprintf("empty link text: %s", m),
+				})
+			}
+
+			// 5. Check for unclosed markdown link parenthesis: [text](path
+			for _, loc := range linkOpenRe.FindAllStringIndex(line, -1) {
+				if isInsideInlineCode(line, loc[0], loc[1]) {
+					continue
+				}
+				endIdx := loc[1]
+				if endIdx >= len(line) || line[endIdx] != ')' {
+					matchText := line[loc[0]:loc[1]]
+					issues = append(issues, Issue{
+						Severity: SevError,
+						Check:    c.Name(),
+						File:     rel,
+						Line:     lineNo + 1,
+						Message:  fmt.Sprintf("unclosed markdown link parenthesis: %s", matchText),
+					})
 				}
 			}
 		}
@@ -545,17 +691,26 @@ func (c *externalLinksChecker) Check(e *Engine) ([]Issue, error) {
 		for lineNo, line := range lines {
 			for _, match := range linkRe.FindAllStringSubmatch(line, -1) {
 				target := match[1]
-				// Skip URLs, anchors, and .md links (handled by cross-page checker).
-				if strings.HasPrefix(target, "http://") || strings.HasPrefix(target, "https://") ||
-					strings.HasPrefix(target, "#") || strings.HasSuffix(target, ".md") {
+				if strings.HasPrefix(target, "http://") || strings.HasPrefix(target, "https://") || strings.HasPrefix(target, "#") {
+					continue
+				}
+				baseTarget := target
+				if idx := strings.Index(target, "#"); idx != -1 {
+					baseTarget = target[:idx]
+				}
+				if baseTarget == "" {
+					continue
+				}
+				// Skip .md links (handled by cross-page checker).
+				if strings.HasSuffix(baseTarget, ".md") {
 					continue
 				}
 				// Resolve relative to the page's directory, then relative to repo root.
 				pageDir := filepath.Dir(abs)
-				resolved := filepath.Clean(filepath.Join(pageDir, target))
+				resolved := filepath.Clean(filepath.Join(pageDir, baseTarget))
 				if _, err := os.Stat(resolved); os.IsNotExist(err) {
 					// Also try relative to repo root.
-					resolvedRoot := filepath.Join(e.RootDir, target)
+					resolvedRoot := filepath.Join(e.RootDir, baseTarget)
 					if _, err2 := os.Stat(resolvedRoot); os.IsNotExist(err2) {
 						issues = append(issues, Issue{
 							Severity: SevWarn,
@@ -714,6 +869,7 @@ func allCheckers() []Checker {
 		&requiredFilesChecker{},
 		&indexLinksChecker{},
 		&crossPageLinksChecker{},
+		&markdownFormatChecker{},
 		&orphansChecker{},
 		&headingHierarchyChecker{},
 		&logHeadingsChecker{},

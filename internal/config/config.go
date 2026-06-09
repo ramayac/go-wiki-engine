@@ -110,7 +110,7 @@ func Load(dir string) (*Config, error) {
 		case "duplicate_threshold":
 			cfg.DuplicateThreshold = parseFloat(val, 0.7)
 		case "stale_days":
-			cfg.StaleDays = parsePositiveInt(val, 30)
+			cfg.StaleDays = parseInt(val, 30)
 		case "context_summarize":
 			cfg.ContextSummarize = parseBool(val, false)
 		case "watch_interval":
@@ -136,6 +136,28 @@ func parsePositiveInt(s string, fallback int) int {
 		}
 	}
 	if n <= 0 {
+		return fallback
+	}
+	return n
+}
+
+func parseInt(s string, fallback int) int {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return fallback
+	}
+	if s == "0" {
+		return 0
+	}
+	n := 0
+	hasDigit := false
+	for _, c := range s {
+		if c >= '0' && c <= '9' {
+			n = n*10 + int(c-'0')
+			hasDigit = true
+		}
+	}
+	if !hasDigit {
 		return fallback
 	}
 	return n

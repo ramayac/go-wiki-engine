@@ -37,7 +37,7 @@ When `wiki-engine watch` reports changed candidates:
 1. Run `wiki-engine candidates` to get the filtered list.
 2. For each candidate, run `wiki-engine impact <file>` to see which wiki pages are affected.
 3. Read the changed source files that are relevant.
-4. Update wiki pages with durable facts.
+4. Update wiki pages with durable facts. Ensure all links are standard relative Markdown links (e.g., `[Text](file.md)`).
 5. Append a dated entry to [wiki/log.md](../../wiki/log.md).
 6. Run `wiki-engine lint`.
 

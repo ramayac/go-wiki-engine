@@ -20,3 +20,5 @@ jobs:
         run: go test ./...
       - name: build
         run: go build -o /dev/null ./cmd/wiki-engine
+      - name: wiki-lint
+        run: make wiki-lint

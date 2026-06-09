@@ -22,8 +22,8 @@ Ingest the current repository changes into the wiki.
 3. Ignore repo-specific excluded paths (configured in `.wikirc`).
 4. Read only the changed source files that are relevant to the ingest.
 5. Decide whether each durable fact belongs in an existing wiki page or needs a new page.
-6. Update the relevant wiki pages with durable facts only.
-7. Update [wiki/index.md](../../wiki/index.md) if coverage changed.
+6. Update the relevant wiki pages with durable facts only. Ensure all links are standard relative Markdown links (e.g., `[Text](file.md)`).
+7. Update [wiki/index.md](../../wiki/index.md) if coverage changed using standard relative Markdown links.
 8. Append an ingest entry to [wiki/log.md](../../wiki/log.md) using the required heading format.
 9. Run `wiki-engine lint`.
 

@@ -11,6 +11,7 @@ Keep the wiki coherent, linked, and current.
 - Stale claims are updated when source files changed.
 - Exclusions still match repo reality.
 - New recurring topics have a page instead of being trapped in chat history.
+- Links are standard relative Markdown format, are not malformed (e.g., no wiki-style links `[[Page]]` or unclosed parentheses), and are correctly mapped to files that exist.
 
 ## Shell-First Checks
 
