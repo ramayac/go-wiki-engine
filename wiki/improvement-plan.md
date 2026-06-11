@@ -138,23 +138,23 @@ Actually the `.github/workflows/` directory likely exists from the TODO items. T
 ## TODO Checklist
 
 ### Phase 1 — Front Matter & Lifecycle Foundation
-- [ ] 1A. Document front matter schema in `scaffold/wiki/schema.md` and add front matter to all `scaffold/wiki/*.md`
-- [ ] 1B. Add `ParseFrontMatter()` to `internal/engine/` (minimal hand-written YAML parser)
-- [ ] 1C. Add `frontMatterChecker` (required fields, valid status values, `superseded_by` linkage)
-- [ ] 1D. Add `--active` flag to `list` and `context` for lifecycle filtering
+- [x] 1A. Document front matter schema in `scaffold/wiki/schema.md` and add front matter to all `scaffold/wiki/*.md`
+- [x] 1B. Add `ParseFrontMatter()` to `internal/engine/` (minimal hand-written YAML parser)
+- [x] 1C. Add `frontMatterChecker` (required fields, valid status values, `superseded_by` linkage)
+- [x] 1D. Add `--active` flag to `list` and `context` for lifecycle filtering
 
 ### Phase 1.5 — Graph Construction & Context Optimization
-- [ ] 1.5A. Extract shared link-parsing helper from `crossPageLinksChecker` and `orphansChecker`
-- [ ] 1.5B. Add `BuildWikiGraph()` — BFS from `index.md`, skips `deprecated`/`legacy` nodes
-- [ ] 1.5C. Implement topological (by depth) and chronological (by `created`/`updated`/mtime) graph sorting
-- [ ] 1.5D. Modify `wiki-engine context --active` to output compact graph reference instead of full page summaries
+- [x] 1.5A. Extract shared link-parsing helper from `crossPageLinksChecker` and `orphansChecker`
+- [x] 1.5B. Add `BuildWikiGraph()` — BFS from `index.md`, skips `deprecated`/`legacy` nodes
+- [x] 1.5C. Implement topological (by depth) and chronological (by `created`/`updated`/mtime) graph sorting
+- [x] 1.5D. Modify `wiki-engine context --active` to output compact graph reference instead of full page summaries
 
 ### Phase 2 — Linter Hardening
-- [ ] 2A. Fix `Lint()` severity gating — `SevInfo` issues should not cause exit code 1
-- [ ] 2B. Add `indexFormatChecker` — validate index entries use `title`, relative path, and pipe-separated description
-- [ ] 2C. Add `bareUrlChecker` — detect bare URLs and HTML `<a>` tags
-- [ ] 2D. Add `frontMatterChecker` (same as Phase 1C, listed here for completeness)
-- [ ] 2E. Add `--check` / `--skip` flags to `wiki-engine lint`
+- [x] 2A. Fix `Lint()` severity gating — `SevInfo` issues should not cause exit code 1
+- [x] 2B. Add `indexFormatChecker` — validate index entries use `title`, relative path, and pipe-separated description
+- [x] 2C. Add `bareUrlChecker` — detect bare URLs and HTML `<a>` tags
+- [x] 2D. Add `frontMatterChecker` (same as Phase 1C, listed here for completeness)
+- [x] 2E. Add `--check` / `--skip` flags to `wiki-engine lint`
 
 ### Phase 3 — Slash Command Coherence
 - [ ] 3A. Update all `.wiki-instructions/*.md` to use `context --active` and respect lifecycle status

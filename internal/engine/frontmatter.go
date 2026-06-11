@@ -4,6 +4,8 @@ package engine
 import (
 	"bufio"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -139,4 +141,15 @@ func parseTags(s string) []string {
 		}
 	}
 	return tags
+}
+
+// PageFrontMatter loads and parses front matter for a page path relative to repo root.
+func (e *Engine) PageFrontMatter(relPath string) (FrontMatter, bool) {
+	abs := filepath.Join(e.RootDir, relPath)
+	data, err := os.ReadFile(abs)
+	if err != nil {
+		return DefaultFrontMatter(), false
+	}
+	fm, found, _ := ParseFrontMatter(string(data))
+	return fm, found
 }

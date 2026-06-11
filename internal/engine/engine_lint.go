@@ -353,13 +353,8 @@ func (c *orphansChecker) Check(e *Engine) ([]Issue, error) {
 		return issues, nil
 	}
 	linked := make(map[string]bool)
-	linkRe := regexp.MustCompile(`\]\(([^)]+)\)`)
-	for _, match := range linkRe.FindAllStringSubmatch(string(data), -1) {
-		target := match[1]
-		if strings.HasPrefix(target, "http://") || strings.HasPrefix(target, "https://") || strings.HasPrefix(target, "#") {
-			continue
-		}
-		linked[target] = true
+	for _, dest := range ExtractLinks(string(data), wikiDir, wikiDir) {
+		linked[dest] = true
 	}
 
 	for _, f := range allFiles {
@@ -863,10 +858,299 @@ func (c *staleContentChecker) Check(e *Engine) ([]Issue, error) {
 	return issues, nil
 }
 
+// frontMatterChecker validates YAML front matter on all wiki pages.
+type frontMatterChecker struct{}
+
+func (c *frontMatterChecker) Name() string { return "front-matter" }
+
+func (c *frontMatterChecker) Check(e *Engine) ([]Issue, error) {
+	var issues []Issue
+	wikiDir := e.WikiPath()
+	files, err := e.List()
+	if err != nil {
+		return nil, err
+	}
+
+	validStatuses := map[string]bool{
+		"planned":    true,
+		"current":    true,
+		"legacy":     true,
+		"deprecated": true,
+	}
+
+	for _, rel := range files {
+		if !strings.HasSuffix(rel, ".md") {
+			continue
+		}
+		abs := filepath.Join(e.RootDir, rel)
+		data, err := os.ReadFile(abs)
+		if err != nil {
+			continue
+		}
+
+		content := string(data)
+		fm, found, err := ParseFrontMatter(content)
+
+		if err != nil {
+			issues = append(issues, Issue{
+				Severity: SevError,
+				Check:    c.Name(),
+				File:     rel,
+				Line:     1,
+				Message:  fmt.Sprintf("malformed front matter: %v", err),
+			})
+			continue
+		}
+
+		if !found {
+			issues = append(issues, Issue{
+				Severity: SevWarn,
+				Check:    c.Name(),
+				File:     rel,
+				Line:     1,
+				Message:  "missing front matter block",
+			})
+			continue
+		}
+
+		// Check status
+		if fm.Status == "" {
+			issues = append(issues, Issue{
+				Severity: SevError,
+				Check:    c.Name(),
+				File:     rel,
+				Line:     1,
+				Message:  "missing status field in front matter",
+			})
+		} else if !validStatuses[fm.Status] {
+			issues = append(issues, Issue{
+				Severity: SevError,
+				Check:    c.Name(),
+				File:     rel,
+				Line:     1,
+				Message:  fmt.Sprintf("invalid status value in front matter: %s (must be one of: planned, current, legacy, deprecated)", fm.Status),
+			})
+		}
+
+		// Check description
+		if fm.Description == "" {
+			issues = append(issues, Issue{
+				Severity: SevWarn,
+				Check:    c.Name(),
+				File:     rel,
+				Line:     1,
+				Message:  "missing recommended description field in front matter",
+			})
+		}
+
+		// Check superseded_by
+		if fm.Status == "deprecated" && fm.SupersededBy == "" {
+			issues = append(issues, Issue{
+				Severity: SevError,
+				Check:    c.Name(),
+				File:     rel,
+				Line:     1,
+				Message:  "superseded_by is required when status is deprecated",
+			})
+		}
+
+		if fm.SupersededBy != "" {
+			targetRel := fm.SupersededBy
+			var targetAbs string
+
+			// Try relative to current file's directory
+			dir := filepath.Dir(abs)
+			cand1 := filepath.Clean(filepath.Join(dir, targetRel))
+			// Try relative to wiki root
+			cand2 := filepath.Clean(filepath.Join(wikiDir, targetRel))
+
+			if _, err1 := os.Stat(cand1); err1 == nil {
+				targetAbs = cand1
+			} else if _, err2 := os.Stat(cand2); err2 == nil {
+				targetAbs = cand2
+			}
+
+			if targetAbs == "" {
+				issues = append(issues, Issue{
+					Severity: SevError,
+					Check:    c.Name(),
+					File:     rel,
+					Line:     1,
+					Message:  fmt.Sprintf("superseded_by target does not exist: %s", targetRel),
+				})
+			} else {
+				// Parse target front matter to check status
+				tData, err := os.ReadFile(targetAbs)
+				if err == nil {
+					tfm, _, _ := ParseFrontMatter(string(tData))
+					if tfm.Status != "current" && tfm.Status != "planned" {
+						issues = append(issues, Issue{
+							Severity: SevError,
+							Check:    c.Name(),
+							File:     rel,
+							Line:     1,
+							Message:  fmt.Sprintf("superseded_by target %s is not active (status: %s)", targetRel, tfm.Status),
+						})
+					}
+				}
+			}
+		}
+	}
+
+	return issues, nil
+}
+
+// indexFormatChecker validates the formatting of index.md entries.
+type indexFormatChecker struct{}
+
+func (c *indexFormatChecker) Name() string { return "index-format" }
+
+func (c *indexFormatChecker) Check(e *Engine) ([]Issue, error) {
+	var issues []Issue
+	wikiDir := e.WikiPath()
+	indexPath := filepath.Join(wikiDir, "index.md")
+	data, err := os.ReadFile(indexPath)
+	if err != nil {
+		return nil, nil // Handled by required-files checker
+	}
+
+	lines := strings.Split(string(data), "\n")
+	bulletLinkRe := regexp.MustCompile(`^\s*[-*]\s+\[`)
+	linkRe := regexp.MustCompile(`\[([^\]]+)\]\(([^)]+)\)`)
+
+	for lineNo, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+
+		if bulletLinkRe.MatchString(line) {
+			parts := strings.SplitN(line, "|", 2)
+			
+			match := linkRe.FindStringSubmatch(parts[0])
+			if len(match) < 3 {
+				issues = append(issues, Issue{
+					Severity: SevWarn,
+					Check:    c.Name(),
+					File:     filepath.Join(e.Cfg.WikiDir, "index.md"),
+					Line:     lineNo + 1,
+					Message:  "malformed link in index entry",
+				})
+				continue
+			}
+
+			target := match[2]
+			if strings.HasPrefix(target, "/") || strings.Contains(target, "://") {
+				issues = append(issues, Issue{
+					Severity: SevError,
+					Check:    c.Name(),
+					File:     filepath.Join(e.Cfg.WikiDir, "index.md"),
+					Line:     lineNo + 1,
+					Message:  fmt.Sprintf("index entry must use a relative path: %s", target),
+				})
+			}
+
+			if len(parts) < 2 {
+				issues = append(issues, Issue{
+					Severity: SevWarn,
+					Check:    c.Name(),
+					File:     filepath.Join(e.Cfg.WikiDir, "index.md"),
+					Line:     lineNo + 1,
+					Message:  "index entry missing pipe-separated description",
+				})
+			} else {
+				desc := strings.TrimSpace(parts[1])
+				if desc == "" {
+					issues = append(issues, Issue{
+						Severity: SevWarn,
+						Check:    c.Name(),
+						File:     filepath.Join(e.Cfg.WikiDir, "index.md"),
+						Line:     lineNo + 1,
+						Message:  "index entry has empty description",
+					})
+				}
+			}
+		}
+	}
+
+	return issues, nil
+}
+
+// bareUrlChecker flags bare URLs and HTML anchor tags outside code blocks.
+type bareUrlChecker struct{}
+
+func (c *bareUrlChecker) Name() string { return "bare-urls" }
+
+func (c *bareUrlChecker) Check(e *Engine) ([]Issue, error) {
+	var issues []Issue
+	files, err := e.List()
+	if err != nil {
+		return nil, err
+	}
+
+	htmlAnchorRe := regexp.MustCompile(`</?[aA]\b`)
+	inlineCodeRe := regexp.MustCompile("`[^`]*`|``[^`]+``")
+	markdownLinkRe := regexp.MustCompile(`!?\[[^\]]*\]\([^)]+\)`)
+	bareUrlRe := regexp.MustCompile("https?://[^\\s`<>\\)]+")
+
+	for _, rel := range files {
+		if !strings.HasSuffix(rel, ".md") {
+			continue
+		}
+		abs := filepath.Join(e.RootDir, rel)
+		data, err := os.ReadFile(abs)
+		if err != nil {
+			continue
+		}
+
+		lines := strings.Split(string(data), "\n")
+		inCodeBlock := false
+
+		for lineNo, line := range lines {
+			trimmed := strings.TrimSpace(line)
+			if strings.HasPrefix(trimmed, "```") {
+				inCodeBlock = !inCodeBlock
+				continue
+			}
+			if inCodeBlock {
+				continue
+			}
+
+			if htmlAnchorRe.MatchString(line) {
+				issues = append(issues, Issue{
+					Severity: SevError,
+					Check:    c.Name(),
+					File:     rel,
+					Line:     lineNo + 1,
+					Message:  "use markdown links, not HTML",
+				})
+			}
+
+			cleaned := inlineCodeRe.ReplaceAllString(line, "")
+			cleaned = markdownLinkRe.ReplaceAllString(cleaned, "")
+
+			if match := bareUrlRe.FindString(cleaned); match != "" {
+				issues = append(issues, Issue{
+					Severity: SevWarn,
+					Check:    c.Name(),
+					File:     rel,
+					Line:     lineNo + 1,
+					Message:  fmt.Sprintf("bare URL outside link: %s (use [text](url) format)", match),
+				})
+			}
+		}
+	}
+
+	return issues, nil
+}
+
 // allCheckers returns the default set of lint checkers, ordered by priority.
 func allCheckers() []Checker {
 	return []Checker{
 		&requiredFilesChecker{},
+		&frontMatterChecker{},
+		&indexFormatChecker{},
+		&bareUrlChecker{},
 		&indexLinksChecker{},
 		&crossPageLinksChecker{},
 		&markdownFormatChecker{},
@@ -917,8 +1201,120 @@ func (e *Engine) Lint() LintResult {
 		}
 	}
 
+	// Parse fail threshold
+	failThreshold := SevWarn // default fallback
+	switch strings.ToLower(e.Cfg.FailSeverity) {
+	case "info":
+		failThreshold = SevInfo
+	case "warn":
+		failThreshold = SevWarn
+	case "error":
+		failThreshold = SevError
+	}
+
+	hasFailure := false
+	for _, iss := range allIssues {
+		if iss.Severity >= failThreshold {
+			hasFailure = true
+			break
+		}
+	}
+
 	return LintResult{
-		OK:       len(allIssues) == 0,
+		OK:       !hasFailure,
+		Messages: msgs,
+		Issues:   allIssues,
+	}
+}
+
+// LintWithOptions runs specified checkers, skipping any listed in skip.
+func (e *Engine) LintWithOptions(check []string, skip []string) LintResult {
+	checkAll := true
+	checkMap := make(map[string]bool)
+	for _, c := range check {
+		if c == "all" {
+			checkAll = true
+			break
+		}
+		if c != "" {
+			checkAll = false
+			checkMap[c] = true
+		}
+	}
+
+	skipMap := make(map[string]bool)
+	for _, s := range skip {
+		if s != "" {
+			skipMap[s] = true
+		}
+	}
+
+	var activeCheckers []Checker
+	for _, c := range allCheckers() {
+		name := c.Name()
+		if skipMap[name] {
+			continue
+		}
+		if !checkAll && !checkMap[name] {
+			continue
+		}
+		activeCheckers = append(activeCheckers, c)
+	}
+
+	var allIssues []Issue
+	allIssues = make([]Issue, 0)
+	for _, c := range activeCheckers {
+		issues, err := c.Check(e)
+		if err != nil {
+			allIssues = append(allIssues, Issue{
+				Severity: SevError,
+				Check:    c.Name(),
+				Message:  fmt.Sprintf("checker %s failed: %v", c.Name(), err),
+			})
+			continue
+		}
+		allIssues = append(allIssues, issues...)
+	}
+
+	// Stable sort by file then line.
+	sort.SliceStable(allIssues, func(i, j int) bool {
+		if allIssues[i].File != allIssues[j].File {
+			return allIssues[i].File < allIssues[j].File
+		}
+		return allIssues[i].Line < allIssues[j].Line
+	})
+
+	// Build backward-compatible Messages.
+	var msgs []string
+	for _, iss := range allIssues {
+		if iss.Line > 0 {
+			msgs = append(msgs, fmt.Sprintf("%s:%d: [%s] %s", iss.File, iss.Line, iss.Check, iss.Message))
+		} else {
+			msgs = append(msgs, fmt.Sprintf("%s: [%s] %s", iss.File, iss.Check, iss.Message))
+		}
+	}
+
+	// Parse fail threshold
+	failThreshold := SevWarn // default fallback
+	switch strings.ToLower(e.Cfg.FailSeverity) {
+	case "info":
+		failThreshold = SevInfo
+	case "warn":
+		failThreshold = SevWarn
+	case "error":
+		failThreshold = SevError
+	}
+
+	hasFailure := false
+	for _, iss := range allIssues {
+		if iss.Severity >= failThreshold {
+			hasFailure = true
+			break
+		}
+	}
+
+	return LintResult{
+		OK:       !hasFailure,
 		Messages: msgs,
 		Issues:   allIssues,
 	}

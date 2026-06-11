@@ -35,22 +35,22 @@ Refer to the [Improvement Plan](improvement-plan.md) for the detailed roadmap an
 
 | # | Task | Effort | Status |
 |---|------|--------|--------|
-| 33 | **Fix lint severity gating (exit code)** | 0.5h | ⬜ Planned |
-| 34 | **Front matter schema & YAML parser** | 4h | ⬜ Planned |
-| 35 | **Front matter lint checker** | 2h | ⬜ Planned |
-| 36 | **Lifecycle filtering in list/context (`--active`)** | 3h | ⬜ Planned |
-| 37 | **Index format checker** | 1.5h | ⬜ Planned |
+| 33 | **Fix lint severity gating (exit code)** | 0.5h | ✅ Done |
+| 34 | **Front matter schema & YAML parser** | 4h | ✅ Done |
+| 35 | **Front matter lint checker** | 2h | ✅ Done |
+| 36 | **Lifecycle filtering in list/context (`--active`)** | 3h | ✅ Done |
+| 37 | **Index format checker** | 1.5h | ✅ Done |
 | 38 | **Slash command lifecycle awareness** | 2h | ⬜ Planned |
-| 39 | **Bare URL and HTML link checker** | 1h | ⬜ Planned |
-| 40 | **`--check` / `--skip` lint flags** | 2h | ⬜ Planned |
+| 39 | **Bare URL and HTML link checker** | 1h | ✅ Done |
+| 40 | **`--check` / `--skip` lint flags** | 2h | ✅ Done |
 | 41 | **CI linting pipeline setup** | 1h | ⬜ Planned |
 | 42 | **Dead code cleanup** | 0.5h | ⬜ Planned |
 | 43 | **Prompt restructuring (reduce overlap)** | 3h | ⬜ Planned |
 | 44 | **Wiki front matter migration** | 1h | ⬜ Planned |
-| 45 | **Shared Link-Parsing Helper** | 2h | ⬜ Planned |
-| 46 | **Directed Graph Builder (`BuildWikiGraph()`)** | 5h | ⬜ Planned |
-| 47 | **Topological/Chronological Sorting of Graph** | 2h | ⬜ Planned |
-| 48 | **Compact Context Graph Export (`context --active`)** | 4h | ⬜ Planned |
+| 45 | **Shared Link-Parsing Helper** | 2h | ✅ Done |
+| 46 | **Directed Graph Builder (`BuildWikiGraph()`)** | 5h | ✅ Done |
+| 47 | **Topological/Chronological Sorting of Graph** | 2h | ✅ Done |
+| 48 | **Compact Context Graph Export (`context --active`)** | 4h | ✅ Done |
 
 ---
 

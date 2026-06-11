@@ -108,11 +108,48 @@ echo "  ok"
 
 # Test: duplicate detection (disabled by threshold, but check it doesn't crash)
 echo "--- duplicate detection ---"
-echo "# Duplicate page" > wiki/dup1.md
-echo "# Duplicate page" > wiki/dup2.md
+echo -e "---\nstatus: current\ndescription: dup1\n---\n# Duplicate page" > wiki/dup1.md
+echo -e "---\nstatus: current\ndescription: dup2\n---\n# Duplicate page" > wiki/dup2.md
 # Set a very low threshold to trigger it
 echo 'duplicate_threshold = 0.1' >> .wikirc
 "$BIN" lint 2>&1 | grep -q "duplicate-content" && echo "  duplicate detected" || echo "  ok (no false positive)"
+
+# Test: active flag on list and context
+echo "--- active flag ---"
+# Make one of the operations legacy
+echo -e "---\nstatus: legacy\ndescription: Legacy lint procedure\n---\n# Legacy Lint" > wiki/operations/lint.md
+# Should not show up in list --active
+"$BIN" list --active | grep -q "wiki/operations/lint.md" && { echo "FAIL: legacy page in list --active"; exit 1; }
+# Should show up in context without --active
+"$BIN" context | grep -q "operations/lint.md \[legacy\]" || { echo "FAIL: status missing in context catalog"; exit 1; }
+# Should not show up in context --active
+"$BIN" context --active | grep -q "operations/lint.md" && { echo "FAIL: legacy page in context --active"; exit 1; }
+# Should show the active wiki graph format
+"$BIN" context --active | grep -q "== active wiki graph ==" || { echo "FAIL: active graph header missing"; exit 1; }
+"$BIN" context --active | grep -q "index.md \[current\]" || { echo "FAIL: active node index.md missing in graph"; exit 1; }
+"$BIN" context --active | grep -q "  -> schema.md" || { echo "FAIL: active edge in graph missing"; exit 1; }
+# Sort topo check
+"$BIN" context --active --sort=topo | grep -q "== active wiki graph ==" || { echo "FAIL: topo sort failed"; exit 1; }
+# JSON graph format check
+"$BIN" --json context --active | grep -q '"nodes"' || { echo "FAIL: json graph output missing nodes"; exit 1; }
+"$BIN" --json context --active | grep -q '"edges"' || { echo "FAIL: json graph output missing edges"; exit 1; }
+# Test: lint --check and --skip flags
+echo "--- lint flags ---"
+# Add a duplicate-content issue (by overriding dup1 and dup2 with same content)
+echo -e "---\nstatus: current\ndescription: same\n---\nSame content" > wiki/dup1.md
+echo -e "---\nstatus: current\ndescription: same\n---\nSame content" > wiki/dup2.md
+# We set threshold low so it flags duplicate
+echo 'duplicate_threshold = 0.1' >> .wikirc
+
+# 1. lint --check=front-matter should pass because front matter is ok
+"$BIN" lint --check=front-matter || { echo "FAIL: lint --check=front-matter failed"; exit 1; }
+
+# 2. lint --skip=duplicate-content,orphans,heading-hierarchy should pass because we skip duplicate, orphans, and heading-hierarchy checks
+"$BIN" lint --skip=duplicate-content,orphans,heading-hierarchy || { echo "FAIL: lint --skip=... failed"; exit 1; }
+
+# 3. normal lint should fail because of duplicate-content
+"$BIN" lint && { echo "FAIL: expected duplicate lint failure"; exit 1; } || true
+echo "  ok"
 
 echo ""
 echo "=== all integration tests passed ==="

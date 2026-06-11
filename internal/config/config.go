@@ -20,13 +20,14 @@ type Config struct {
 	WatchInterval      int     // seconds between watch polls (0 = disabled)
 	CacheEnabled       bool    // use .wiki/.cache.json for faster lookups
 	CacheMaxMB         int     // max cache file size in MB (0 = unlimited)
+	FailSeverity       string  // severity above/equal to which lint fails: error, warn, info
 }
 
 // DefaultConfig returns a Config with sensible defaults.
 func DefaultConfig() *Config {
 	return &Config{
-		WikiDir:     "wiki",
-		DefaultDiff: "main...HEAD",
+		WikiDir:            "wiki",
+		DefaultDiff:        "main...HEAD",
 		LogLines:           10,
 		DuplicateThreshold: 0.7,
 		StaleDays:          30,
@@ -34,6 +35,7 @@ func DefaultConfig() *Config {
 		WatchInterval:      0, // disabled by default
 		CacheEnabled:       true,
 		CacheMaxMB:         0, // unlimited
+		FailSeverity:       "warn",
 		Ignore: []string{
 			"wiki/",
 			"bin/",
@@ -119,6 +121,8 @@ func Load(dir string) (*Config, error) {
 			cfg.CacheEnabled = parseBool(val, true)
 		case "cache_max_mb":
 			cfg.CacheMaxMB = parsePositiveInt(val, 0)
+		case "fail_severity":
+			cfg.FailSeverity = strings.ToLower(strings.TrimSpace(val))
 		}
 	}
 	return cfg, scanner.Err()

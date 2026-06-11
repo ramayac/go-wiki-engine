@@ -303,6 +303,7 @@ func (e *Engine) Stats() (*StatsResult, error) {
 // ContextEntry is a single entry in the context catalog.
 type ContextEntry struct {
 	File        string `json:"file"`
+	Status      string `json:"status"`
 	Description string `json:"description"`
 	Summary     string `json:"summary,omitempty"`  // first ~3 paragraphs when --summarize
 	LineCount   int    `json:"line_count"`
@@ -324,15 +325,36 @@ type ContextResult struct {
 // When minimal is true, only the catalog and recent log are returned.
 // When summarize is true, each catalog entry includes a page summary
 // (first heading and first few paragraphs) plus line count.
-func (e *Engine) Context(minimal, summarize bool) (*ContextResult, error) {
+// When active is true, non-active pages (status legacy/deprecated) are filtered out.
+func (e *Engine) Context(minimal, summarize, active bool) (*ContextResult, error) {
 	cr := &ContextResult{}
 
 	// Build catalog from index.md.
 	wikiDir := e.WikiPath()
 	indexPath := filepath.Join(wikiDir, "index.md")
+	var rawCatalog []ContextEntry
 	if data, err := os.ReadFile(indexPath); err == nil {
-		cr.Catalog = parseIndexCatalog(string(data))
+		rawCatalog = parseIndexCatalog(string(data))
 	}
+
+	// Fetch status and filter based on active/summarize requirements
+	var filteredCatalog []ContextEntry
+	for _, entry := range rawCatalog {
+		fm, _ := e.PageFrontMatter(filepath.Join(e.Cfg.WikiDir, entry.File))
+		entry.Status = fm.Status
+
+		isActive := fm.Status == "current" || fm.Status == "planned"
+
+		if active && !isActive {
+			continue
+		}
+		if summarize && !isActive {
+			continue
+		}
+
+		filteredCatalog = append(filteredCatalog, entry)
+	}
+	cr.Catalog = filteredCatalog
 
 	// Stats.
 	if st, err := e.Stats(); err == nil {
@@ -462,10 +484,31 @@ func (e *Engine) Summary(page string) (*SummaryResult, error) {
 	var previewLines []string
 	inPara := false
 
+	inFM := false
+	firstLine := true
+
 	for scanner.Scan() {
 		lineNo++
 		text := scanner.Text()
 		trimmed := strings.TrimSpace(text)
+
+		if firstLine {
+			if trimmed == "" {
+				continue
+			}
+			firstLine = false
+			if trimmed == "---" {
+				inFM = true
+				continue
+			}
+		}
+
+		if inFM {
+			if trimmed == "---" {
+				inFM = false
+			}
+			continue
+		}
 
 		// Capture first heading.
 		if sr.FirstHeader == "" && headingRe.MatchString(text) {
