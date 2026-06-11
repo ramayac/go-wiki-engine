@@ -133,12 +133,7 @@ func parseLogLines(s string) int {
 }
 
 func parsePositiveInt(s string, fallback int) int {
-	n := 0
-	for _, c := range s {
-		if c >= '0' && c <= '9' {
-			n = n*10 + int(c-'0')
-		}
-	}
+	n := parseInt(s, fallback)
 	if n <= 0 {
 		return fallback
 	}

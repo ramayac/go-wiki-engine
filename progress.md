@@ -1,7 +1,7 @@
 # Progress
 
 ## Status
-Completed Phase 5: Cleanup & Polish. The improvement plan is 100% completed.
+All improvement plan phases (1–5) implemented. Tier 7 bookkeeping items (see wiki/todo.md) remain deferred.
 
 ## Tasks
 - [x] 1A. Document front matter schema in scaffold/wiki/schema.md and add front matter to all scaffold/wiki/*.md
