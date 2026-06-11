@@ -265,3 +265,40 @@ func TestSyncPromptsPreservesExistingShims(t *testing.T) {
 		t.Error("SyncPrompts overwrote existing CLAUDE.md — should preserve user content")
 	}
 }
+
+func TestSyncPromptsRemovesOrphans(t *testing.T) {
+	dest := t.TempDir()
+
+	// First sync to populate the destination.
+	if _, err := SyncPrompts(dest); err != nil {
+		t.Fatalf("first SyncPrompts failed: %v", err)
+	}
+
+	// Write an orphan file that simulates a removed prompt.
+	orphanPath := filepath.Join(dest, ".wiki-instructions", "migrate-shims.md")
+	if err := os.WriteFile(orphanPath, []byte("stale content"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Second sync should remove the orphan.
+	updated, err := SyncPrompts(dest)
+	if err != nil {
+		t.Fatalf("second SyncPrompts failed: %v", err)
+	}
+
+	if _, err := os.Stat(orphanPath); !os.IsNotExist(err) {
+		t.Error("SyncPrompts did not remove orphaned file migrate-shims.md")
+	}
+
+	// Verify the removal was reported.
+	found := false
+	for _, u := range updated {
+		if u == "removed .wiki-instructions/migrate-shims.md" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("SyncPrompts did not report orphan removal in updated list")
+	}
+}

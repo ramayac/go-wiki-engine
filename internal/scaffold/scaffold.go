@@ -107,21 +107,63 @@ func SyncPrompts(destDir string) ([]string, error) {
 	// Sync each instruction layer prefix. The embedded FS dereferences
 	// symlinks, so .github/prompts/ and .claude/commands/ contain regular
 	// file copies of the canonical .wiki-instructions/ files.
-	for _, prefix := range []string{
+	prefixes := []string{
 		"files/.wiki-instructions",
 		"files/.github",
 		"files/.claude",
 		"files/.pi",
-	} {
+	}
+	for _, prefix := range prefixes {
 		err := syncEmbeddedDir(destDir, prefix, &updated)
 		if err != nil {
 			return updated, err
 		}
 	}
 
+	// Remove destination files that no longer exist in the embedded
+	// FS. This cleans up prompts that were removed from the scaffold
+	// (e.g. migrate-shims.md, summarize.md).
+	cleanOrphanedFiles(destDir, prefixes, &updated)
+
 	shims, err := syncShims(destDir)
 	updated = append(updated, shims...)
 	return updated, err
+}
+
+// cleanOrphanedFiles removes files in the destination sync directories
+// that no longer exist in the embedded FS. Only files within the known
+// sync prefixes are considered — wiki/ and .wikirc are never touched.
+func cleanOrphanedFiles(destDir string, embedPrefixes []string, cleaned *[]string) {
+	// Build the set of all known embedded paths (relative to destDir).
+	known := make(map[string]bool)
+	for _, prefix := range embedPrefixes {
+		fs.WalkDir(files, prefix, func(path string, d fs.DirEntry, err error) error {
+			if err != nil || d.IsDir() {
+				return err
+			}
+			rel, _ := filepath.Rel("files", path)
+			known[rel] = true
+			return nil
+		})
+	}
+
+	// Walk each destination prefix and remove files not in known.
+	for _, prefix := range embedPrefixes {
+		relRoot, _ := filepath.Rel("files", prefix)
+		walkRoot := filepath.Join(destDir, relRoot)
+		filepath.Walk(walkRoot, func(path string, info os.FileInfo, err error) error {
+			if err != nil || info.IsDir() {
+				return err
+			}
+			rel, _ := filepath.Rel(destDir, path)
+			if !known[rel] {
+				if err := os.Remove(path); err == nil {
+					*cleaned = append(*cleaned, "removed "+rel)
+				}
+			}
+			return nil
+		})
+	}
 }
 
 // syncEmbeddedDir walks an embedded directory and writes all files
