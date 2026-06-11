@@ -70,3 +70,4 @@ Address **after** the main improvement plan (Phases 1–5). These are housekeepi
 | 51 | **Add front matter to all wiki pages** | 1h | ✅ Done — all wiki pages migrated to include YAML front matter |
 | 52 | **Update `phases.md` with forward-looking entries** | 15m | ✅ Done — updated project's own phases.md with all implementation phases |
 | 53 | **Clean up `todo.md` stale status markers** | 15m | ✅ Done — all status markers updated and validated |
+| 54 | **Add unit tests for `upgrade.go` download path** | 2h | ⬜ Deferred — SHA-256 checksum validation, tar.gz/zip extraction, and fallback logic need mock HTTP server coverage |
