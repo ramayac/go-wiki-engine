@@ -169,7 +169,7 @@ Actually the `.github/workflows/` directory likely exists from the TODO items. T
 
 ### Phase 4 — CI & Self-Linting
 - [ ] 4A. Add `make lint` step to `.github/workflows/test.yml` CI pipeline
-- [ ] 4B. Add front matter to the project's own 14 wiki pages
+- [x] 4B. Add front matter to the project's own 14 wiki pages
 - [ ] 4C. Make `make lint` the PR gate for wiki health
 
 ### Phase 5 — Cleanup & Polish
