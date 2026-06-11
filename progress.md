@@ -1,7 +1,7 @@
 # Progress
 
 ## Status
-Completed Phase 2: Linter Hardening
+Completed Phase 4B: Wiki Front Matter Migration
 
 ## Tasks
 - [x] 1A. Document front matter schema in scaffold/wiki/schema.md and add front matter to all scaffold/wiki/*.md
@@ -17,9 +17,11 @@ Completed Phase 2: Linter Hardening
 - [x] 2C. Add bareUrlChecker — detect bare URLs and HTML <a> tags outside code blocks
 - [x] 2D. Add frontMatterChecker (completed in Phase 1)
 - [x] 2E. Add --check / --skip flags to wiki-engine lint
+- [x] 4B. Add front matter to the project's own 14 wiki pages (migrated all 13 project wiki files)
 
 ## Files Changed
 - `scaffold/wiki/*.md` and `scaffold/wiki/operations/*.md` (added front matter)
+- `wiki/*.md` and `wiki/operations/*.md` (added front matter to the project's own wiki pages)
 - `internal/config/config.go` (added and parsed FailSeverity setting, defaulting to warn)
 - `internal/config/config_test.go` (updated config loading tests)
 - `internal/engine/frontmatter.go` (created front matter parser and PageFrontMatter method)
@@ -27,14 +29,15 @@ Completed Phase 2: Linter Hardening
 - `internal/engine/graph.go` (created BFS BuildWikiGraph and SortNodes, extracted ExtractLinks helper)
 - `internal/engine/graph_test.go` (created unit tests for graph builder and sorting)
 - `internal/engine/engine.go` (updated Summary and Context signature/implementation)
-- `internal/engine/engine_lint.go` (added and registered frontMatterChecker, indexFormatChecker, bareUrlChecker; implemented LintWithOptions; refactored orphansChecker to use ExtractLinks)
+- `internal/engine/engine_lint.go` (added and registered frontMatterChecker, indexFormatChecker, bareUrlChecker; implemented LintWithOptions; refactored orphansChecker to use ExtractLinks; refactored bareUrlChecker to check cleaned lines for HTML tags)
 - `internal/engine/engine_test.go` (updated test setup and added tests for all checkers and options)
 - `cmd/wiki-engine/main.go` (updated context, list and lint commands to support all new flags)
 - `test/integration_test.sh` (updated to support front matter and tested active graph, sorting, json, and check/skip lint flags)
 
 ## Notes
-- Phases 1, 1.5, and 2 completed and fully verified via go unit tests and integration_test.sh.
+- Phases 1, 1.5, 2, and 4B completed and fully verified via go unit tests, integration_test.sh, and make lint.
 - All integration and unit tests pass successfully.
+
 
 
 

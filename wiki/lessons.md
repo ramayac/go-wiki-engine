@@ -1,3 +1,8 @@
+---
+status: current
+description: "Lessons learned during design, testing, and implementation."
+superseded_by: ""
+---
 # Lessons
 
 Accumulated design insights from real usage sessions. Each entry records a gap that was discovered, the consequence, and what was built to close it.

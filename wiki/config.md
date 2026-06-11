@@ -1,3 +1,8 @@
+---
+status: current
+description: "Specification and usage guide for the .wikirc configuration file."
+superseded_by: ""
+---
 # Configuration Reference
 
 All settings live in `.wikirc` at the repo root. If the file is absent, sensible defaults are used. Values are `key = "value"` pairs (quotes optional for simple values). Arrays use bracket syntax.

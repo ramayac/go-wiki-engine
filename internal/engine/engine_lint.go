@@ -1116,7 +1116,10 @@ func (c *bareUrlChecker) Check(e *Engine) ([]Issue, error) {
 				continue
 			}
 
-			if htmlAnchorRe.MatchString(line) {
+			cleaned := inlineCodeRe.ReplaceAllString(line, "")
+			cleaned = markdownLinkRe.ReplaceAllString(cleaned, "")
+
+			if htmlAnchorRe.MatchString(cleaned) {
 				issues = append(issues, Issue{
 					Severity: SevError,
 					Check:    c.Name(),
@@ -1125,9 +1128,6 @@ func (c *bareUrlChecker) Check(e *Engine) ([]Issue, error) {
 					Message:  "use markdown links, not HTML",
 				})
 			}
-
-			cleaned := inlineCodeRe.ReplaceAllString(line, "")
-			cleaned = markdownLinkRe.ReplaceAllString(cleaned, "")
 
 			if match := bareUrlRe.FindString(cleaned); match != "" {
 				issues = append(issues, Issue{

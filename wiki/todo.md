@@ -1,3 +1,8 @@
+---
+status: current
+description: "Improvement backlog categorized by tier and priority."
+superseded_by: ""
+---
 # TODO — Improvement Backlog
 
 Ranked by implementation difficulty within each tier. Effort assumes familiarity with the codebase.
@@ -46,7 +51,7 @@ Refer to the [Improvement Plan](improvement-plan.md) for the detailed roadmap an
 | 41 | **CI linting pipeline setup** | 1h | ⬜ Planned |
 | 42 | **Dead code cleanup** | 0.5h | ⬜ Planned |
 | 43 | **Prompt restructuring (reduce overlap)** | 3h | ⬜ Planned |
-| 44 | **Wiki front matter migration** | 1h | ⬜ Planned |
+| 44 | **Wiki front matter migration** | 1h | ✅ Done |
 | 45 | **Shared Link-Parsing Helper** | 2h | ✅ Done |
 | 46 | **Directed Graph Builder (`BuildWikiGraph()`)** | 5h | ✅ Done |
 | 47 | **Topological/Chronological Sorting of Graph** | 2h | ✅ Done |

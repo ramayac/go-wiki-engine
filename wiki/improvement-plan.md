@@ -1,3 +1,8 @@
+---
+status: current
+description: "Deep analysis and phased roadmap for linter hardening and lifecycle features."
+superseded_by: ""
+---
 # go-wiki-engine — Deep Analysis & Improvement Plan
 
 ## Executive Summary
@@ -110,7 +115,7 @@ You described 5 key goals. Here's how they map to implementation:
 - New `indexFormatChecker`: ensure every index entry follows `- [text]\(file.md) | description` pattern
 - Expand `markdownFormatChecker` to also catch:
   - Bare URLs outside code blocks (`https://...` not wrapped in `[text]\(url)`)
-  - HTML anchor tags `<a href=...>`
+  - HTML anchor tags `<a href="...">`
   - Reference-style links `[text][ref]` (if you want to disallow them)
 
 ### Goal 5: "CI/test should lint our own wiki"

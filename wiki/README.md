@@ -1,3 +1,8 @@
+---
+status: current
+description: "Overview of the wiki structure, rules, and navigation."
+superseded_by: ""
+---
 # Wiki
 
 This directory is the repository-local knowledge base.
