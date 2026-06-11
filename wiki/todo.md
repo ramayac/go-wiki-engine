@@ -1,5 +1,7 @@
 # TODO — Improvement Backlog
 
+Refer to the [Improvement Plan](improvement-plan.md) for the detailed roadmap and phase breakdown.
+
 Ranked by implementation difficulty within each tier. Effort assumes familiarity with the codebase.
 ✅ = completed.
 
@@ -36,12 +38,12 @@ Ranked by implementation difficulty within each tier. Effort assumes familiarity
 
 ---
 
-## Tier 3 — Hard (1–3 days each) ~50% DONE
+## Tier 3 — Hard (1–3 days each) ✅ ALL DONE
 
 | # | Task | Effort | Status |
 |---|------|--------|--------|
 | 18 | **`wiki-engine relevant <query>` command** | 1.5d | ✅ `engine.Relevant()` — heading ×3 + body scoring, sorted, top-N |
-| 19 | **`wiki-engine impact <changed-files>` command** | 1d | ⬜ Not started — maps changed files to wiki pages that need updating |
+| 19 | **`wiki-engine impact <changed-files>` command** | 1d | ✅ `engine.Impact()` — maps changed files to wiki pages that mention them |
 | 20 | **Refactor lint to composable checker pattern** | 1d | ✅ `Checker` interface, 9 implementations, `allCheckers()`, severity levels |
 | 21 | **`--json` flag on all commands** | 1d | ✅ Consistent JSON envelope on `list`, `headings`, `search`, `log-tail`, `changed`, `candidates`, `lint`, `stats`, `context`, `summary`, `relevant` |
 | 22 | **Integration tests** | 1.5d | ✅ `test/integration_test.sh` — 14 end-to-end tests covering init, list, search, lint, stats, context, summary, relevant, json, diff, watch, impact, cache, duplicate detection |
@@ -49,7 +51,7 @@ Ranked by implementation difficulty within each tier. Effort assumes familiarity
 
 ---
 
-## Tier 4 — Harder (design + implementation, 2–4 days each)
+## Tier 4 — Harder (design + implementation, 2–4 days each) ~75% DONE
 
 | # | Task | Effort | Status |
 |---|------|--------|--------|
@@ -60,7 +62,7 @@ Ranked by implementation difficulty within each tier. Effort assumes familiarity
 
 ---
 
-## Tier 5 — Long-term / speculative
+## Tier 5 — Long-term / speculative ~60% DONE
 
 | # | Task | Effort | Status |
 |---|------|--------|--------|
@@ -69,3 +71,24 @@ Ranked by implementation difficulty within each tier. Effort assumes familiarity
 | 30 | **`wiki-engine watch` mode** | 3d | ✅ `engine.WatchOnce()` + `watch` command with `--once` and continuous modes, `watch_interval` config |
 | 31 | **Wiki template system** | 3d | ⬜ |
 | 32 | **Multi-repo wiki aggregation** | 4d | ⬜ |
+
+---
+
+## Tier 6 — Hardening & Page Lifecycle (New Backlog)
+
+Refer to the [Improvement Plan](improvement-plan.md) for full phase breakdown.
+
+| # | Task | Effort | Status |
+|---|------|--------|--------|
+| 33 | **Fix lint severity gating (exit code)** | 0.5h | ⬜ Planned |
+| 34 | **Front matter schema & YAML parser** | 4h | ⬜ Planned |
+| 35 | **Front matter lint checker** | 2h | ⬜ Planned |
+| 36 | **Lifecycle filtering in list/context (`--active`)** | 3h | ⬜ Planned |
+| 37 | **Index format checker** | 1.5h | ⬜ Planned |
+| 38 | **Slash command lifecycle awareness** | 2h | ⬜ Planned |
+| 39 | **Bare URL and HTML link checker** | 1h | ⬜ Planned |
+| 40 | **`--check` / `--skip` lint flags** | 2h | ⬜ Planned |
+| 41 | **CI linting pipeline setup** | 1h | ⬜ Planned |
+| 42 | **Dead code cleanup** | 0.5h | ⬜ Planned |
+| 43 | **Prompt restructuring (reduce overlap)** | 3h | ⬜ Planned |
+| 44 | **Wiki front matter migration** | 1h | ⬜ Planned |

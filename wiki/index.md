@@ -9,6 +9,7 @@
 - [log.md](log.md) | Append-only timeline of wiki maintenance.
 - [lessons.md](lessons.md) | Design insights and gap post-mortems from real usage sessions.
 - [todo.md](todo.md) | Improvement backlog ranked by difficulty.
+- [improvement-plan.md](improvement-plan.md) | Comprehensive deep analysis and phased improvement plan.
 - [config.md](config.md) | Full `.wikirc` configuration reference.
 
 ## Operations
