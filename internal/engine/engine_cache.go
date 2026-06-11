@@ -143,15 +143,6 @@ func (e *Engine) cacheValid(c *wikiCache) bool {
 }
 
 var errFileChanged = filepath.SkipAll // sentinel to abort walk early
-
-// cachedList returns file list from cache, falling back to filesystem walk.
-func (e *Engine) cachedList() ([]string, error) {
-	if c := e.loadCache(); c != nil {
-		return c.Files, nil
-	}
-	return e.List()
-}
-
 // RebuildCache saves a fresh cache if the current one is stale
 // or missing. Called by lint --rebuild-cache.
 func (e *Engine) RebuildCache() error {

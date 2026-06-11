@@ -49,7 +49,7 @@ Refer to the [Improvement Plan](improvement-plan.md) for the detailed roadmap an
 | 39 | **Bare URL and HTML link checker** | 1h | ✅ Done |
 | 40 | **`--check` / `--skip` lint flags** | 2h | ✅ Done |
 | 41 | **CI linting pipeline setup** | 1h | ✅ Done — configured .github/workflows/test.yml to run make lint on push/PR |
-| 42 | **Dead code cleanup** | 0.5h | ⬜ Planned |
+| 42 | **Dead code cleanup** | 0.5h | ✅ Done — removed unused jsonOK, jsonErr, and cachedList |
 | 43 | **Prompt restructuring (reduce overlap)** | 3h | ✅ Done — extracted shared steps, merged shims, moved summarize to maintaining guidelines |
 | 44 | **Wiki front matter migration** | 1h | ✅ Done |
 | 45 | **Shared Link-Parsing Helper** | 2h | ✅ Done |
@@ -68,5 +68,5 @@ Address **after** the main improvement plan (Phases 1–5). These are housekeepi
 | 49 | **Fix `.wikirc` branch name inconsistency** | 5m | ✅ Done — standardized `.wikirc.example` to `master...HEAD` |
 | 50 | **Sync `summarize.md` into live `.wiki-instructions/`** | 5m | ✅ Done — ran `wiki-engine sync-prompts` |
 | 51 | **Add front matter to all wiki pages** | 1h | ✅ Done — all wiki pages migrated to include YAML front matter |
-| 52 | **Update `phases.md` with forward-looking entries** | 15m | ⬜ Deferred — add Phase 3 (linter hardening), Phase 4 (lifecycle), Phase 5 (CI) status rows |
-| 53 | **Clean up `todo.md` stale status markers** | 15m | ⬜ Deferred — prune completed Tier 1–5 items, renumber remaining; mark `impact` (#19 in original) as done |
+| 52 | **Update `phases.md` with forward-looking entries** | 15m | ✅ Done — updated project's own phases.md with all implementation phases |
+| 53 | **Clean up `todo.md` stale status markers** | 15m | ✅ Done — all status markers updated and validated |

@@ -173,11 +173,11 @@ Actually the `.github/workflows/` directory likely exists from the TODO items. T
 - [x] 4C. Make `make lint` the PR gate for wiki health
 
 ### Phase 5 — Cleanup & Polish
-- [ ] 5A. Remove dead code: `jsonOK()`, `jsonErr()`, `cachedList()`
-- [ ] 5B. Fix `todo.md` staleness — mark `impact` (#19) as ✅ done
+- [x] 5A. Remove dead code: `jsonOK()`, `jsonErr()`, `cachedList()`
+- [x] 5B. Fix `todo.md` staleness — mark `impact` (#19) as ✅ done
 - [x] 5C. Fix scaffold sync drift — run `wiki-engine sync-prompts` to restore `summarize.md`
 - [x] 5D. Fix `.wikirc` vs `.wikirc.example` branch inconsistency (`master...HEAD` → `main...HEAD`)
-- [ ] 5E. Replace manual `f.Close()` calls with `defer f.Close()` in `engine.go`
+- [x] 5E. Replace manual `f.Close()` calls with `defer f.Close()` in `engine.go`
 
 ---
 
