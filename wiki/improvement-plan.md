@@ -162,15 +162,15 @@ Actually the `.github/workflows/` directory likely exists from the TODO items. T
 - [x] 2E. Add `--check` / `--skip` flags to `wiki-engine lint`
 
 ### Phase 3 — Slash Command Coherence
-- [ ] 3A. Update all `.wiki-instructions/*.md` to use `context --active` and respect lifecycle status
-- [ ] 3B. Add `/wiki-lint` prompt as new `.wiki-instructions/lint.md`
-- [ ] 3C. Reduce prompt overlap — extract shared steps into `wiki-maintainer.md`
-- [ ] 3D. Ensure prompt/command naming alignment (merge `migrate-shims`, document `summarize` as a flag)
+- [x] 3A. Update all `.wiki-instructions/*.md` to use `context --active` and respect lifecycle status
+- [x] 3B. Add `/wiki-lint` prompt as new `.wiki-instructions/lint.md`
+- [x] 3C. Reduce prompt overlap — extract shared steps into `wiki-maintainer.md`
+- [x] 3D. Ensure prompt/command naming alignment (merge `migrate-shims`, document `summarize` as a flag)
 
 ### Phase 4 — CI & Self-Linting
-- [ ] 4A. Add `make lint` step to `.github/workflows/test.yml` CI pipeline
+- [x] 4A. Add `make lint` step to `.github/workflows/test.yml` CI pipeline
 - [x] 4B. Add front matter to the project's own 14 wiki pages
-- [ ] 4C. Make `make lint` the PR gate for wiki health
+- [x] 4C. Make `make lint` the PR gate for wiki health
 
 ### Phase 5 — Cleanup & Polish
 - [ ] 5A. Remove dead code: `jsonOK()`, `jsonErr()`, `cachedList()`

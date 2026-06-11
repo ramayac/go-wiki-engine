@@ -1,1 +1,0 @@
-../../.wiki-instructions/migrate-shims.md

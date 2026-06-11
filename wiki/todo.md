@@ -45,12 +45,12 @@ Refer to the [Improvement Plan](improvement-plan.md) for the detailed roadmap an
 | 35 | **Front matter lint checker** | 2h | ✅ Done |
 | 36 | **Lifecycle filtering in list/context (`--active`)** | 3h | ✅ Done |
 | 37 | **Index format checker** | 1.5h | ✅ Done |
-| 38 | **Slash command lifecycle awareness** | 2h | ⬜ Planned |
+| 38 | **Slash command lifecycle awareness** | 2h | ✅ Done — updated prompts to use context --active |
 | 39 | **Bare URL and HTML link checker** | 1h | ✅ Done |
 | 40 | **`--check` / `--skip` lint flags** | 2h | ✅ Done |
-| 41 | **CI linting pipeline setup** | 1h | ⬜ Planned |
+| 41 | **CI linting pipeline setup** | 1h | ✅ Done — configured .github/workflows/test.yml to run make lint on push/PR |
 | 42 | **Dead code cleanup** | 0.5h | ⬜ Planned |
-| 43 | **Prompt restructuring (reduce overlap)** | 3h | ⬜ Planned |
+| 43 | **Prompt restructuring (reduce overlap)** | 3h | ✅ Done — extracted shared steps, merged shims, moved summarize to maintaining guidelines |
 | 44 | **Wiki front matter migration** | 1h | ✅ Done |
 | 45 | **Shared Link-Parsing Helper** | 2h | ✅ Done |
 | 46 | **Directed Graph Builder (`BuildWikiGraph()`)** | 5h | ✅ Done |

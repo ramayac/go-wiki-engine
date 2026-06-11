@@ -94,7 +94,7 @@ func TestSyncPrompts(t *testing.T) {
 		".wiki-instructions/query.md",
 		".wiki-instructions/refresh.md",
 		".wiki-instructions/onboard.md",
-		".wiki-instructions/migrate-shims.md",
+		".wiki-instructions/lint.md",
 		".wiki-instructions/wiki-maintainer.md",
 	}
 	for _, f := range canonical {
@@ -110,7 +110,7 @@ func TestSyncPrompts(t *testing.T) {
 		".github/prompts/wiki-query.prompt.md",
 		".github/prompts/wiki-refresh.prompt.md",
 		".github/prompts/wiki-onboard.prompt.md",
-		".github/prompts/wiki-migrate-shims.prompt.md",
+		".github/prompts/wiki-lint.prompt.md",
 		".github/instructions/wiki-maintainer.instructions.md",
 	}
 	for _, f := range copilot {
@@ -126,7 +126,7 @@ func TestSyncPrompts(t *testing.T) {
 		".claude/commands/wiki-query.md",
 		".claude/commands/wiki-refresh.md",
 		".claude/commands/wiki-onboard.md",
-		".claude/commands/wiki-migrate-shims.md",
+		".claude/commands/wiki-lint.md",
 	}
 	for _, f := range claude {
 		p := filepath.Join(dest, f)

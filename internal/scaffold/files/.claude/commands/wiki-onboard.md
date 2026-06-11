@@ -9,7 +9,7 @@ Run a full-project wiki onboarding. This is a **cold-start** survey — do not r
 
 ## Required context
 
-- Run `wiki-engine context` to check whether the wiki has been populated.
+- Run `wiki-engine context --active` to check whether the wiki has been populated.
 - Read [wiki/phases.md](../../wiki/phases.md) — check which phases are still `not-started`.
 - Skim the top-level directory to understand what kind of project this is.
 - If wiki-engine is not installed, read [wiki/index.md](../../wiki/index.md) instead.
@@ -25,26 +25,40 @@ wiki-engine candidates
 If candidates returns no output, fall back to surveying the repo manually:
 - List top-level directories.
 - Read the root `README.md`, `Makefile`, and any `package.json` / `go.mod` / `pyproject.toml`.
-- Check for existing docs in common locations: `docs/`, `AGENTS.md`, `CONTRIBUTING.md`, `ARCHITECTURE.md`, `ADR/`, `notes/`.
+- Check for existing docs in common locations: `docs/`, `AGENTS.md`, `CLAUDE.md`, `CONTRIBUTING.md`, `ARCHITECTURE.md`, `ADR/`, `notes/`.
 
 ### 2. Check for external knowledge to migrate
 
 Before creating new pages, scan for files that already contain durable knowledge outside `wiki/`:
-
 - `docs/` or `doc/` — planning docs, design decisions, lessons learned
 - `AGENTS.md` — AI agent SOPs and architectural rules
+- `CLAUDE.md` — Claude-specific conventions or workflows
 - `CONTRIBUTING.md` — developer workflow rules
 - `ARCHITECTURE.md`, `DESIGN.md`, or similar top-level docs
 
-If found:
-- Copy their durable content into appropriately-named wiki pages (e.g., `wiki/agents-guide.md`, `wiki/big-plan.md`).
-- Replace the original file with a one-line stub pointing to its new wiki location, OR delete it if it is fully superseded.
-- Note the migration in the log.
+If any file contains custom instructions (not just a redirect shim), migrate the durable knowledge:
+- Coding conventions or team workflow → add to [wiki/README.md](../../wiki/README.md).
+- Architecture or component notes → add to [wiki/repo-map.md](../../wiki/repo-map.md).
+- Broad AI guidance (how the agent should behave) → add an **AI Agent Guidance** section in [wiki/README.md](../../wiki/README.md).
+- If it is large or specialized, copy into a dedicated wiki page (e.g. `wiki/agents-guide.md`) with a valid front matter block.
+- Once migrated, replace `AGENTS.md` and `CLAUDE.md` with standard redirect shims:
+  ```markdown
+  # AI Agent Instructions (or Claude Instructions)
+
+  This project uses a structured wiki for all documentation and agent context.
+
+  Start here: **[wiki/index.md](wiki/index.md)**
+
+  The wiki covers architecture, conventions, active phases, and the project change log.
+  To update or query the wiki, use the `/wiki-ingest`, `/wiki-query`, or `/wiki-refresh`
+  Copilot slash commands (installed in `.github/prompts/`).
+  ```
+- Replace other migrated external files with a one-line stub pointing to their new wiki location, or delete them if they are fully superseded.
+- Note the migration details in `wiki/log.md`.
 
 ### 3. Populate wiki/repo-map.md
 
 Fill in every section — do not leave placeholder comments:
-
 - **Purpose** — one or two sentence description of what the project does.
 - **High-Signal Areas** — the most important source directories and files, with a one-line role for each.
 - **Generated Artifacts** — build outputs, caches, test fixtures.
@@ -63,7 +77,15 @@ Decide what the first wiki topic pages should be based on what you found. Common
 | `api.md` | Projects with a public API |
 | `data-model.md` | Projects with a significant schema |
 
-Read only the source files needed to populate each page. Write durable facts only — not implementation details that change every PR. Ensure all pages use standard relative Markdown links (e.g., `[Text](file.md)`) to connect topics and source references.
+Read only the source files needed to populate each page. Write durable facts only — not implementation details that change every PR.
+**Required:** Include a proper YAML front matter block at the top of every new page (and `wiki/repo-map.md` if not already present):
+```yaml
+---
+status: current          # current | planned
+description: "One-line summary of this page's purpose"
+---
+```
+Ensure all pages use standard relative Markdown links (e.g., `[Text](file.md)`) to connect topics and source references.
 
 ### 5. Update wiki/index.md
 

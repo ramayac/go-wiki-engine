@@ -9,7 +9,8 @@ Monitor the repository for changes that need wiki maintenance.
 
 ## Required context
 
-- Read [wiki/index.md](../../wiki/index.md).
+- Run `wiki-engine context --active` to get the current snapshot of active wiki pages.
+- Follow the guidelines in [wiki-maintainer.md](wiki-maintainer.md).
 - Read [wiki/operations/ingest.md](../../wiki/operations/ingest.md).
 
 ## Execution steps
@@ -34,12 +35,16 @@ Runs a single change + lint cycle and exits. Use this before starting work to ch
 
 When `wiki-engine watch` reports changed candidates:
 
-1. Run `wiki-engine candidates` to get the filtered list.
-2. For each candidate, run `wiki-engine impact <file>` to see which wiki pages are affected.
-3. Read the changed source files that are relevant.
-4. Update wiki pages with durable facts. Ensure all links are standard relative Markdown links (e.g., `[Text](file.md)`).
-5. Append a dated entry to [wiki/log.md](../../wiki/log.md).
-6. Run `wiki-engine lint`.
+1. Run `wiki-engine context --active`.
+2. Run `wiki-engine candidates` to get the filtered list.
+3. For each candidate, run `wiki-engine impact <file>` to see which wiki pages are affected.
+4. Read the changed source files that are relevant.
+5. Update active wiki pages with durable facts:
+   - Ensure all new pages include a valid YAML front matter block (with `status: current` or `status: planned`, and a `description`).
+   - If replacing or retiring an existing page, set its front matter `status` to `deprecated` and specify the replacing page path in `superseded_by: "target-page.md"`.
+   - Update pages with durable facts only, using standard relative Markdown links (e.g., `[Text](file.md)`).
+6. Append a dated entry to [wiki/log.md](../../wiki/log.md).
+7. Run `wiki-engine lint`.
 
 If no candidates have durable wiki impact, report "no wiki update needed" and move on.
 
