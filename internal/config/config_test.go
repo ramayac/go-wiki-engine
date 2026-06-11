@@ -122,6 +122,7 @@ context_summarize = true
 cache_enabled = false
 cache_max_mb = 10
 watch_interval = 120
+fail_severity = "error"
 `
 	if err := os.WriteFile(filepath.Join(dir, ".wikirc"), []byte(content), 0o644); err != nil {
 		t.Fatal(err)
@@ -147,6 +148,9 @@ watch_interval = 120
 	}
 	if cfg.WatchInterval != 120 {
 		t.Errorf("WatchInterval = %d, want 120", cfg.WatchInterval)
+	}
+	if cfg.FailSeverity != "error" {
+		t.Errorf("FailSeverity = %q, want %q", cfg.FailSeverity, "error")
 	}
 }
 

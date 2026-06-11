@@ -152,9 +152,25 @@ func loadEngine() (*config.Config, *engine.Engine) {
 func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string, useJSON bool) {
 	switch cmd {
 	case "list":
+		activeOnly := false
+		for _, a := range args[2:] {
+			if a == "--active" {
+				activeOnly = true
+			}
+		}
 		files, err := eng.List()
 		if err != nil {
 			fatal(err)
+		}
+		if activeOnly {
+			var filtered []string
+			for _, f := range files {
+				fm, _ := eng.PageFrontMatter(f)
+				if fm.Status == "current" || fm.Status == "planned" {
+					filtered = append(filtered, f)
+				}
+			}
+			files = filtered
 		}
 		if useJSON {
 			writeJSON(files)
@@ -247,7 +263,8 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 		}
 
 	case "lint":
-		// Check for --rebuild-cache flag.
+		var check []string
+		var skip []string
 		for _, a := range args[2:] {
 			if a == "--rebuild-cache" {
 				if err := eng.RebuildCache(); err != nil {
@@ -255,9 +272,19 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 				} else {
 					fmt.Fprintln(os.Stderr, "cache rebuilt")
 				}
+			} else if strings.HasPrefix(a, "--check=") {
+				val := strings.TrimPrefix(a, "--check=")
+				if val != "" {
+					check = strings.Split(val, ",")
+				}
+			} else if strings.HasPrefix(a, "--skip=") {
+				val := strings.TrimPrefix(a, "--skip=")
+				if val != "" {
+					skip = strings.Split(val, ",")
+				}
 			}
 		}
-		result := eng.Lint()
+		result := eng.LintWithOptions(check, skip)
 		if useJSON {
 			writeJSON(result.Issues)
 			if !result.OK {
@@ -304,15 +331,47 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 	case "context":
 		minimal := false
 		summarize := false
+		active := false
+		sortBy := "chrono"
 		for _, a := range args[2:] {
-			switch a {
-			case "--minimal":
+			switch {
+			case a == "--minimal":
 				minimal = true
-			case "--summarize":
+			case a == "--summarize":
 				summarize = true
+			case a == "--active":
+				active = true
+			case a == "--sort=topo":
+				sortBy = "topo"
+			case a == "--sort=chrono":
+				sortBy = "chrono"
 			}
 		}
-		cr, err := eng.Context(minimal, summarize)
+
+		if active {
+			nodes, edges, err := eng.BuildWikiGraph()
+			if err != nil {
+				fatal(err)
+			}
+			engine.SortNodes(nodes, sortBy)
+
+			if useJSON {
+				writeJSON(engine.WikiGraphJSON{Nodes: nodes, Edges: edges})
+				return
+			}
+
+			fmt.Println("== active wiki graph ==")
+			for _, n := range nodes {
+				fmt.Printf("%s [%s] | %s\n", n.File, n.Status, n.Description)
+				for _, dest := range n.Links {
+					fmt.Printf("  -> %s\n", dest)
+				}
+				fmt.Println()
+			}
+			return
+		}
+
+		cr, err := eng.Context(minimal, summarize, false)
 		if err != nil {
 			fatal(err)
 		}
@@ -332,7 +391,7 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 		fmt.Println()
 		fmt.Println("== catalog ==")
 		for _, c := range cr.Catalog {
-			fmt.Printf("%s | %s\n", c.File, c.Description)
+			fmt.Printf("%s [%s] | %s\n", c.File, c.Status, c.Description)
 		}
 		if len(cr.RecentLog) > 0 {
 			fmt.Println()

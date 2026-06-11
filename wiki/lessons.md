@@ -1,3 +1,8 @@
+---
+status: current
+description: "Lessons learned during design, testing, and implementation."
+superseded_by: ""
+---
 # Lessons
 
 Accumulated design insights from real usage sessions. Each entry records a gap that was discovered, the consequence, and what was built to close it.
@@ -145,3 +150,41 @@ The same create-only semantics that `Init` already used for `.wikirc` are now ap
 ### Key design principle confirmed
 
 **Match the conventions of every tool in the ecosystem.** Different AI tools look for context in different places. The scaffold should install shims for all known entrypoint conventions, each pointing back to the single source of truth.
+
+---
+
+## 2026-06-10 — Hardened Upgrade Checksum Verification and Loop Defer Resource Management
+
+### What happened
+
+During linter hardening and prompt lifecycle updates:
+1. We wanted to secure the self-upgrade command (`wiki-engine upgrade`) from downloading unverified binaries directly from GitHub.
+2. In the linter loop implementations of `internal/engine/engine.go`, we observed code that processed multiple files under a loop using manual `f.Close()` calls. Attempting to use a standard `defer f.Close()` within a loop causes file handles to accumulate until the enclosing method returns, risking file descriptor exhaustion.
+3. Synchronizing prompts using `wiki-engine sync-prompts` previously left deprecated or removed prompt files (such as `migrate-shims.md` and `summarize.md`) in the target directories because the file sync did not account for orphaned target files.
+
+### Why it matters
+
+- **Security Integrity:** Downloading and running binaries without hash verification makes the tool vulnerable to compromised delivery vectors (e.g., tampered release assets).
+- **Resource Leaks:** CLI tools operating on large codebases can hit operating system limits on open file descriptors if loops do not release file resources immediately.
+- **Scaffold Hygiene:** Orphaned command templates and stale instruction configurations in user repos cause AI agents to try to invoke commands that no longer exist or are deprecated, resulting in prompt drift and overlap.
+
+### The fix
+
+- **Release Asset Hashing:** Upgraded `upgrade.Run()` to fetch `checksums.txt` from the GitHub release tag, resolve the matching asset for the running OS/Arch, compute its SHA-256 hash, and verify it matches the record in `checksums.txt` before replacing the binary. Added a fallback to `go install` for development/offline envs.
+- **Anonymous Loop Defers:** Wrapped loop iteration file tasks inside an anonymous function block:
+  ```go
+  for _, rel := range files {
+      func() {
+          f, err := os.Open(abs)
+          if err != nil { return }
+          defer f.Close()
+          // ... file scanning ...
+      }()
+  }
+  ```
+  This guarantees that `defer` evaluates and closes file handles immediately on each iteration.
+- **Orphan Cleanup:** Added checks to remove obsolete files from the target directories that are no longer part of the template scaffold during synchronization.
+
+### Key design principle confirmed
+
+**Continuous hygiene is critical for both plumbing and instruction layers.** Low-level CLI operations must manage OS resources defensively, while high-level AI prompt instructions must be synchronized and kept free of stale or redundant files to prevent agent context pollution.

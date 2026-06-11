@@ -94,7 +94,7 @@ func TestSyncPrompts(t *testing.T) {
 		".wiki-instructions/query.md",
 		".wiki-instructions/refresh.md",
 		".wiki-instructions/onboard.md",
-		".wiki-instructions/migrate-shims.md",
+		".wiki-instructions/lint.md",
 		".wiki-instructions/wiki-maintainer.md",
 	}
 	for _, f := range canonical {
@@ -110,7 +110,7 @@ func TestSyncPrompts(t *testing.T) {
 		".github/prompts/wiki-query.prompt.md",
 		".github/prompts/wiki-refresh.prompt.md",
 		".github/prompts/wiki-onboard.prompt.md",
-		".github/prompts/wiki-migrate-shims.prompt.md",
+		".github/prompts/wiki-lint.prompt.md",
 		".github/instructions/wiki-maintainer.instructions.md",
 	}
 	for _, f := range copilot {
@@ -126,7 +126,7 @@ func TestSyncPrompts(t *testing.T) {
 		".claude/commands/wiki-query.md",
 		".claude/commands/wiki-refresh.md",
 		".claude/commands/wiki-onboard.md",
-		".claude/commands/wiki-migrate-shims.md",
+		".claude/commands/wiki-lint.md",
 	}
 	for _, f := range claude {
 		p := filepath.Join(dest, f)
@@ -263,5 +263,42 @@ func TestSyncPromptsPreservesExistingShims(t *testing.T) {
 	}
 	if string(data) != custom {
 		t.Error("SyncPrompts overwrote existing CLAUDE.md — should preserve user content")
+	}
+}
+
+func TestSyncPromptsRemovesOrphans(t *testing.T) {
+	dest := t.TempDir()
+
+	// First sync to populate the destination.
+	if _, err := SyncPrompts(dest); err != nil {
+		t.Fatalf("first SyncPrompts failed: %v", err)
+	}
+
+	// Write an orphan file that simulates a removed prompt.
+	orphanPath := filepath.Join(dest, ".wiki-instructions", "migrate-shims.md")
+	if err := os.WriteFile(orphanPath, []byte("stale content"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Second sync should remove the orphan.
+	updated, err := SyncPrompts(dest)
+	if err != nil {
+		t.Fatalf("second SyncPrompts failed: %v", err)
+	}
+
+	if _, err := os.Stat(orphanPath); !os.IsNotExist(err) {
+		t.Error("SyncPrompts did not remove orphaned file migrate-shims.md")
+	}
+
+	// Verify the removal was reported.
+	found := false
+	for _, u := range updated {
+		if u == "removed .wiki-instructions/migrate-shims.md" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("SyncPrompts did not report orphan removal in updated list")
 	}
 }

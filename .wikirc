@@ -2,6 +2,9 @@ wiki_dir = "wiki"
 default_diff = "master...HEAD"
 log_lines = 10
 cache_enabled = true
+# Stale-content detection is disabled for this repo — the wiki is actively
+# maintained and daily agent commits keep every page fresh. Set >0 in
+# repos where the wiki drifts between sessions.
 stale_days = 0
 
 ignore = [

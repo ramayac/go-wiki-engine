@@ -1,3 +1,8 @@
+---
+status: current
+description: "Overview of the repository architecture, high-signal areas, and build instructions."
+superseded_by: ""
+---
 # Repo Map
 
 ## Purpose

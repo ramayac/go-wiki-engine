@@ -9,8 +9,9 @@ Run the repository wiki refresh workflow.
 
 ## Required context
 
-- Run `wiki-engine context` to get the current wiki snapshot.
+- Run `wiki-engine context --active` to get the current snapshot of active wiki pages.
 - Use `wiki-engine refresh` for the full maintenance report.
+- Follow the guidelines in [wiki-maintainer.md](wiki-maintainer.md).
 - If wiki-engine is not installed, read [wiki/index.md](../../wiki/index.md) and [wiki/repo-map.md](../../wiki/repo-map.md).
 
 ## Execution steps
@@ -18,8 +19,8 @@ Run the repository wiki refresh workflow.
 1. Run `wiki-engine refresh`.
 2. If it reports no ingest candidates, stop and explain that no wiki update is needed.
 3. Review the output from `wiki-engine changed` and `wiki-engine candidates`.
-4. If the repo changes require wiki maintenance, update the relevant pages under `wiki/`. Ensure all links are standard relative Markdown links (e.g., `[Text](file.md)`).
-5. If a page is added or its role changes, update [wiki/index.md](../../wiki/index.md) using standard relative Markdown links.
+4. If the repo changes require wiki maintenance, update the relevant active pages under `wiki/` (creating them with proper YAML front matter if new).
+5. If a page is added, its status changes, or its role changes, update [wiki/index.md](../../wiki/index.md) using standard relative Markdown links.
 6. Append a dated entry to [wiki/log.md](../../wiki/log.md) using the log heading convention.
 7. Run `wiki-engine lint`.
 8. Summarize:

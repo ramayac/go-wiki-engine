@@ -9,17 +9,18 @@ Answer the user's repository question from the wiki first.
 
 ## Required context
 
-- Run `wiki-engine context` to get the current wiki snapshot.
+- Run `wiki-engine context --active` to get the current active wiki snapshot (skipping `deprecated` or `legacy` pages).
 - Search the wiki with `wiki-engine search <term>` or `wiki-engine relevant <term>`.
-- Read only the wiki pages needed to answer the question.
+- Read only the active wiki pages needed to answer the question.
+- Follow the guidelines in [wiki-maintainer.md](wiki-maintainer.md).
 - If wiki-engine is not installed, read [wiki/index.md](../../wiki/index.md) and [wiki/log.md](../../wiki/log.md) instead.
 
 ## Execution steps
 
 1. Search the wiki using `wiki-engine search <term>` or equivalent targeted reads.
-2. Read only the wiki pages needed to answer the question.
-3. Use source files only if the wiki lacks enough evidence.
-4. If the answer reveals a durable repo fact that is missing or stale in the wiki, update the relevant page. Always link using standard relative Markdown links (e.g., `[Text](file.md)`).
+2. Read only the active wiki pages needed to answer the question. Skip pages marked `deprecated` or `legacy`.
+3. Use source files only if the active wiki pages lack enough evidence.
+4. If the answer reveals a durable repo fact that is missing or stale in the wiki, update the relevant active page (ensuring it contains proper front matter and links using standard relative Markdown links).
 5. If durable wiki content changed, append a dated entry to [wiki/log.md](../../wiki/log.md) and run `wiki-engine lint`.
 
 In the final response:

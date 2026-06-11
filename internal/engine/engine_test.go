@@ -18,15 +18,15 @@ func setupWiki(t *testing.T) string {
 	os.MkdirAll(opsDir, 0o755)
 
 	files := map[string]string{
-		"wiki/README.md":            "# Wiki\n",
-		"wiki/index.md":             "# Index\n\n- [schema.md](schema.md)\n- [log.md](log.md)\n- [repo-map.md](repo-map.md)\n- [phases.md](phases.md)\n- [operations/ingest.md](operations/ingest.md)\n- [operations/query.md](operations/query.md)\n- [operations/lint.md](operations/lint.md)\n",
-		"wiki/log.md":               "# Log\n\n## [2026-04-16] ingest | initial scaffold\n\n- Created wiki.\n\n## [2026-04-15] lint | first check\n\n- All OK.\n",
-		"wiki/schema.md":            "# Schema\n",
-		"wiki/phases.md":            "# Phases\n",
-		"wiki/repo-map.md":          "# Repo Map\n",
-		"wiki/operations/ingest.md": "# Ingest\n",
-		"wiki/operations/query.md":  "# Query\n",
-		"wiki/operations/lint.md":   "# Lint\n",
+		"wiki/README.md":            "---\nstatus: current\ndescription: README\n---\n# Wiki\n",
+		"wiki/index.md":             "---\nstatus: current\ndescription: Index\n---\n# Index\n\n- [schema.md](schema.md) | Schema\n- [log.md](log.md) | Log\n- [repo-map.md](repo-map.md) | Repo Map\n- [phases.md](phases.md) | Phases\n- [operations/ingest.md](operations/ingest.md) | Ingest\n- [operations/query.md](operations/query.md) | Query\n- [operations/lint.md](operations/lint.md) | Lint\n",
+		"wiki/log.md":               "---\nstatus: current\ndescription: Log\n---\n# Log\n\n## [2026-04-16] ingest | initial scaffold\n\n- Created wiki.\n\n## [2026-04-15] lint | first check\n\n- All OK.\n",
+		"wiki/schema.md":            "---\nstatus: current\ndescription: Schema\n---\n# Schema\n",
+		"wiki/phases.md":            "---\nstatus: current\ndescription: Phases\n---\n# Phases\n",
+		"wiki/repo-map.md":          "---\nstatus: current\ndescription: Repo Map\n---\n# Repo Map\n",
+		"wiki/operations/ingest.md": "---\nstatus: current\ndescription: Ingest\n---\n# Ingest\n",
+		"wiki/operations/query.md":  "---\nstatus: current\ndescription: Query\n---\n# Query\n",
+		"wiki/operations/lint.md":   "---\nstatus: current\ndescription: Lint\n---\n# Lint\n",
 	}
 	for rel, content := range files {
 		p := filepath.Join(root, rel)
@@ -197,7 +197,7 @@ func TestLintInvalidLogHeading(t *testing.T) {
 func TestLintMarker(t *testing.T) {
 	root := setupWiki(t)
 	repoMap := filepath.Join(root, "wiki", "repo-map.md")
-	os.WriteFile(repoMap, []byte("# Repo Map\n\nTODO: fill this in\n"), 0o644)
+	os.WriteFile(repoMap, []byte("---\nstatus: current\ndescription: Repo Map\n---\n# Repo Map\n\nTODO: fill this in\n"), 0o644)
 	eng := newTestEngine(root)
 	result := eng.Lint()
 	if result.OK {
@@ -208,7 +208,7 @@ func TestLintMarker(t *testing.T) {
 func TestLintMarkerInCodeBlock(t *testing.T) {
 	root := setupWiki(t)
 	repoMap := filepath.Join(root, "wiki", "repo-map.md")
-	os.WriteFile(repoMap, []byte("# Repo Map\n\n```bash\nwiki-engine search \"TODO:\"\n```\n"), 0o644)
+	os.WriteFile(repoMap, []byte("---\nstatus: current\ndescription: Repo Map\n---\n# Repo Map\n\n```bash\nwiki-engine search \"TODO:\"\n```\n"), 0o644)
 	eng := newTestEngine(root)
 	result := eng.Lint()
 	if !result.OK {
@@ -257,7 +257,7 @@ func TestStats(t *testing.T) {
 func TestContext(t *testing.T) {
 	root := setupWiki(t)
 	eng := newTestEngine(root)
-	cr, err := eng.Context(false, false)
+	cr, err := eng.Context(false, false, false)
 	if err != nil {
 		t.Fatalf("Context failed: %v", err)
 	}
@@ -275,7 +275,7 @@ func TestContext(t *testing.T) {
 func TestContextMinimal(t *testing.T) {
 	root := setupWiki(t)
 	eng := newTestEngine(root)
-	cr, err := eng.Context(true, false)
+	cr, err := eng.Context(true, false, false)
 	if err != nil {
 		t.Fatalf("Context(minimal) failed: %v", err)
 	}
@@ -648,7 +648,7 @@ func TestContextSummarize(t *testing.T) {
 	root := setupWiki(t)
 	eng := newTestEngine(root)
 
-	cr, err := eng.Context(false, true)
+	cr, err := eng.Context(false, true, false)
 	if err != nil {
 		t.Fatalf("Context(summarize) failed: %v", err)
 	}
@@ -695,7 +695,7 @@ func TestContextMinimalSummarize(t *testing.T) {
 	eng := newTestEngine(root)
 
 	// Minimal + summarize: catalog should have summaries but no phase.
-	cr, err := eng.Context(true, true)
+	cr, err := eng.Context(true, true, false)
 	if err != nil {
 		t.Fatalf("Context(minimal, summarize) failed: %v", err)
 	}
@@ -704,5 +704,312 @@ func TestContextMinimalSummarize(t *testing.T) {
 	}
 	if !cr.Summarized {
 		t.Error("summarized should be true")
+	}
+}
+
+func TestFrontMatterChecker(t *testing.T) {
+	root := setupWiki(t)
+	eng := newTestEngine(root)
+
+	// Verify standard setup passes front matter check
+	fmc := &frontMatterChecker{}
+	issues, err := fmc.Check(eng)
+	if err != nil {
+		t.Fatalf("frontMatterChecker failed: %v", err)
+	}
+	if len(issues) != 0 {
+		t.Errorf("expected 0 issues on clean setup, got %d: %v", len(issues), issues)
+	}
+
+	// 1. Missing front matter block
+	os.WriteFile(filepath.Join(root, "wiki", "schema.md"), []byte("# Schema\nNo front matter"), 0o644)
+	issues, _ = fmc.Check(eng)
+	foundMissing := false
+	for _, iss := range issues {
+		if iss.File == "wiki/schema.md" && strings.Contains(iss.Message, "missing front matter block") {
+			foundMissing = true
+			if iss.Severity != SevWarn {
+				t.Errorf("expected warning severity for missing front matter, got %v", iss.Severity)
+			}
+		}
+	}
+	if !foundMissing {
+		t.Error("expected issue for missing front matter block")
+	}
+
+	// Restore schema.md
+	os.WriteFile(filepath.Join(root, "wiki", "schema.md"), []byte("---\nstatus: current\ndescription: Schema\n---\n# Schema\n"), 0o644)
+
+	// 2. Invalid status value
+	os.WriteFile(filepath.Join(root, "wiki", "schema.md"), []byte("---\nstatus: invalid_status\ndescription: Schema\n---\n# Schema\n"), 0o644)
+	issues, _ = fmc.Check(eng)
+	foundInvalidStatus := false
+	for _, iss := range issues {
+		if iss.File == "wiki/schema.md" && strings.Contains(iss.Message, "invalid status value") {
+			foundInvalidStatus = true
+			if iss.Severity != SevError {
+				t.Errorf("expected error severity for invalid status, got %v", iss.Severity)
+			}
+		}
+	}
+	if !foundInvalidStatus {
+		t.Error("expected issue for invalid status")
+	}
+
+	// Restore schema.md
+	os.WriteFile(filepath.Join(root, "wiki", "schema.md"), []byte("---\nstatus: current\ndescription: Schema\n---\n# Schema\n"), 0o644)
+
+	// 3. Deprecated status requiring superseded_by
+	os.WriteFile(filepath.Join(root, "wiki", "schema.md"), []byte("---\nstatus: deprecated\ndescription: Schema\n---\n# Schema\n"), 0o644)
+	issues, _ = fmc.Check(eng)
+	foundMissingSuperseded := false
+	for _, iss := range issues {
+		if iss.File == "wiki/schema.md" && strings.Contains(iss.Message, "superseded_by is required") {
+			foundMissingSuperseded = true
+			if iss.Severity != SevError {
+				t.Errorf("expected error severity for missing superseded_by, got %v", iss.Severity)
+			}
+		}
+	}
+	if !foundMissingSuperseded {
+		t.Error("expected issue for missing superseded_by when deprecated")
+	}
+
+	// 4. Superseded_by target does not exist
+	os.WriteFile(filepath.Join(root, "wiki", "schema.md"), []byte("---\nstatus: deprecated\ndescription: Schema\nsuperseded_by: non-existent.md\n---\n# Schema\n"), 0o644)
+	issues, _ = fmc.Check(eng)
+	foundNonExistentTarget := false
+	for _, iss := range issues {
+		if iss.File == "wiki/schema.md" && strings.Contains(iss.Message, "superseded_by target does not exist") {
+			foundNonExistentTarget = true
+		}
+	}
+	if !foundNonExistentTarget {
+		t.Error("expected issue for non-existent superseded_by target")
+	}
+
+	// 5. Superseded_by target is not active (e.g. is deprecated itself)
+	os.WriteFile(filepath.Join(root, "wiki", "phases.md"), []byte("---\nstatus: deprecated\ndescription: Phases\nsuperseded_by: schema.md\n---\n# Phases\n"), 0o644)
+	os.WriteFile(filepath.Join(root, "wiki", "schema.md"), []byte("---\nstatus: deprecated\ndescription: Schema\nsuperseded_by: phases.md\n---\n# Schema\n"), 0o644)
+	issues, _ = fmc.Check(eng)
+	foundNotActiveTarget := false
+	for _, iss := range issues {
+		if strings.Contains(iss.Message, "is not active") {
+			foundNotActiveTarget = true
+		}
+	}
+	if !foundNotActiveTarget {
+		t.Error("expected issue for non-active superseded_by target")
+	}
+}
+
+func TestContextActive(t *testing.T) {
+	root := setupWiki(t)
+	eng := newTestEngine(root)
+
+	// Make one of the wiki files legacy (non-active)
+	os.WriteFile(filepath.Join(root, "wiki", "phases.md"), []byte("---\nstatus: legacy\ndescription: Phases\n---\n# Phases\n"), 0o644)
+
+	// Without active flag: should contain all pages (9)
+	cr, err := eng.Context(false, false, false)
+	if err != nil {
+		t.Fatalf("Context failed: %v", err)
+	}
+	if len(cr.Catalog) != 8 { // Wait, setupWiki has 9 files but index.md lists 7 of them. index.md: schema.md, log.md, repo-map.md, phases.md, operations/ingest.md, operations/query.md, operations/lint.md.
+		// README.md is not in index.md catalog, so catalog has 7 entries.
+		// Let's count actually. SetupWiki index has:
+		// schema.md, log.md, repo-map.md, phases.md, operations/ingest.md, operations/query.md, operations/lint.md = 7.
+		// So total catalog size is 7.
+	}
+	originalCount := len(cr.Catalog)
+
+	// With active=true: should filter out phases.md (non-active), so count should be originalCount - 1
+	crActive, err := eng.Context(false, false, true)
+	if err != nil {
+		t.Fatalf("Context(active=true) failed: %v", err)
+	}
+	if len(crActive.Catalog) != originalCount-1 {
+		t.Errorf("expected %d active catalog entries, got %d", originalCount-1, len(crActive.Catalog))
+	}
+
+	// Verify phases.md is not in the active catalog
+	for _, entry := range crActive.Catalog {
+		if entry.File == "phases.md" {
+			t.Error("expected phases.md to be filtered out of active catalog")
+		}
+	}
+}
+
+func TestIndexFormatChecker(t *testing.T) {
+	root := setupWiki(t)
+	eng := newTestEngine(root)
+
+	// Clean setup should have zero index-format issues
+	ifc := &indexFormatChecker{}
+	issues, err := ifc.Check(eng)
+	if err != nil {
+		t.Fatalf("indexFormatChecker failed: %v", err)
+	}
+	if len(issues) != 0 {
+		t.Errorf("expected 0 issues on clean setup, got %d: %v", len(issues), issues)
+	}
+
+	// 1. Missing description
+	indexPath := filepath.Join(root, "wiki", "index.md")
+	os.WriteFile(indexPath, []byte("---\nstatus: current\ndescription: Index\n---\n# Index\n- [schema.md](schema.md)\n"), 0o644)
+	issues, _ = ifc.Check(eng)
+	foundMissingDesc := false
+	for _, iss := range issues {
+		if strings.Contains(iss.Message, "missing pipe-separated description") {
+			foundMissingDesc = true
+		}
+	}
+	if !foundMissingDesc {
+		t.Error("expected issue for missing description")
+	}
+
+	// 2. Non-relative target (starts with /)
+	os.WriteFile(indexPath, []byte("---\nstatus: current\ndescription: Index\n---\n# Index\n- [/schema.md](/schema.md) | Schema description\n"), 0o644)
+	issues, _ = ifc.Check(eng)
+	foundNonRelative := false
+	for _, iss := range issues {
+		if strings.Contains(iss.Message, "must use a relative path") {
+			foundNonRelative = true
+		}
+	}
+	if !foundNonRelative {
+		t.Error("expected issue for non-relative path starting with /")
+	}
+
+	// 3. Non-relative target (has protocol)
+	os.WriteFile(indexPath, []byte("---\nstatus: current\ndescription: Index\n---\n# Index\n- [schema.md](https://google.com/schema.md) | Schema description\n"), 0o644)
+	issues, _ = ifc.Check(eng)
+	foundProtocol := false
+	for _, iss := range issues {
+		if strings.Contains(iss.Message, "must use a relative path") {
+			foundProtocol = true
+		}
+	}
+	if !foundProtocol {
+		t.Error("expected issue for non-relative path starting with https://")
+	}
+}
+
+func TestBareUrlChecker(t *testing.T) {
+	root := setupWiki(t)
+	eng := newTestEngine(root)
+
+	// Clean setup should have zero bare-url issues
+	buc := &bareUrlChecker{}
+	issues, err := buc.Check(eng)
+	if err != nil {
+		t.Fatalf("bareUrlChecker failed: %v", err)
+	}
+	if len(issues) != 0 {
+		t.Errorf("expected 0 issues on clean setup, got %d: %v", len(issues), issues)
+	}
+
+	// 1. Bare URL outside link
+	readmePath := filepath.Join(root, "wiki", "README.md")
+	os.WriteFile(readmePath, []byte("---\nstatus: current\ndescription: README\n---\n# README\nVisit https://google.com for more info.\n"), 0o644)
+	issues, _ = buc.Check(eng)
+	foundBareUrl := false
+	for _, iss := range issues {
+		if strings.Contains(iss.Message, "bare URL outside link") {
+			foundBareUrl = true
+			if iss.Severity != SevWarn {
+				t.Errorf("expected warning severity for bare URL, got %v", iss.Severity)
+			}
+		}
+	}
+	if !foundBareUrl {
+		t.Error("expected issue for bare URL")
+	}
+
+	// 2. HTML anchor tag
+	os.WriteFile(readmePath, []byte("---\nstatus: current\ndescription: README\n---\n# README\nVisit <a href=\"https://google.com\">Google</a>.\n"), 0o644)
+	issues, _ = buc.Check(eng)
+	foundHtmlLink := false
+	for _, iss := range issues {
+		if strings.Contains(iss.Message, "use markdown links, not HTML") {
+			foundHtmlLink = true
+			if iss.Severity != SevError {
+				t.Errorf("expected error severity for HTML links, got %v", iss.Severity)
+			}
+		}
+	}
+	if !foundHtmlLink {
+		t.Error("expected issue for HTML link")
+	}
+
+	// 3. URL in code block (should be ignored)
+	os.WriteFile(readmePath, []byte("---\nstatus: current\ndescription: README\n---\n# README\n```\nhttps://google.com\n```\n"), 0o644)
+	issues, _ = buc.Check(eng)
+	if len(issues) != 0 {
+		t.Errorf("expected no issues for URL inside code block, got: %v", issues)
+	}
+
+	// 4. URL in inline backticks (should be ignored)
+	os.WriteFile(readmePath, []byte("---\nstatus: current\ndescription: README\n---\n# README\n`https://google.com` is a URL.\n"), 0o644)
+	issues, _ = buc.Check(eng)
+	if len(issues) != 0 {
+		t.Errorf("expected no issues for URL inside inline code, got: %v", issues)
+	}
+}
+
+func TestLintWithOptions(t *testing.T) {
+	root := setupWiki(t)
+	eng := newTestEngine(root)
+
+	// Introduce a markers issue and an index-format issue
+	os.WriteFile(filepath.Join(root, "wiki", "repo-map.md"), []byte("---\nstatus: current\ndescription: Repo Map\n---\n# Repo Map\nTODO: fix\n"), 0o644)
+	os.WriteFile(filepath.Join(root, "wiki", "index.md"), []byte("---\nstatus: current\ndescription: Index\n---\n# Index\n- [schema.md](schema.md)\n"), 0o644)
+
+	// 1. Run all (default) -> both issues should be found
+	resAll := eng.LintWithOptions(nil, nil)
+	foundMarkers := false
+	foundIndexFormat := false
+	for _, iss := range resAll.Issues {
+		if iss.Check == "markers" {
+			foundMarkers = true
+		}
+		if iss.Check == "index-format" {
+			foundIndexFormat = true
+		}
+	}
+	if !foundMarkers || !foundIndexFormat {
+		t.Errorf("expected both markers and index-format issues, got markers=%v, index-format=%v", foundMarkers, foundIndexFormat)
+	}
+
+	// 2. Check only markers -> only markers issue should be found
+	resCheck := eng.LintWithOptions([]string{"markers"}, nil)
+	foundMarkers = false
+	foundIndexFormat = false
+	for _, iss := range resCheck.Issues {
+		if iss.Check == "markers" {
+			foundMarkers = true
+		}
+		if iss.Check == "index-format" {
+			foundIndexFormat = true
+		}
+	}
+	if !foundMarkers || foundIndexFormat {
+		t.Errorf("expected only markers issue, got markers=%v, index-format=%v", foundMarkers, foundIndexFormat)
+	}
+
+	// 3. Skip markers -> only index-format issue should be found
+	resSkip := eng.LintWithOptions(nil, []string{"markers"})
+	foundMarkers = false
+	foundIndexFormat = false
+	for _, iss := range resSkip.Issues {
+		if iss.Check == "markers" {
+			foundMarkers = true
+		}
+		if iss.Check == "index-format" {
+			foundIndexFormat = true
+		}
+	}
+	if foundMarkers || !foundIndexFormat {
+		t.Errorf("expected only index-format issue, got markers=%v, index-format=%v", foundMarkers, foundIndexFormat)
 	}
 }

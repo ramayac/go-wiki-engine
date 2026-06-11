@@ -1,3 +1,8 @@
+---
+status: current
+description: "Workflow for running the wiki linter and repairing inconsistencies."
+superseded_by: ""
+---
 # Lint Workflow
 
 ## Goal

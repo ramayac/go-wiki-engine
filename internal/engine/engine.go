@@ -76,24 +76,26 @@ func (e *Engine) Headings() ([]HeadingEntry, error) {
 			continue
 		}
 		abs := filepath.Join(e.RootDir, rel)
-		f, err := os.Open(abs)
-		if err != nil {
-			continue
-		}
-		scanner := bufio.NewScanner(f)
-		lineNo := 0
-		for scanner.Scan() {
-			lineNo++
-			text := scanner.Text()
-			if headingRe.MatchString(text) {
-				entries = append(entries, HeadingEntry{
-					File:    rel,
-					Line:    lineNo,
-					Heading: text,
-				})
+		func() {
+			f, err := os.Open(abs)
+			if err != nil {
+				return
 			}
-		}
-		f.Close()
+			defer f.Close()
+			scanner := bufio.NewScanner(f)
+			lineNo := 0
+			for scanner.Scan() {
+				lineNo++
+				text := scanner.Text()
+				if headingRe.MatchString(text) {
+					entries = append(entries, HeadingEntry{
+						File:    rel,
+						Line:    lineNo,
+						Heading: text,
+					})
+				}
+			}
+		}()
 	}
 	return entries, nil
 }
@@ -118,24 +120,26 @@ func (e *Engine) Search(query string) ([]SearchResult, error) {
 	var results []SearchResult
 	for _, rel := range files {
 		abs := filepath.Join(e.RootDir, rel)
-		f, err := os.Open(abs)
-		if err != nil {
-			continue
-		}
-		scanner := bufio.NewScanner(f)
-		lineNo := 0
-		for scanner.Scan() {
-			lineNo++
-			text := scanner.Text()
-			if strings.Contains(strings.ToLower(text), lowerQ) {
-				results = append(results, SearchResult{
-					File: rel,
-					Line: lineNo,
-					Text: text,
-				})
+		func() {
+			f, err := os.Open(abs)
+			if err != nil {
+				return
 			}
-		}
-		f.Close()
+			defer f.Close()
+			scanner := bufio.NewScanner(f)
+			lineNo := 0
+			for scanner.Scan() {
+				lineNo++
+				text := scanner.Text()
+				if strings.Contains(strings.ToLower(text), lowerQ) {
+					results = append(results, SearchResult{
+						File: rel,
+						Line: lineNo,
+						Text: text,
+					})
+				}
+			}
+		}()
 	}
 	return results, nil
 }
@@ -244,14 +248,6 @@ type JSONOutput struct {
 	Error string      `json:"error,omitempty"`
 }
 
-func jsonOK(data interface{}) JSONOutput {
-	return JSONOutput{OK: true, Data: data}
-}
-
-func jsonErr(err error) JSONOutput {
-	return JSONOutput{OK: false, Error: err.Error()}
-}
-
 // StatsResult holds aggregate wiki statistics.
 type StatsResult struct {
 	Files       int    `json:"files"`
@@ -280,18 +276,20 @@ func (e *Engine) Stats() (*StatsResult, error) {
 		}
 		// Count lines.
 		if strings.HasSuffix(rel, ".md") {
-			f, err := os.Open(abs)
-			if err != nil {
-				continue
-			}
-			scanner := bufio.NewScanner(f)
-			for scanner.Scan() {
-				sr.TotalLines++
-				if headingRe.MatchString(scanner.Text()) {
-					sr.Headings++
+			func() {
+				f, err := os.Open(abs)
+				if err != nil {
+					return
 				}
-			}
-			f.Close()
+				defer f.Close()
+				scanner := bufio.NewScanner(f)
+				for scanner.Scan() {
+					sr.TotalLines++
+					if headingRe.MatchString(scanner.Text()) {
+						sr.Headings++
+					}
+				}
+			}()
 		}
 	}
 	if !latest.IsZero() {
@@ -303,6 +301,7 @@ func (e *Engine) Stats() (*StatsResult, error) {
 // ContextEntry is a single entry in the context catalog.
 type ContextEntry struct {
 	File        string `json:"file"`
+	Status      string `json:"status"`
 	Description string `json:"description"`
 	Summary     string `json:"summary,omitempty"`  // first ~3 paragraphs when --summarize
 	LineCount   int    `json:"line_count"`
@@ -324,15 +323,36 @@ type ContextResult struct {
 // When minimal is true, only the catalog and recent log are returned.
 // When summarize is true, each catalog entry includes a page summary
 // (first heading and first few paragraphs) plus line count.
-func (e *Engine) Context(minimal, summarize bool) (*ContextResult, error) {
+// When active is true, non-active pages (status legacy/deprecated) are filtered out.
+func (e *Engine) Context(minimal, summarize, active bool) (*ContextResult, error) {
 	cr := &ContextResult{}
 
 	// Build catalog from index.md.
 	wikiDir := e.WikiPath()
 	indexPath := filepath.Join(wikiDir, "index.md")
+	var rawCatalog []ContextEntry
 	if data, err := os.ReadFile(indexPath); err == nil {
-		cr.Catalog = parseIndexCatalog(string(data))
+		rawCatalog = parseIndexCatalog(string(data))
 	}
+
+	// Fetch status and filter based on active/summarize requirements
+	var filteredCatalog []ContextEntry
+	for _, entry := range rawCatalog {
+		fm, _ := e.PageFrontMatter(filepath.Join(e.Cfg.WikiDir, entry.File))
+		entry.Status = fm.Status
+
+		isActive := fm.Status == "current" || fm.Status == "planned"
+
+		if active && !isActive {
+			continue
+		}
+		if summarize && !isActive {
+			continue
+		}
+
+		filteredCatalog = append(filteredCatalog, entry)
+	}
+	cr.Catalog = filteredCatalog
 
 	// Stats.
 	if st, err := e.Stats(); err == nil {
@@ -462,10 +482,31 @@ func (e *Engine) Summary(page string) (*SummaryResult, error) {
 	var previewLines []string
 	inPara := false
 
+	inFM := false
+	firstLine := true
+
 	for scanner.Scan() {
 		lineNo++
 		text := scanner.Text()
 		trimmed := strings.TrimSpace(text)
+
+		if firstLine {
+			if trimmed == "" {
+				continue
+			}
+			firstLine = false
+			if trimmed == "---" {
+				inFM = true
+				continue
+			}
+		}
+
+		if inFM {
+			if trimmed == "---" {
+				inFM = false
+			}
+			continue
+		}
 
 		// Capture first heading.
 		if sr.FirstHeader == "" && headingRe.MatchString(text) {
@@ -539,34 +580,36 @@ func (e *Engine) Relevant(query string, topN int) ([]RelevanceResult, error) {
 			continue
 		}
 		abs := filepath.Join(e.RootDir, rel)
-		f, err := os.Open(abs)
-		if err != nil {
-			continue
-		}
-
 		var score float64
 		headingHits := 0
 		bodyHits := 0
 		var matchedHeadings []string
 
-		scanner := bufio.NewScanner(f)
-		for scanner.Scan() {
-			text := scanner.Text()
-			lower := strings.ToLower(text)
+		func() {
+			f, err := os.Open(abs)
+			if err != nil {
+				return
+			}
+			defer f.Close()
 
-			if headingRe.MatchString(text) {
-				if strings.Contains(lower, lowerQ) {
-					headingHits++
-					matchedHeadings = append(matchedHeadings, text)
+			scanner := bufio.NewScanner(f)
+			for scanner.Scan() {
+				text := scanner.Text()
+				lower := strings.ToLower(text)
+
+				if headingRe.MatchString(text) {
+					if strings.Contains(lower, lowerQ) {
+						headingHits++
+						matchedHeadings = append(matchedHeadings, text)
+					}
+					continue
 				}
-				continue
-			}
 
-			if strings.Contains(lower, lowerQ) {
-				bodyHits++
+				if strings.Contains(lower, lowerQ) {
+					bodyHits++
+				}
 			}
-		}
-		f.Close()
+		}()
 
 		// Score: heading matches are worth 3× body matches.
 		score = float64(headingHits)*3.0 + float64(bodyHits)

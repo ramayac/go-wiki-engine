@@ -1,3 +1,8 @@
+---
+status: current
+description: "Catalog of all wiki pages with one-line descriptions."
+superseded_by: ""
+---
 # Wiki Index
 
 ## Core

@@ -1,3 +1,8 @@
+---
+status: current
+description: "Workflow for searching and answering questions from the wiki first."
+superseded_by: ""
+---
 # Query Workflow
 
 ## Goal

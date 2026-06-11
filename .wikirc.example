@@ -7,7 +7,7 @@
 wiki_dir = "wiki"
 
 # Default git diff range used by changed, candidates, refresh, watch.
-default_diff = "main...HEAD"
+default_diff = "master...HEAD"
 
 # Number of log entries shown by log-tail.
 log_lines = 10

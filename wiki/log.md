@@ -1,6 +1,18 @@
+---
+status: current
+description: "Append-only timeline of wiki maintenance activity."
+superseded_by: ""
+---
 # Wiki Log
 
 Append-only timeline of wiki maintenance activity.
+
+## [2026-06-10] ingest | checksum verification, prompt restructures, bookkeeping
+
+- Added checksum validation to self-upgrade, downloading GitHub release asset, computing SHA-256 hash, and verifying against checksums.txt.
+- Completed Phase 3, restructured instructions under `.wiki-instructions/` to support `context --active`, integrated shims, and created `wiki-lint`.
+- Completed Phase 4 CI check consolidation, simplifying workflows to run `make lint`.
+- Completed Phase 5 code cleanup, removing dead helper functions (`jsonOK`, `jsonErr`, `cachedList`) and wrapping loop file handles with anonymous defers.
 
 ## [2026-05-28] ingest | summarize mode, config docs, coverage, cache limit
 
