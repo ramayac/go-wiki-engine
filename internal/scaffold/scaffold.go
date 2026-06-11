@@ -109,9 +109,10 @@ func SyncPrompts(destDir string) ([]string, error) {
 	// file copies of the canonical .wiki-instructions/ files.
 	prefixes := []string{
 		"files/.wiki-instructions",
-		"files/.github",
-		"files/.claude",
-		"files/.pi",
+		"files/.github/prompts",
+		"files/.github/instructions",
+		"files/.claude/commands",
+		"files/.pi/skills",
 	}
 	for _, prefix := range prefixes {
 		err := syncEmbeddedDir(destDir, prefix, &updated)
