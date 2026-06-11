@@ -51,3 +51,17 @@ Refer to the [Improvement Plan](improvement-plan.md) for the detailed roadmap an
 | 46 | **Directed Graph Builder (`BuildWikiGraph()`)** | 5h | ⬜ Planned |
 | 47 | **Topological/Chronological Sorting of Graph** | 2h | ⬜ Planned |
 | 48 | **Compact Context Graph Export (`context --active`)** | 4h | ⬜ Planned |
+
+---
+
+## Tier 7 — Loose Ends & Bookkeeping
+
+Address **after** the main improvement plan (Phases 1–5). These are housekeeping items surfaced during the 2026-06-10 wiki audit.
+
+| # | Task | Effort | Status |
+|---|------|--------|--------|
+| 49 | **Fix `.wikirc` branch name inconsistency** | 5m | ✅ Done — standardized `.wikirc.example` to `master...HEAD` |
+| 50 | **Sync `summarize.md` into live `.wiki-instructions/`** | 5m | ✅ Done — ran `wiki-engine sync-prompts` |
+| 51 | **Add front matter to all wiki pages** | 1h | ⬜ Deferred — depends on Phase 1 parser; 14 pages need `---\nstatus: current\ndescription: "..."\n---` |
+| 52 | **Update `phases.md` with forward-looking entries** | 15m | ⬜ Deferred — add Phase 3 (linter hardening), Phase 4 (lifecycle), Phase 5 (CI) status rows |
+| 53 | **Clean up `todo.md` stale status markers** | 15m | ⬜ Deferred — prune completed Tier 1–5 items, renumber remaining; mark `impact` (#19 in original) as done |

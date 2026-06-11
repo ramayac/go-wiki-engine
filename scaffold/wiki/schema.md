@@ -1,3 +1,8 @@
+---
+status: current
+description: "Contract and standards for wiki pages, lifecycle, and structure."
+superseded_by: ""
+---
 # Wiki Schema
 
 ## Goal

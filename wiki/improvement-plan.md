@@ -135,6 +135,47 @@ Actually the `.github/workflows/` directory likely exists from the TODO items. T
 
 ---
 
+## TODO Checklist
+
+### Phase 1 — Front Matter & Lifecycle Foundation
+- [ ] 1A. Document front matter schema in `scaffold/wiki/schema.md` and add front matter to all `scaffold/wiki/*.md`
+- [ ] 1B. Add `ParseFrontMatter()` to `internal/engine/` (minimal hand-written YAML parser)
+- [ ] 1C. Add `frontMatterChecker` (required fields, valid status values, `superseded_by` linkage)
+- [ ] 1D. Add `--active` flag to `list` and `context` for lifecycle filtering
+
+### Phase 1.5 — Graph Construction & Context Optimization
+- [ ] 1.5A. Extract shared link-parsing helper from `crossPageLinksChecker` and `orphansChecker`
+- [ ] 1.5B. Add `BuildWikiGraph()` — BFS from `index.md`, skips `deprecated`/`legacy` nodes
+- [ ] 1.5C. Implement topological (by depth) and chronological (by `created`/`updated`/mtime) graph sorting
+- [ ] 1.5D. Modify `wiki-engine context --active` to output compact graph reference instead of full page summaries
+
+### Phase 2 — Linter Hardening
+- [ ] 2A. Fix `Lint()` severity gating — `SevInfo` issues should not cause exit code 1
+- [ ] 2B. Add `indexFormatChecker` — validate index entries use `title`, relative path, and pipe-separated description
+- [ ] 2C. Add `bareUrlChecker` — detect bare URLs and HTML `<a>` tags
+- [ ] 2D. Add `frontMatterChecker` (same as Phase 1C, listed here for completeness)
+- [ ] 2E. Add `--check` / `--skip` flags to `wiki-engine lint`
+
+### Phase 3 — Slash Command Coherence
+- [ ] 3A. Update all `.wiki-instructions/*.md` to use `context --active` and respect lifecycle status
+- [ ] 3B. Add `/wiki-lint` prompt as new `.wiki-instructions/lint.md`
+- [ ] 3C. Reduce prompt overlap — extract shared steps into `wiki-maintainer.md`
+- [ ] 3D. Ensure prompt/command naming alignment (merge `migrate-shims`, document `summarize` as a flag)
+
+### Phase 4 — CI & Self-Linting
+- [ ] 4A. Add `make lint` step to `.github/workflows/test.yml` CI pipeline
+- [ ] 4B. Add front matter to the project's own 14 wiki pages
+- [ ] 4C. Make `make lint` the PR gate for wiki health
+
+### Phase 5 — Cleanup & Polish
+- [ ] 5A. Remove dead code: `jsonOK()`, `jsonErr()`, `cachedList()`
+- [ ] 5B. Fix `todo.md` staleness — mark `impact` (#19) as ✅ done
+- [x] 5C. Fix scaffold sync drift — run `wiki-engine sync-prompts` to restore `summarize.md`
+- [x] 5D. Fix `.wikirc` vs `.wikirc.example` branch inconsistency (`master...HEAD` → `main...HEAD`)
+- [ ] 5E. Replace manual `f.Close()` calls with `defer f.Close()` in `engine.go`
+
+---
+
 ## Part 3: Phased Implementation Plan
 
 ### Phase 1 — Front Matter & Lifecycle Foundation (1–2 days)
@@ -484,3 +525,18 @@ stateDiagram-v2
 | `current` | ✅ yes | ✅ yes | ✅ default |
 | `legacy` | ❌ no | ❌ no | ⚠️ only with `--all` |
 | `deprecated` | ❌ no | ❌ no | ⚠️ only with `--all` |
+
+---
+
+## Part 7: Design Decisions from Review (Grill Session)
+
+During the interactive review session, the following design specifics were aligned on:
+
+1. **YAML Parser scope**: The parser will be flat key-value pairs with single-line values only to keep it simple, fast, and dependency-free.
+2. **Traversal cutoff**: If an active page is only reachable through legacy/deprecated nodes, it will be excluded from the active graph index. Traversal strictly halts at deprecated/legacy boundaries.
+3. **Graph export formats**: `wiki-engine context --active` will output structured JSON graph data (nodes & edges adjacency list) when run with `--json`, and topologically sorted text output otherwise.
+4. **Linter severity gate**: The severity failure threshold will be configurable in `.wikirc` (e.g., `fail_severity: warn`), defaulting to `warn`.
+5. **Missing front matter fallback**: Pages lacking front matter will be treated as `current` by default so we do not break unmigrated wikis, but will trigger a lint warning/error indicating missing metadata.
+6. **`superseded_by` validation**: The linter will validate that the target specified in `superseded_by` exists in the repository wiki and is active (`current` or `planned`).
+7. **Sorting options**: `wiki-engine context --active` will sort chronologically by default (recently updated first), with an optional `--sort=topo` flag to switch to topological sorting.
+8. **Chronological sorting priority**: Page dates are resolved with the following fallback precedence: `updated` field -> `created` field -> filesystem modification time (`mtime`).

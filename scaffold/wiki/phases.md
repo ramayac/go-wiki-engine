@@ -1,3 +1,8 @@
+---
+status: current
+description: "Rollout phases and status board for wiki maturity."
+superseded_by: ""
+---
 # Wiki Phases
 
 ## Status Board

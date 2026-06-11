@@ -1,3 +1,8 @@
+---
+status: current
+description: "Workflow for incrementally absorbing repository changes into the wiki."
+superseded_by: ""
+---
 # Ingest Workflow
 
 ## Goal
