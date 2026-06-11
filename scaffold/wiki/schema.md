@@ -52,3 +52,31 @@ Every repo that adopts this pattern should have at least these files:
 ## Repo-Specific Exclusions
 
 Each repo should document high-noise or user-authored areas that should not be routinely ingested in `.wikirc` under the `ignore` list.
+
+## Page Lifecycle & Front Matter
+
+Every wiki page must include YAML front matter specifying its status and a brief description:
+
+```yaml
+---
+status: current          # planned | current | legacy | deprecated
+description: "One-line summary of this page's purpose"
+superseded_by: ""        # (Conditional) path to the replacing page if status is deprecated
+---
+```
+
+### Status Definitions
+
+- **`planned`**: The page is a placeholder or has been proposed but the content/implementation is not yet written. Agents can write to these.
+- **`current`**: The page contains active, valid, and up-to-date documentation. Agents can read and write to these.
+- **`legacy`**: The page is outdated but still kept for historical context. Agents should not read this page unless requested with `--all`.
+- **`deprecated`**: The page is fully obsolete and has been superseded. If a page is deprecated, it must define `superseded_by` pointing to the new replacement page. Agents skip these entirely.
+
+### Agent Visibility
+
+| Status | Agent Reads? | Agent Writes? | Shows in `context`? |
+|--------|--------------|---------------|---------------------|
+| `planned` | ✅ Yes | ✅ Yes (to fill in) | ✅ Marked as planned |
+| `current` | ✅ Yes | ✅ Yes | ✅ Default (active) |
+| `legacy` | ❌ No | ❌ No | ⚠️ Only with `--all` |
+| `deprecated` | ❌ No | ❌ No | ⚠️ Only with `--all` |

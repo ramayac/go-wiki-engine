@@ -121,6 +121,18 @@ You described 5 key goals. Here's how they map to implementation:
 
 Actually the `.github/workflows/` directory likely exists from the TODO items. The Makefile `lint` target already chains `vet` → `wiki-lint`. The improvement is to make the linter exit code respect severity levels so CI passes on `info` but fails on `error`/`warn`.
 
+### Goal 6: "Active Wiki Graph Indexing (Context Optimization)"
+
+**Current state:**
+- The engine processes page listings and headers individually but has no unified model of page relationships (links).
+- Linter contains localized parsing logic in `crossPageLinksChecker` (finds all page-to-page links) and `orphansChecker` (tracks index.md to page connectivity).
+
+**Plan:**
+- **Reusing Checker Logic for Graph Construction**: Extract the link-parsing regex and logic into a shared helper in the `engine` package. Construct a directed graph where pages are nodes and links are edges.
+- **Filtering by Lifecycle Status**: During graph traversal (starting from `index.md`), retrieve the page lifecycle status from YAML front matter. Stop traversing and exclude any node (and its descendants, unless reachable via another active path) if its status is `deprecated` or `legacy`.
+- **Sorting & Exporting**: Sort the active nodes topologically (by graph depth/hierarchy) or chronologically (by `created`/`updated` date, fallback to filesystem `mtime`).
+- **Compact reference for agent**: Expose this graph index directly through `wiki-engine context --active`. Instead of dumping full page summaries, output a lightweight, structured map of active nodes, their relationships, and one-line descriptions. This serves as the agent's entry point to selectively fetch specific pages, avoiding context bloat.
+
 ---
 
 ## Part 3: Phased Implementation Plan
@@ -166,6 +178,29 @@ New `frontMatterChecker`:
 - `wiki-engine list --active` — only show pages where `status ∈ {current, planned}`
 - `wiki-engine context` — catalog marks each page's status; `--active` filters out non-active
 - `wiki-engine context --summarize` — skip deprecated/legacy pages
+
+---
+
+### Phase 1.5 — Graph Construction & Context Optimization (1 day)
+
+#### 1.5A. Shared Link-Parsing Helper
+Extract link parsing logic from `crossPageLinksChecker` and `orphansChecker` into a shared helper function in the `engine` package. This function will parse all outgoing page-to-page links from a page's markdown content.
+
+#### 1.5B. Directed Graph Builder
+Add a `BuildWikiGraph()` function in `internal/engine/` that:
+- Starts BFS/DFS traversal from `index.md`.
+- Uses the shared link-parsing helper to discover edges.
+- Resolves YAML front matter for each page.
+- Excludes pages (and their descendants, unless reachable through another active node) with `status: deprecated` or `status: legacy`.
+- Emits a graph representation of active pages and their connection topology.
+
+#### 1.5C. Topological/Chronological Sorting
+Implement sorting options for the graph:
+- **Topological**: Sorted based on node depth/traversal level from `index.md` (parents before children).
+- **Chronological**: Sorted based on front-matter `created`/`updated` fields, or filesystem `mtime` as a fallback.
+
+#### 1.5D. Compact Graph Reference in CLI
+Modify `wiki-engine context --active` to output a lightweight, structured graph index (containing page names, statuses, descriptions, and outgoing links) rather than dumping full page summaries. This serves as the agent's entry point/working memory to selectively fetch only the pages it needs.
 
 ---
 
@@ -326,9 +361,12 @@ Ensure the linter is the single source of truth for wiki health. Any PR that int
 |----------|------|--------|--------|
 | 🔴 P0 | Fix lint severity gating (Phase 2A) | Unblocks CI | 30 min |
 | 🔴 P0 | Front matter schema + parser (Phase 1A-1B) | Foundation for lifecycle | 4 hrs |
+| 🔴 P0 | Link-parsing helper & Graph Builder (Phase 1.5A-1.5B) | Core graph logic | 5 hrs |
 | 🟡 P1 | Front matter lint checker (Phase 1C) | Enforces structure | 2 hrs |
 | 🟡 P1 | Lifecycle filtering in list/context (Phase 1D) | Reduces agent context pollution | 3 hrs |
 | 🟡 P1 | Index format checker (Phase 2B) | Wiki hygiene | 1.5 hrs |
+| 🟡 P1 | Topological/Chronological sort (Phase 1.5C) | Graph traversal order | 2 hrs |
+| 🟡 P1 | Compact Context Graph Export (Phase 1.5D) | Agent context optimization | 4 hrs |
 | 🟢 P2 | Slash command lifecycle awareness (Phase 3A) | Agent effectiveness | 2 hrs |
 | 🟢 P2 | Bare URL checker (Phase 2C) | Markdown purity | 1 hr |
 | 🟢 P2 | `--check`/`--skip` lint flags (Phase 2E) | Usability | 2 hrs |
@@ -337,7 +375,7 @@ Ensure the linter is the single source of truth for wiki health. Any PR that int
 | 🔵 P3 | Prompt restructuring (Phase 3B-3D) | Coherence | 3 hrs |
 | ⚪ P4 | Wiki front matter migration (Phase 4B) | Dogfooding | 1 hr |
 
-**Total estimated effort: 4–5 days of focused work**
+**Total estimated effort: 5–7 days of focused work**
 
 ---
 
@@ -373,6 +411,9 @@ graph TD
         F --> L15[external-links]
         F --> L16[duplicate-content]
         F --> L17[stale-content]
+
+        E --> G1[Graph Builder & Traversal ⭐NEW]
+        G1 --> L7
     end
 
     subgraph "Wiki Pages"
@@ -393,6 +434,7 @@ graph TD
     style L6 fill:#4CAF50,color:#fff
     style L7 fill:#4CAF50,color:#fff
     style L8 fill:#4CAF50,color:#fff
+    style G1 fill:#4CAF50,color:#fff
     style P4 fill:#4CAF50,color:#fff
 ```
 
