@@ -517,6 +517,26 @@ func TestLintMarkdownFormatUnclosedLink(t *testing.T) {
 	}
 }
 
+func TestLintMarkdownFormatReferenceLinks(t *testing.T) {
+	root := setupWiki(t)
+	repoMap := filepath.Join(root, "wiki", "repo-map.md")
+	os.WriteFile(repoMap, []byte("# Repo Map\n\nRef link: [schema][1]\n\n[1]: schema.md\nNormal: [schema](schema.md)\nInline code: `[x][y]`\n"), 0o644)
+	eng := newTestEngine(root)
+	result := eng.Lint()
+	refCount := 0
+	for _, iss := range result.Issues {
+		if iss.Check == "markdown-format" && strings.Contains(iss.Message, "reference-style link") {
+			refCount++
+			if iss.Severity != SevWarn {
+				t.Errorf("reference-style link should be warn severity, got %v", iss.Severity)
+			}
+		}
+	}
+	if refCount != 1 {
+		t.Errorf("expected exactly 1 reference-style link issue, got %d", refCount)
+	}
+}
+
 func TestLintAnchorInLinks(t *testing.T) {
 	root := setupWiki(t)
 	repoMap := filepath.Join(root, "wiki", "repo-map.md")

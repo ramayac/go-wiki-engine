@@ -222,11 +222,12 @@ type markdownFormatChecker struct{}
 func (c *markdownFormatChecker) Name() string { return "markdown-format" }
 
 var (
-	wikiLinkRe   = regexp.MustCompile(`\[\[([^\]]+)\]\]`)
-	spacedLinkRe = regexp.MustCompile(`\[([^\]]*)\]\s+\(([^)]*)\)`)
-	emptyLinkRe  = regexp.MustCompile(`\[([^\]]*)\]\(\s*\)`) // empty target like `[text]()`
-	emptyTextRe  = regexp.MustCompile(`\[\s*\]\(([^)]+)\)`)  // empty link text like `[](target)`
-	linkOpenRe   = regexp.MustCompile(`\[([^\]]+)\]\(([^)]*)`)
+	wikiLinkRe      = regexp.MustCompile(`\[\[([^\]]+)\]\]`)
+	spacedLinkRe    = regexp.MustCompile(`\[([^\]]*)\]\s+\(([^)]*)\)`)
+	emptyLinkRe     = regexp.MustCompile(`\[([^\]]*)\]\(\s*\)`) // empty target like `[text]()`
+	emptyTextRe     = regexp.MustCompile(`\[\s*\]\(([^)]+)\)`)  // empty link text like `[](target)`
+	linkOpenRe      = regexp.MustCompile(`\[([^\]]+)\]\(([^)]*)`)
+	referenceLinkRe = regexp.MustCompile(`\[[^\]]+\]\[[^\]]*\]`) // reference-style links like `[text][ref]`
 )
 
 func (c *markdownFormatChecker) Check(e *Engine) ([]Issue, error) {
@@ -332,6 +333,21 @@ func (c *markdownFormatChecker) Check(e *Engine) ([]Issue, error) {
 						Message:  fmt.Sprintf("unclosed markdown link parenthesis: %s", matchText),
 					})
 				}
+			}
+
+			// 6. Check for reference-style links [text][ref]
+			for _, loc := range referenceLinkRe.FindAllStringIndex(line, -1) {
+				if isInsideInlineCode(line, loc[0], loc[1]) {
+					continue
+				}
+				m := line[loc[0]:loc[1]]
+				issues = append(issues, Issue{
+					Severity: SevWarn,
+					Check:    c.Name(),
+					File:     rel,
+					Line:     lineNo + 1,
+					Message:  fmt.Sprintf("reference-style link: %s (use [text](path) instead)", m),
+				})
 			}
 		}
 	}

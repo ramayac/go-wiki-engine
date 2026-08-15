@@ -188,3 +188,26 @@ During linter hardening and prompt lifecycle updates:
 ### Key design principle confirmed
 
 **Continuous hygiene is critical for both plumbing and instruction layers.** Low-level CLI operations must manage OS resources defensively, while high-level AI prompt instructions must be synchronized and kept free of stale or redundant files to prevent agent context pollution.
+
+---
+
+## 2026-08-14 — Improvement plan retired; its design decisions archived here
+
+### What happened
+
+The `wiki/improvement-plan.md` roadmap (phases 1–5) was fully implemented and verified. Rather than letting the document drift as a half-historical, half-current page, it was marked `deprecated` with `superseded_by: repo-map.md`, and the durable decisions from its "Part 7" were folded into this page so future sessions still see why the code works the way it does.
+
+### Design decisions that remain binding
+
+1. **YAML parser scope** — the front matter parser is flat `key: value` pairs with single-line values only; no nested YAML, no external dependencies.
+2. **Graph traversal cutoff** — BFS from `index.md` halts at `legacy`/`deprecated` nodes; an active page reachable only through an inactive path is excluded from `context --active`.
+3. **Graph export formats** — `context --active` emits JSON `nodes` + `edges` with `--json`, and sorted text output otherwise.
+4. **Severity gate** — `fail_severity` in `.wikirc` controls which severity fails `wiki-engine lint` (default `warn`).
+5. **Missing front matter fallback** — pages without front matter are treated as `current` so unmigrated wikis keep working, but lint warns about the missing metadata.
+6. **`superseded_by` validation** — the linter requires the target page to exist and be active (`current` or `planned`).
+7. **Sorting options** — chronological by default with precedence `updated` → `created` → filesystem mtime; `--sort=topo` switches to depth order.
+8. **Reference-style links** — `[text][ref]` links are flagged at warn severity by the markdown-format checker (added 2026-08-14, completing the optional Goal 4 item).
+
+### Key design principle confirmed
+
+**Retire plans into their artifacts.** A roadmap's value ends when it ships; its decisions don't. Archive the decisions in `lessons.md` and deprecate the plan page with `superseded_by`, instead of maintaining an indefinitely "current" plan document.

@@ -7,6 +7,11 @@ superseded_by: ""
 
 Append-only timeline of wiki maintenance activity.
 
+## [2026-08-14] lint | reference-style link checker, improvement plan retirement
+
+- Added a warn-level reference-style link check (`[text][ref]`) to the markdown-format checker with unit tests (improvement plan Goal 4, optional item).
+- Deprecated `wiki/improvement-plan.md` (`superseded_by: repo-map.md`) after folding its Part 7 design decisions into `wiki/lessons.md`.
+
 ## [2026-08-14] ingest | 2026-08 audit fixes — release loop, cache removal, symlink distribution, git staleness
 
 Triggered by the 2026-08-14 deep audit of the project concept, work loop, and gaps.

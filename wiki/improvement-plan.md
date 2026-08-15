@@ -1,9 +1,12 @@
 ---
-status: current
-description: "Deep analysis and phased roadmap for linter hardening and lifecycle features."
-superseded_by: ""
+status: deprecated
+description: "Completed hardening roadmap — design decisions archived in lessons.md."
+superseded_by: "repo-map.md"
 ---
 # go-wiki-engine — Deep Analysis & Improvement Plan
+
+> [!NOTE]
+> **This roadmap is fully implemented and deprecated.** All phases 1–5 shipped (see [log.md](log.md)). The durable design decisions from Part 7 were archived in [lessons.md](lessons.md); the current architecture lives in [repo-map.md](repo-map.md).
 
 ## Executive Summary
 
