@@ -259,7 +259,7 @@ func TestStats(t *testing.T) {
 func TestContext(t *testing.T) {
 	root := setupWiki(t)
 	eng := newTestEngine(root)
-	cr, err := eng.Context(false, false, false)
+	cr, err := eng.Context(false, false)
 	if err != nil {
 		t.Fatalf("Context failed: %v", err)
 	}
@@ -277,7 +277,7 @@ func TestContext(t *testing.T) {
 func TestContextMinimal(t *testing.T) {
 	root := setupWiki(t)
 	eng := newTestEngine(root)
-	cr, err := eng.Context(true, false, false)
+	cr, err := eng.Context(true, false)
 	if err != nil {
 		t.Fatalf("Context(minimal) failed: %v", err)
 	}
@@ -307,6 +307,19 @@ func TestSummaryNotFound(t *testing.T) {
 	_, err := eng.Summary("nonexistent.md")
 	if err == nil {
 		t.Error("Summary should error for nonexistent page")
+	}
+}
+
+func TestSummaryPathTraversal(t *testing.T) {
+	root := setupWiki(t)
+	eng := newTestEngine(root)
+
+	// A real file outside the wiki dir must not be readable through Summary.
+	if err := os.WriteFile(filepath.Join(root, "secret.md"), []byte("# Secret\n"), 0o644); err != nil {
+		t.Fatalf("write secret.md: %v", err)
+	}
+	if _, err := eng.Summary("../secret.md"); err == nil {
+		t.Error("Summary should reject paths escaping the wiki directory")
 	}
 }
 
@@ -629,7 +642,7 @@ func TestContextSummarize(t *testing.T) {
 	root := setupWiki(t)
 	eng := newTestEngine(root)
 
-	cr, err := eng.Context(false, true, false)
+	cr, err := eng.Context(false, true)
 	if err != nil {
 		t.Fatalf("Context(summarize) failed: %v", err)
 	}
@@ -676,7 +689,7 @@ func TestContextMinimalSummarize(t *testing.T) {
 	eng := newTestEngine(root)
 
 	// Minimal + summarize: catalog should have summaries but no phase.
-	cr, err := eng.Context(true, true, false)
+	cr, err := eng.Context(true, true)
 	if err != nil {
 		t.Fatalf("Context(minimal, summarize) failed: %v", err)
 	}
@@ -784,39 +797,36 @@ func TestFrontMatterChecker(t *testing.T) {
 	}
 }
 
-func TestContextActive(t *testing.T) {
+func TestContextLifecycleFiltering(t *testing.T) {
 	root := setupWiki(t)
 	eng := newTestEngine(root)
 
-	// Make one of the wiki files legacy (non-active)
+	// Make one of the wiki files legacy (non-active).
 	os.WriteFile(filepath.Join(root, "wiki", "phases.md"), []byte("---\nstatus: legacy\ndescription: Phases\n---\n# Phases\n"), 0o644)
 
-	// Without active flag: should contain all pages (9)
-	cr, err := eng.Context(false, false, false)
+	// Plain context includes legacy pages: the catalog shows everything.
+	cr, err := eng.Context(false, false)
 	if err != nil {
 		t.Fatalf("Context failed: %v", err)
 	}
-	if len(cr.Catalog) != 8 { // Wait, setupWiki has 9 files but index.md lists 7 of them. index.md: schema.md, log.md, repo-map.md, phases.md, operations/ingest.md, operations/query.md, operations/lint.md.
-		// README.md is not in index.md catalog, so catalog has 7 entries.
-		// Let's count actually. SetupWiki index has:
-		// schema.md, log.md, repo-map.md, phases.md, operations/ingest.md, operations/query.md, operations/lint.md = 7.
-		// So total catalog size is 7.
-	}
-	originalCount := len(cr.Catalog)
-
-	// With active=true: should filter out phases.md (non-active), so count should be originalCount - 1
-	crActive, err := eng.Context(false, false, true)
-	if err != nil {
-		t.Fatalf("Context(active=true) failed: %v", err)
-	}
-	if len(crActive.Catalog) != originalCount-1 {
-		t.Errorf("expected %d active catalog entries, got %d", originalCount-1, len(crActive.Catalog))
-	}
-
-	// Verify phases.md is not in the active catalog
-	for _, entry := range crActive.Catalog {
+	found := false
+	for _, entry := range cr.Catalog {
 		if entry.File == "phases.md" {
-			t.Error("expected phases.md to be filtered out of active catalog")
+			found = true
+		}
+	}
+	if !found {
+		t.Error("plain context should include legacy pages")
+	}
+
+	// Summarize mode filters legacy/deprecated pages out.
+	crSum, err := eng.Context(false, true)
+	if err != nil {
+		t.Fatalf("Context(summarize) failed: %v", err)
+	}
+	for _, entry := range crSum.Catalog {
+		if entry.File == "phases.md" {
+			t.Error("summarize context should filter out legacy pages")
 		}
 	}
 }

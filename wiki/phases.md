@@ -16,6 +16,12 @@ superseded_by: ""
 | 4 | CI & self-linting | completed | Linter gates PRs in GitHub Actions pipeline |
 | 5 | Cleanup & polish | completed | Dead code removed and todo backlog cleaned |
 
+## Post-Completion
+
+All rollout phases are complete; the board is now a historical record. Open work
+lives in [todo.md](todo.md). Reopen or append phases when a new feature wave
+(e.g. a hardening cycle) needs staged tracking again.
+
 ## Related
 
 - Open work: [todo.md](todo.md)

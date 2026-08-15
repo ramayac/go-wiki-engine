@@ -41,6 +41,13 @@ context_summarize = false
 # Set to 0 to disable continuous watch (wiki-engine watch --once still works).
 watch_interval = 0
 
+# --- Lint severity gate ---
+
+# Minimum severity that causes wiki-engine lint to fail with exit code 1.
+# Issues below this level are still printed but do not fail the run.
+# Values: error | warn | info. Also drives the watch --once exit code.
+fail_severity = "warn"
+
 # --- Ignored paths ---
 
 # Paths excluded from candidate filtering (wiki-engine candidates).

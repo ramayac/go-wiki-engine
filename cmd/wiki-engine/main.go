@@ -395,7 +395,7 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 			return
 		}
 
-		cr, err := eng.Context(minimal, summarize, false)
+		cr, err := eng.Context(minimal, summarize)
 		if err != nil {
 			fatal(err)
 		}
@@ -556,7 +556,11 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 		}
 
 		if once {
-			runWatchCycle(eng, useJSON)
+			// One-shot checks signal drift via exit code, matching lint:
+			// exit 1 when the lint gate fails (fail_severity).
+			if runWatchCycle(eng, useJSON) {
+				os.Exit(1)
+			}
 			return
 		}
 
@@ -610,7 +614,7 @@ Commands:
   diff <from> <to>        Show wiki file changes between two git refs
   watch [--once]          Poll for changes and lint issues (interval from .wikirc)
   refresh [diff-range]    Run the full maintenance snapshot
-  upgrade                 Self-upgrade to the latest version via go install
+  upgrade                 Self-upgrade from the latest GitHub release (checksum-verified; go install fallback)
   version                 Print the version
   help                    Show this help
 
@@ -622,25 +626,27 @@ func fatal(err error) {
 	os.Exit(1)
 }
 
-func runWatchCycle(eng *engine.Engine, useJSON bool) {
+// runWatchCycle runs one watch cycle and reports whether the lint gate failed.
+// The return value drives the exit code of `watch --once`; continuous mode
+// ignores it.
+func runWatchCycle(eng *engine.Engine, useJSON bool) bool {
 	wr, err := eng.WatchOnce()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "watch error: %v\n", err)
-		return
+		return true
 	}
 	if useJSON {
 		writeJSON(wr)
-		return
+		return !wr.LintOK
 	}
-	if len(wr.Changed) == 0 {
-		return // no changes, silent
-	}
-	fmt.Printf("\n=== [%s] ===\n", time.Now().Format("15:04:05"))
-	fmt.Printf("changed: %d file(s)\n", len(wr.Changed))
-	if len(wr.Candidates) > 0 {
-		fmt.Printf("candidates: %d file(s)\n", len(wr.Candidates))
-		for _, f := range wr.Candidates {
-			fmt.Printf("  %s\n", f)
+	if len(wr.Changed) > 0 {
+		fmt.Printf("\n=== [%s] ===\n", time.Now().Format("15:04:05"))
+		fmt.Printf("changed: %d file(s)\n", len(wr.Changed))
+		if len(wr.Candidates) > 0 {
+			fmt.Printf("candidates: %d file(s)\n", len(wr.Candidates))
+			for _, f := range wr.Candidates {
+				fmt.Printf("  %s\n", f)
+			}
 		}
 	}
 	if !wr.LintOK {
@@ -649,4 +655,5 @@ func runWatchCycle(eng *engine.Engine, useJSON bool) {
 			fmt.Printf("  [%s] %s: %s\n", iss.Severity, iss.File, iss.Message)
 		}
 	}
+	return !wr.LintOK
 }

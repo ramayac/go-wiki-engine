@@ -23,7 +23,8 @@ internal/engine/        Core operations: List, Headings, Search, LogTail,
 internal/engine/engine_lint.go   Composable Checker interface + 17 implementations
 internal/scaffold/      Init command — copies go:embed scaffold into a target repo
   files/                go:embed source (mirror of scaffold/)
-internal/upgrade/       Self-upgrade via `go install @latest`
+internal/upgrade/       Self-upgrade — GitHub release binary with SHA-256
+                        checksum verification; `go install` fallback
 scaffold/               Human-readable reference copy of embedded templates
   wiki/                 Wiki pages: README, index, log, schema, phases, repo-map, operations/
   .wiki-instructions/   Canonical workflow definitions (single source of truth for all tools)
@@ -63,9 +64,9 @@ scaffold/               Human-readable reference copy of embedded templates
 | `relevant <query> [n]` | Rank wiki pages by relevance to a query |
 | `impact <file...>` | Show which wiki pages mention changed source files (or pipe from `changed`) |
 | `diff <from> <to>` | Show wiki files added/removed/changed between two git refs |
-| `watch [--once]` | Poll for changes + lint issues at interval from `.wikirc`; exits with guidance when `watch_interval` is 0; `--once` for one-shot check |
+| `watch [--once]` | Poll for changes + lint issues at interval from `.wikirc`; exits with guidance when `watch_interval` is 0; `--once` runs a single cycle and exits 1 when the lint gate (`fail_severity`) fails |
 | `refresh [diff]` | Run list + log-tail + changed + candidates + lint as a maintenance snapshot |
-| `upgrade` | Re-runs `go install github.com/ramayac/go-wiki-engine/cmd/wiki-engine@latest` |
+| `upgrade` | Downloads the latest GitHub release binary and verifies its SHA-256 checksum against `checksums.txt`; falls back to `go install github.com/ramayac/go-wiki-engine/cmd/wiki-engine@latest` |
 | `version` | Print the version set by -ldflags at build time |
 
 ## How the Multi-Tool Integration Works
@@ -100,6 +101,19 @@ The workflow is:
 
 `go:embed` follows symlinks at build time, so the embedded FS contains regular files. `make sync-scaffold` uses `cp -rL` to dereference symlinks when copying the scaffold into `internal/scaffold/files/`.
 
+## JSON Output Contract
+
+All commands accept `--json` and emit one JSON envelope per invocation on stdout:
+
+```json
+{ "ok": true, "data": { }, "error": "" }
+```
+
+- `ok` reflects command success; `error` carries the failure reason for fatal errors.
+- `lint --json` emits the issues array as `data` with `ok:false` when the `fail_severity` gate fails, and still exits 1 (matching plain-text lint).
+- `context --active --json` emits `{nodes, edges, unlinked}` — the machine-readable active graph for agent navigation.
+- `watch --once --json` emits one `WatchResult` (`changed`, `candidates`, `lint_ok`, `lint_issues`) and exits 1 when `lint_ok` is false.
+
 ## Configuration — .wikirc
 
 Full key reference: [config.md](config.md).
@@ -111,6 +125,7 @@ Full key reference: [config.md](config.md).
 | `log_lines` | `10` | Number of log entries shown by log-tail |
 | `duplicate_threshold` | `0.7` | Similarity above which pages are flagged as duplicates (0.0-1.0, 0 disables) |
 | `stale_days` | `30` | Days since a page's last git commit before it is flagged as stale (0 disables; falls back to file mtime outside git) |
+| `fail_severity` | `warn` | Minimum severity that fails `wiki-engine lint` with exit 1 (`error`, `warn`, or `info`) |
 | `watch_interval` | `0` | Seconds between watch polls (0 disables continuous watch; `--once` still works) |
 | `context_summarize` | `false` | Default `wiki-engine context` to `--summarize` mode |
 | `ignore` | `["wiki/", "bin/", "*.log", "*.tmp"]` | Paths excluded from candidate filtering |

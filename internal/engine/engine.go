@@ -303,28 +303,28 @@ type ContextEntry struct {
 	File        string `json:"file"`
 	Status      string `json:"status"`
 	Description string `json:"description"`
-	Summary     string `json:"summary,omitempty"`  // first ~3 paragraphs when --summarize
+	Summary     string `json:"summary,omitempty"` // first ~3 paragraphs when --summarize
 	LineCount   int    `json:"line_count"`
 }
 
 // ContextResult holds a condensed wiki snapshot for agent context loading.
 type ContextResult struct {
-	Files         int            `json:"files"`
-	LastUpdated   string         `json:"last_updated"`
-	Phase         string         `json:"phase"`
-	Catalog       []ContextEntry `json:"catalog"`
-	RecentLog     []string       `json:"recent_log"`
-	HeadingCount  int            `json:"heading_count"`
-	Summarized    bool           `json:"summarized"`
+	Files        int            `json:"files"`
+	LastUpdated  string         `json:"last_updated"`
+	Phase        string         `json:"phase"`
+	Catalog      []ContextEntry `json:"catalog"`
+	RecentLog    []string       `json:"recent_log"`
+	HeadingCount int            `json:"heading_count"`
+	Summarized   bool           `json:"summarized"`
 }
 
 // Context returns a condensed snapshot of the wiki — enough for an agent
 // to understand what's in the wiki without reading every file.
 // When minimal is true, only the catalog and recent log are returned.
 // When summarize is true, each catalog entry includes a page summary
-// (first heading and first few paragraphs) plus line count.
-// When active is true, non-active pages (status legacy/deprecated) are filtered out.
-func (e *Engine) Context(minimal, summarize, active bool) (*ContextResult, error) {
+// (first heading and first few paragraphs) plus line count, and
+// non-active pages (status legacy/deprecated) are filtered out.
+func (e *Engine) Context(minimal, summarize bool) (*ContextResult, error) {
 	cr := &ContextResult{}
 
 	// Build catalog from index.md.
@@ -343,9 +343,6 @@ func (e *Engine) Context(minimal, summarize, active bool) (*ContextResult, error
 
 		isActive := fm.Status == "current" || fm.Status == "planned"
 
-		if active && !isActive {
-			continue
-		}
 		if summarize && !isActive {
 			continue
 		}
@@ -468,7 +465,12 @@ type SummaryResult struct {
 // first paragraph, and line count. Useful for agents to preview a page
 // before loading it fully.
 func (e *Engine) Summary(page string) (*SummaryResult, error) {
-	abs := filepath.Join(e.WikiPath(), page)
+	wikiDir := e.WikiPath()
+	abs := filepath.Join(wikiDir, page)
+	// Containment guard: reject paths that escape the wiki directory.
+	if rel, err := filepath.Rel(wikiDir, abs); err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return nil, fmt.Errorf("page not found: %s", page)
+	}
 	f, err := os.Open(abs)
 	if err != nil {
 		return nil, fmt.Errorf("page not found: %s", page)
@@ -640,8 +642,8 @@ func (e *Engine) Relevant(query string, topN int) ([]RelevanceResult, error) {
 
 // ImpactResult reports which wiki pages mention a changed file.
 type ImpactResult struct {
-	ChangedFile  string   `json:"changed_file"`
-	WikiPages    []string `json:"wiki_pages"`
+	ChangedFile string   `json:"changed_file"`
+	WikiPages   []string `json:"wiki_pages"`
 }
 
 // Impact maps changed files to wiki pages that mention them.
@@ -786,10 +788,10 @@ func (e *Engine) changedWikiFiles(diffRange string) ([]string, error) {
 
 // WatchResult holds the output of one watch cycle.
 type WatchResult struct {
-	Changed    []string       `json:"changed"`
-	Candidates []string       `json:"candidates"`
-	LintOK     bool           `json:"lint_ok"`
-	LintIssues []Issue        `json:"lint_issues,omitempty"`
+	Changed    []string `json:"changed"`
+	Candidates []string `json:"candidates"`
+	LintOK     bool     `json:"lint_ok"`
+	LintIssues []Issue  `json:"lint_issues,omitempty"`
 }
 
 // WatchOnce runs a single watch cycle: changed + candidates + lint.
