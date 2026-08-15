@@ -9,7 +9,7 @@ Answer the user's repository question from the wiki first.
 
 ## Required context
 
-- Run `wiki-engine context --active` to get the current active wiki snapshot (skipping `deprecated` or `legacy` pages).
+- Run `wiki-engine context --active --sort=topo` to build the map of active wiki pages (parents before children). Use `--sort=chrono` for recency and `wiki-engine --json context --active` for a structured nodes/edges map.
 - Search the wiki with `wiki-engine search <term>` or `wiki-engine relevant <term>`.
 - Read only the active wiki pages needed to answer the question.
 - Follow the guidelines in [wiki-maintainer.md](wiki-maintainer.md).
@@ -17,7 +17,7 @@ Answer the user's repository question from the wiki first.
 
 ## Execution steps
 
-1. Search the wiki using `wiki-engine search <term>` or equivalent targeted reads.
+1. Map first, then search: run `wiki-engine context --active`, locate the topic with `wiki-engine search <term>` or `wiki-engine relevant <term>`, and follow the graph's `->` links to related pages.
 2. Read only the active wiki pages needed to answer the question. Skip pages marked `deprecated` or `legacy`.
 3. Use source files only if the active wiki pages lack enough evidence.
 4. If the answer reveals a durable repo fact that is missing or stale in the wiki, update the relevant active page (ensuring it contains proper front matter, standard relative Markdown links, and cross-links to its related pages).

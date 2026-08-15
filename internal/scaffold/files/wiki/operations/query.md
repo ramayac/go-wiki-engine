@@ -11,9 +11,9 @@ Answer repo questions from the wiki first so the agent does not start from zero 
 
 ## Procedure
 
-1. Read [index.md](../index.md).
+1. Map the wiki with `wiki-engine context --active --sort=topo`, then read [index.md](../index.md).
 2. Read the latest relevant entries in [log.md](../log.md).
-3. Search the wiki for the topic.
+3. Search the wiki for the topic and follow the graph's `->` links to related pages.
 4. Read only the linked pages needed to answer the question.
 5. Read source files only when the wiki lacks enough evidence.
 6. If the answer is durable, write it back into the wiki.
@@ -21,7 +21,9 @@ Answer repo questions from the wiki first so the agent does not start from zero 
 ## Shell-First Search
 
 ```bash
+wiki-engine context --active --sort=topo
 wiki-engine search <keyword>
+wiki-engine relevant <keyword>
 wiki-engine list
 wiki-engine headings
 ```

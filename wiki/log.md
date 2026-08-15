@@ -7,6 +7,13 @@ superseded_by: ""
 
 Append-only timeline of wiki maintenance activity.
 
+## [2026-08-14] lint | document graph navigation and search in all instruction layers
+
+- Audit found the graph feature was only taught as a health check, not as a map. Added a "Graph Navigation & Search" section to `wiki-maintainer.md`: hierarchical map (`context --active --sort=topo`), recency map (`--sort=chrono`), machine map (`--json context --active` nodes/edges/unlinked), following `->` edges, and map-then-search flow.
+- Updated the query workflows (canonical prompt + live and scaffold `operations/query.md`) to map first, then search/relevant, then read along edges.
+- Added `wiki-engine context --active --sort=topo` to `wiki/README.md` shell-first navigation and to the pi.dev skill quick reference.
+- Propagated via `make sync-scaffold` + `wiki-engine sync-prompts`.
+
 ## [2026-08-14] lint | removed progress.md, slimmed todo.md to open backlog
 
 - Deleted the root-level `progress.md` — its completion records are redundant with `wiki/log.md` and git history, and it was durable knowledge living outside the wiki.

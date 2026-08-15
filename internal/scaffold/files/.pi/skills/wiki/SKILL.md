@@ -20,6 +20,9 @@ commands and repeatable workflows for wiki operations.
 
 ```bash
 wiki-engine context --active          # Active-page graph from index.md (skips legacy/deprecated)
+wiki-engine context --active --sort=topo  # Hierarchical map: parents before children
+wiki-engine --json context --active   # Structured map: nodes + edges (+ unlinked)
+wiki-engine context --sort=chrono     # Recency map: recently-updated first
 wiki-engine context                   # Snapshot: catalog with statuses, recent log, phase
 wiki-engine context --summarize       # Snapshot with per-page previews (progressive disclosure)
 wiki-engine list [--active]           # List wiki files (optionally active pages only)
@@ -67,10 +70,11 @@ Absorb repo changes into the wiki.
 
 ### 2. Query the Repo (`/wiki-query`)
 Answer questions from the wiki first.
-1. Run `wiki-engine context --active` and `wiki-engine search <term>`.
-2. Read only the active wiki pages with matches.
-3. Use source files only if the wiki lacks evidence.
-4. File durable answers back into the wiki.
+1. Map first: `wiki-engine context --active --sort=topo`.
+2. Locate the topic: `wiki-engine search <term>` or `wiki-engine relevant <term>`.
+3. Read along the graph's `->` links to related active pages.
+4. Use source files only if the wiki lacks evidence.
+5. File durable answers back into the wiki.
 
 ### 3. Refresh Wiki (`/wiki-refresh`)
 Periodic maintenance cycle.

@@ -29,6 +29,7 @@ The wiki is the working memory for repo analysis, architectural summaries, opera
 ## Shell-First Navigation
 
 ```bash
+wiki-engine context --active --sort=topo
 wiki-engine list
 wiki-engine headings
 wiki-engine log-tail
