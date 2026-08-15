@@ -19,6 +19,7 @@ Keep the wiki coherent, linked, and current.
 - New recurring topics have a page instead of being trapped in chat history.
 - Links follow the standard in [schema.md](../schema.md): relative Markdown, no wiki-style `[[Page]]` links, no unclosed parentheses, and every target exists.
 - Active pages are cross-linked per [schema.md](../schema.md): each page links to its related pages; the only intentional leaf is [log.md](../log.md).
+- `leaf-pages` surfaces active pages with no outgoing links at info severity — non-failing by default, visible as a reminder.
 
 ## Shell-First Checks
 

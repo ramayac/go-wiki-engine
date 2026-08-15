@@ -298,7 +298,15 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 			return
 		}
 		if result.OK {
-			fmt.Println("wiki lint OK")
+			if len(result.Messages) > 0 {
+				// Info-only issues pass the gate but should still be visible.
+				for _, m := range result.Messages {
+					fmt.Fprintln(os.Stderr, m)
+				}
+				fmt.Println("wiki lint OK (info issues above)")
+			} else {
+				fmt.Println("wiki lint OK")
+			}
 		} else {
 			for _, m := range result.Messages {
 				fmt.Fprintln(os.Stderr, m)

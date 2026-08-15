@@ -41,3 +41,9 @@ make run
 
 <!-- List paths from the `ignore` array in .wikirc — these are excluded from wiki-engine commands. -->
 
+## Related
+
+- [schema.md](schema.md) — the contract this page must satisfy.
+- [operations/ingest.md](operations/ingest.md) — how this page gets updated.
+- [README.md](README.md) — wiki rules and navigation.
+

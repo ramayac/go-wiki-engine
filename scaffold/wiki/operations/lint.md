@@ -18,6 +18,7 @@ Keep the wiki coherent, linked, and current.
 - New recurring topics have a page instead of being trapped in chat history.
 - Links are standard relative Markdown format, are not malformed (e.g., no wiki-style links `[[Page]]` or unclosed parentheses), and are correctly mapped to files that exist.
 - Active pages are cross-linked: each page links to its related pages; the only intentional leaf is `log.md`.
+- `leaf-pages` surfaces active pages with no outgoing links at info severity — non-failing by default, visible as a reminder.
 
 ## Shell-First Checks
 
@@ -31,8 +32,8 @@ wiki-engine search "TODO:"
 ## Repair Order
 
 1. Fix stale or incorrect topic pages.
-2. Fix `wiki/index.md` links or summaries.
-3. Append a log entry if the lint changed durable content.
+2. Fix [index.md](../index.md) links or summaries.
+3. Append a log entry to [log.md](../log.md) if the lint changed durable content.
 
 ## Log Format
 
@@ -41,3 +42,5 @@ Use this exact heading pattern:
 ```md
 ## [YYYY-MM-DD] lint | short summary
 ```
+
+Pages touched by a lint repair should stay connected — see the [ingest workflow](ingest.md).

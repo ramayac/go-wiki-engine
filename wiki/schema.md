@@ -67,6 +67,7 @@ The wiki is a navigable graph, not a pile of pages:
 - Reference other pages with standard relative Markdown links instead of bare filenames.
 - `log.md` is the only intentional leaf — it is append-only: pages link to it, it never links back.
 - After creating or updating pages, run `wiki-engine context --active` and confirm the page is connected; fix any pages reported as unlinked.
+- `wiki-engine lint` reminds you via the `leaf-pages` check (info severity) when an active page has no outgoing links.
 
 ## Page Lifecycle & Front Matter
 

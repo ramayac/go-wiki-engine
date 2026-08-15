@@ -20,7 +20,7 @@ internal/engine/        Core operations: List, Headings, Search, LogTail,
                         Changed, Candidates, Lint, Refresh, Stats,
                         Context, Summary, Relevant, Impact, Diff, Watch,
                         BuildWikiGraph
-internal/engine/engine_lint.go   Composable Checker interface + 16 implementations
+internal/engine/engine_lint.go   Composable Checker interface + 17 implementations
 internal/scaffold/      Init command — copies go:embed scaffold into a target repo
   files/                go:embed source (mirror of scaffold/)
 internal/upgrade/       Self-upgrade via `go install @latest`
@@ -39,7 +39,7 @@ scaffold/               Human-readable reference copy of embedded templates
 
 - `cmd/wiki-engine/main.go` — CLI dispatcher; version injected via `-ldflags`; `--json` flag support on all commands
 - `internal/engine/engine.go` — all read-only wiki operations plus Diff, Watch, Impact; `Lint` delegates to composable checkers
-- `internal/engine/engine_lint.go` — `Checker` interface + 16 implementations: required-files, front-matter, index-format, bare-urls, index-links, cross-page-links, markdown-format, orphans, heading-hierarchy, log-headings, log-chronology, markers, phase-consistency, external-links, duplicate-content, stale-content
+- `internal/engine/engine_lint.go` — `Checker` interface + 17 implementations: required-files, front-matter, index-format, bare-urls, index-links, cross-page-links, markdown-format, orphans, leaf-pages, heading-hierarchy, log-headings, log-chronology, markers, phase-consistency, external-links, duplicate-content, stale-content
 - `internal/scaffold/scaffold.go` — `Init()` walks the embedded FS and remaps `wiki/` to the user-specified dir name; `SyncPrompts()` overwrites `.wiki-instructions/`, `.github/`, `.claude/commands/`, and `.pi/skills/` via `syncEmbeddedDir()` helper; tool-layer files are written as symlinks to `.wiki-instructions/` with a regular-copy fallback on platforms without symlink support; `syncShims()` creates `AGENTS.md`/`CLAUDE.md` only when absent (never overwrites user content); `Init()` preserves an existing `.wikirc`
 - `internal/config/config.go` — parses `.wikirc` (key=value + array format, no external deps); returns defaults when file is absent
 - `scaffold/` — source of truth for scaffold templates; `make sync-scaffold` copies it to `internal/scaffold/files/`
@@ -56,7 +56,7 @@ scaffold/               Human-readable reference copy of embedded templates
 | `log-tail [n]` | Show last N log headings from `log.md` |
 | `changed [diff]` | `git diff --name-only` filtered to non-wiki, non-ignored files |
 | `candidates [diff]` | Same as changed, further filtered by `.wikirc` ignore rules (see [config.md](config.md)) |
-| `lint [--check=<a,b>] [--skip=<a,b>]` | Check required files, front matter, index format, bare URLs, broken links (index + cross-page), log heading format and chronology, open markers, orphans, heading hierarchy, phase consistency, external links to source files, duplicate content, stale content — repair guide: [operations/lint.md](operations/lint.md) |
+| `lint [--check=<a,b>] [--skip=<a,b>]` | Check required files, front matter, index format, bare URLs, broken links (index + cross-page), log heading format and chronology, open markers, orphans, leaf pages, heading hierarchy, phase consistency, external links to source files, duplicate content, stale content — repair guide: [operations/lint.md](operations/lint.md) |
 | `stats` | Aggregate statistics: file count, heading count, total lines, last-updated date |
 | `context [--minimal] [--active] [--sort=topo\|chrono] [--summarize]` | Condensed wiki snapshot, or the active-page graph from `index.md` with `--active` (`--sort=topo` by depth, default chronological) |
 | `summary <page>` | First heading + first paragraph preview of a page |

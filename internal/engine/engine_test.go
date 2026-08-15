@@ -537,6 +537,34 @@ func TestLintMarkdownFormatReferenceLinks(t *testing.T) {
 	}
 }
 
+func TestLeafPagesChecker(t *testing.T) {
+	root := setupWiki(t)
+	eng := newTestEngine(root)
+
+	// Add an active leaf page with no outgoing links.
+	leaf := "---\nstatus: current\ndescription: Leaf\n---\n# Leaf Page\nNo links here.\n"
+	if err := os.WriteFile(filepath.Join(root, "wiki", "leaf.md"), []byte(leaf), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	lr := eng.LintWithOptions([]string{"leaf-pages"}, nil)
+	found := false
+	for _, iss := range lr.Issues {
+		if iss.Check == "leaf-pages" && iss.File == filepath.Join("wiki", "leaf.md") {
+			found = true
+			if iss.Severity != SevInfo {
+				t.Errorf("leaf-pages should be info severity, got %v", iss.Severity)
+			}
+		}
+		if iss.Check == "leaf-pages" && iss.File == filepath.Join("wiki", "log.md") {
+			t.Error("log.md should be exempt from leaf-pages")
+		}
+	}
+	if !found {
+		t.Error("expected leaf-pages issue for active page with no outgoing links")
+	}
+}
+
 func TestLintAnchorInLinks(t *testing.T) {
 	root := setupWiki(t)
 	repoMap := filepath.Join(root, "wiki", "repo-map.md")

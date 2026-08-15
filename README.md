@@ -84,7 +84,7 @@ wiki-engine [--json] <command> [arguments]
 
 | Command | Description |
 |---------|-------------|
-| `lint [--check=<checkers>] [--skip=<checkers>]` | Full health check — front-matter, index-format, bare-urls, structure, links, markers, orphans, duplicates, stale content |
+| `lint [--check=<checkers>] [--skip=<checkers>]` | Full health check — front-matter, index-format, bare-urls, structure, links, markers, orphans, leaf pages, duplicates, stale content |
 | `watch [--once]` | Poll for changes and lint issues (interval from `.wikirc`) |
 | `diff <from> <to>` | Show wiki file changes between two git refs |
 

@@ -1209,6 +1209,62 @@ func (c *bareUrlChecker) Check(e *Engine) ([]Issue, error) {
 	return issues, nil
 }
 
+// leafPagesChecker flags active pages with no outgoing links to other wiki
+// pages. A connected wiki is a graph, not a star: every active page should
+// reference its related pages. log.md is the only intentional leaf because it
+// is append-only. Severity is info so violations surface without failing the
+// default lint gate (fail_severity defaults to warn).
+type leafPagesChecker struct{}
+
+func (c *leafPagesChecker) Name() string { return "leaf-pages" }
+
+func (c *leafPagesChecker) Check(e *Engine) ([]Issue, error) {
+	var issues []Issue
+	wikiDir := e.WikiPath()
+	files, err := e.List()
+	if err != nil {
+		return nil, err
+	}
+	for _, rel := range files {
+		if !strings.HasSuffix(rel, ".md") {
+			continue
+		}
+		wikiRel, err := filepath.Rel(wikiDir, filepath.Join(e.RootDir, rel))
+		if err != nil {
+			continue
+		}
+		wikiRel = filepath.ToSlash(wikiRel)
+
+		// The append-only timeline is the one intentional leaf.
+		if wikiRel == "log.md" {
+			continue
+		}
+
+		abs := filepath.Join(e.RootDir, rel)
+		data, err := os.ReadFile(abs)
+		if err != nil {
+			continue
+		}
+		fm, _, _ := ParseFrontMatter(string(data))
+
+		// Only active pages participate in the graph.
+		if fm.Status == "legacy" || fm.Status == "deprecated" {
+			continue
+		}
+
+		links := ExtractLinks(string(data), filepath.Dir(abs), wikiDir)
+		if len(links) == 0 {
+			issues = append(issues, Issue{
+				Severity: SevInfo,
+				Check:    c.Name(),
+				File:     rel,
+				Message:  "leaf page: no outgoing links to related pages (log.md is the only intentional leaf)",
+			})
+		}
+	}
+	return issues, nil
+}
+
 // allCheckers returns the default set of lint checkers, ordered by priority.
 func allCheckers() []Checker {
 	return []Checker{
@@ -1220,6 +1276,7 @@ func allCheckers() []Checker {
 		&crossPageLinksChecker{},
 		&markdownFormatChecker{},
 		&orphansChecker{},
+		&leafPagesChecker{},
 		&headingHierarchyChecker{},
 		&logHeadingsChecker{},
 		&logChronologyChecker{},

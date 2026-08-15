@@ -7,6 +7,13 @@ superseded_by: ""
 
 Append-only timeline of wiki maintenance activity.
 
+## [2026-08-14] lint | leaf-pages checker enforces wiki connectivity
+
+- Added the `leaf-pages` checker (17th): flags active pages with no outgoing links at info severity — visible but non-failing by default (`fail_severity` defaults to `warn`). `log.md` is the only exempt leaf.
+- CLI now prints info-level issues even when lint passes ("wiki lint OK (info issues above)") so non-failing reminders are not hidden.
+- Cross-linked the scaffold wiki templates (README, schema, phases, repo-map, operations/\*) so a fresh `wiki-engine init` produces an already-connected wiki with zero leaf warnings.
+- Documented the checker in `schema.md`, `operations/lint.md`, `repo-map.md`, `README.md`, and the canonical `.wiki-instructions/`; propagated via `make sync-scaffold` + `wiki-engine sync-prompts`.
+
 ## [2026-08-14] lint | enforce cross-linking in schema, operations, and instructions
 
 - Added a "Cross-Linking Rules" section to `wiki/schema.md` and the scaffold template: every active page must link to its related pages, `index.md` remains the reachability root, `log.md` is the only intentional leaf, and `wiki-engine context --active` verifies connectivity after edits.

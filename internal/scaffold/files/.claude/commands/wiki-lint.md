@@ -21,6 +21,7 @@ Interpret wiki-engine lint output and fix all issues automatically.
    - **`index-format`**: Fix any catalog entries in `wiki/index.md` that do not follow the `- [Title](path.md) | Description` format.
    - **`bare-urls`**: Wrap raw URLs in standard markdown links, and replace HTML `<a>` tags with markdown syntax.
    - **`cross-page-links` / `orphans`**: Fix broken links or add links to connect orphaned pages to the active graph. Also cross-link pages that only receive links — the only intentional leaf is `log.md`.
+   - **`leaf-pages`**: An active page has no outgoing links — cross-link it to its related pages (`log.md` is the only intentional leaf).
    - **`heading-hierarchy` / `log-headings` / `log-chronology`**: Correct markdown heading levels, log entry formats, or reverse-chronological ordering.
    - Other checkers: resolve formatting, markers, phase consistency, or duplicate/stale content warnings.
 4. Apply the necessary fixes to the files under `wiki/`.
