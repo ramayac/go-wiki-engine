@@ -34,5 +34,6 @@ File the answer back into the wiki when it is any of these:
 - A repo workflow that will be reused.
 - A non-obvious cross-file connection.
 - A limitation, exclusion, or decision that future sessions should not rediscover.
+- The page holding the answer cross-links to its related pages (see [schema.md](../schema.md)).
 
 File the answer back using the [ingest workflow](ingest.md) and the durable knowledge rules in [schema.md](../schema.md).

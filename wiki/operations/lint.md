@@ -18,12 +18,14 @@ Keep the wiki coherent, linked, and current.
 - Exclusions still match repo reality.
 - New recurring topics have a page instead of being trapped in chat history.
 - Links follow the standard in [schema.md](../schema.md): relative Markdown, no wiki-style `[[Page]]` links, no unclosed parentheses, and every target exists.
+- Active pages are cross-linked per [schema.md](../schema.md): each page links to its related pages; the only intentional leaf is [log.md](../log.md).
 
 ## Shell-First Checks
 
 ```bash
 wiki-engine lint
 wiki-engine list
+wiki-engine context --active
 wiki-engine search "TODO:"
 ```
 

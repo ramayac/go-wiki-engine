@@ -17,12 +17,14 @@ Keep the wiki coherent, linked, and current.
 - Exclusions still match repo reality.
 - New recurring topics have a page instead of being trapped in chat history.
 - Links are standard relative Markdown format, are not malformed (e.g., no wiki-style links `[[Page]]` or unclosed parentheses), and are correctly mapped to files that exist.
+- Active pages are cross-linked: each page links to its related pages; the only intentional leaf is `log.md`.
 
 ## Shell-First Checks
 
 ```bash
 wiki-engine lint
 wiki-engine list
+wiki-engine context --active
 wiki-engine search "TODO:"
 ```
 

@@ -7,6 +7,13 @@ superseded_by: ""
 
 Append-only timeline of wiki maintenance activity.
 
+## [2026-08-14] lint | enforce cross-linking in schema, operations, and instructions
+
+- Added a "Cross-Linking Rules" section to `wiki/schema.md` and the scaffold template: every active page must link to its related pages, `index.md` remains the reachability root, `log.md` is the only intentional leaf, and `wiki-engine context --active` verifies connectivity after edits.
+- Updated the ingest/query/lint operations docs (live + scaffold) with cross-link steps and checks so the rule is part of the repeatable procedures.
+- Extended the canonical `.wiki-instructions/` maintainer checklist (rule 7) and the ingest/refresh/query/lint/watch prompts to cross-link on every write and verify the graph after linting.
+- Propagated via `make sync-scaffold` + `wiki-engine sync-prompts`.
+
 ## [2026-08-14] lint | cross-linked wiki pages into a navigable graph
 
 - Converted plain-text page references into standard relative Markdown links across `README.md`, `schema.md`, `phases.md`, `repo-map.md`, `config.md`, `lessons.md`, `todo.md`, and the three `operations/` pages.

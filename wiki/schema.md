@@ -58,6 +58,16 @@ Every repo that adopts this pattern should have at least these files:
 
 Each repo should document high-noise or user-authored areas that should not be routinely ingested in `.wikirc` under the `ignore` list — see [config.md](config.md).
 
+## Cross-Linking Rules
+
+The wiki is a navigable graph, not a pile of pages:
+
+- Every active page links to the pages it depends on or extends (concepts, workflows, configuration).
+- `index.md` is the root catalog; every page must be reachable from it.
+- Reference other pages with standard relative Markdown links instead of bare filenames.
+- `log.md` is the only intentional leaf — it is append-only: pages link to it, it never links back.
+- After creating or updating pages, run `wiki-engine context --active` and confirm the page is connected; fix any pages reported as unlinked.
+
 ## Page Lifecycle & Front Matter
 
 Every wiki page must include YAML front matter specifying its status and a brief description:

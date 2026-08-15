@@ -17,7 +17,7 @@ Absorb a repo change into the wiki without rediscovering the entire codebase.
 4. Check for external knowledge files that belong in the wiki: `docs/`, `AGENTS.md`, `CONTRIBUTING.md`, `ARCHITECTURE.md`. If found and not yet migrated, add a migration step to this ingest.
 5. Ignore repo-specific excluded paths from `.wikirc`.
 6. Decide whether the change updates an existing page or needs a new page.
-7. Update the relevant wiki page with the durable facts only.
+7. Update the relevant wiki page with the durable facts only — and cross-link it to its related pages per `wiki/schema.md`.
 8. Update `wiki/index.md` if page coverage changed.
 9. Advance `wiki/phases.md` if phases were completed during this ingest.
 10. Append an entry to `wiki/log.md`.
@@ -34,6 +34,7 @@ wiki-engine refresh
 
 - Update an existing page when the change fits an existing concern.
 - Create a new page when the change introduces a new subsystem, workflow, or recurring question.
+- Cross-link the updated page: add outgoing links to its related pages and link back from them where useful.
 
 ## External Docs Migration Rule
 
