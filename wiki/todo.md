@@ -36,7 +36,7 @@ Ranked by implementation difficulty within each tier. Effort assumes familiarity
 
 ## Tier 6 — Hardening & Page Lifecycle (New Backlog)
 
-Refer to the [Improvement Plan](improvement-plan.md) for the detailed roadmap and phase breakdown of the hardening tasks.
+Refer to [repo-map.md](repo-map.md) for the current architecture and [lessons.md](lessons.md) for the archived design decisions behind the completed hardening roadmap.
 
 | # | Task | Effort | Status |
 |---|------|--------|--------|
@@ -94,3 +94,7 @@ From the 2026-08-14 deep audit. All items implemented and verified.
 | 66 | **Preserve existing .wikirc on init**; impact TTY guard; usage() refresh | ✅ Done |
 | 67 | **Doc sweep**: repo-map/config/schema/README/pi skill alignment | ✅ Done |
 | 68 | **CI**: run integration suite + scaffold-sync guard in test.yml | ✅ Done |
+
+## Related
+
+Rollout status: [phases.md](phases.md). Activity history: [log.md](log.md).

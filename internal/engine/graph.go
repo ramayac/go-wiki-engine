@@ -134,6 +134,9 @@ func (e *Engine) BuildWikiGraph() ([]WikiNode, []WikiEdge, error) {
 		}
 
 		links := ExtractLinks(content, filepath.Dir(absPath), wikiDir)
+		if links == nil {
+			links = []string{} // ensure JSON emits [] instead of null
+		}
 
 		nodesMap[cleanRel] = &WikiNode{
 			File:        cleanRel,
@@ -164,7 +167,7 @@ func (e *Engine) BuildWikiGraph() ([]WikiNode, []WikiEdge, error) {
 
 	// Filter node links to only reference active/reached nodes
 	for _, node := range nodesMap {
-		var activeLinks []string
+		activeLinks := make([]string, 0, len(node.Links))
 		for _, link := range node.Links {
 			if nodesMap[link] != nil {
 				activeLinks = append(activeLinks, link)

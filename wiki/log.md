@@ -7,6 +7,12 @@ superseded_by: ""
 
 Append-only timeline of wiki maintenance activity.
 
+## [2026-08-14] lint | cross-linked wiki pages into a navigable graph
+
+- Converted plain-text page references into standard relative Markdown links across `README.md`, `schema.md`, `phases.md`, `repo-map.md`, `config.md`, `lessons.md`, `todo.md`, and the three `operations/` pages.
+- The active graph is no longer a star: pages now encode their conceptual relationships (`schema → operations/config`, `repo-map → config/lint/ingest`, `operations → index/log/schema/config`, etc.) so `wiki-engine context --active` gives agents real traversal paths.
+- Replaced the stale `improvement-plan.md` reference in `todo.md` with links to `repo-map.md` and `lessons.md`.
+
 ## [2026-08-14] lint | reference-style link checker, improvement plan retirement
 
 - Added a warn-level reference-style link check (`[text][ref]`) to the markdown-format checker with unit tests (improvement plan Goal 4, optional item).

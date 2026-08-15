@@ -7,6 +7,8 @@ superseded_by: ""
 
 Accumulated design insights from real usage sessions. Each entry records a gap that was discovered, the consequence, and what was built to close it.
 
+Related: [log.md](log.md) — chronological record of every change; [todo.md](todo.md) — gaps still open; [repo-map.md](repo-map.md) — the architecture these lessons shaped.
+
 ---
 
 ## 2026-05-01 — The prompt duplication trap

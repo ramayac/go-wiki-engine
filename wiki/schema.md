@@ -15,29 +15,29 @@ It should reduce repeated repo rediscovery by storing stable summaries, operatin
 
 Every repo that adopts this pattern should have at least these files:
 
-- `wiki/README.md`
-- `wiki/index.md`
-- `wiki/log.md`
-- `wiki/schema.md`
-- `wiki/phases.md`
-- `wiki/repo-map.md`
-- `wiki/operations/ingest.md`
-- `wiki/operations/query.md`
-- `wiki/operations/lint.md`
+- [README.md](README.md)
+- [index.md](index.md)
+- [log.md](log.md)
+- `schema.md` (this file)
+- [phases.md](phases.md)
+- [repo-map.md](repo-map.md)
+- [operations/ingest.md](operations/ingest.md)
+- [operations/query.md](operations/query.md)
+- [operations/lint.md](operations/lint.md)
 
 ## Read Order
 
-1. Read `wiki/index.md`.
-2. Read the latest entries in `wiki/log.md`.
-3. Read the relevant operations page.
+1. Read [index.md](index.md).
+2. Read the latest entries in [log.md](log.md).
+3. Read the relevant [operations](operations/ingest.md) page.
 4. Read only the linked topic pages needed for the task.
 5. Read source files only after the wiki has been consulted.
 
 ## Write Order
 
 1. Update the topic page that changed.
-2. Update `wiki/index.md` if a page was added or its role changed.
-3. Append a dated entry to `wiki/log.md`.
+2. Update [index.md](index.md) if a page was added or its role changed.
+3. Append a dated entry to [log.md](log.md).
 
 ## File Style
 
@@ -49,14 +49,14 @@ Every repo that adopts this pattern should have at least these files:
 
 ## Durable Knowledge Rules
 
-- Put repeatable procedures in `wiki/operations/`.
-- Put repo facts in `wiki/repo-map.md` or another topic page referenced by the index.
+- Put repeatable procedures in [operations/](operations/ingest.md).
+- Put repo facts in [repo-map.md](repo-map.md) or another topic page referenced by [index.md](index.md).
 - Put longer-lived decisions or answers into the wiki instead of leaving them only in chat history.
-- Keep the log append-only.
+- Keep [log.md](log.md) append-only.
 
 ## Repo-Specific Exclusions
 
-Each repo should document high-noise or user-authored areas that should not be routinely ingested in `.wikirc` under the `ignore` list.
+Each repo should document high-noise or user-authored areas that should not be routinely ingested in `.wikirc` under the `ignore` list — see [config.md](config.md).
 
 ## Page Lifecycle & Front Matter
 

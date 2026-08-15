@@ -5,7 +5,7 @@ superseded_by: ""
 ---
 # Configuration Reference
 
-All settings live in `.wikirc` at the repo root. If the file is absent, sensible defaults are used. Values are `key = "value"` pairs (quotes optional for simple values). Arrays use bracket syntax.
+All settings live in `.wikirc` at the repo root. If the file is absent, sensible defaults are used. Values are `key = "value"` pairs (quotes optional for simple values). Arrays use bracket syntax. Architecture context lives in [repo-map.md](repo-map.md).
 
 ## Paths
 
@@ -36,7 +36,7 @@ log_lines = 10
 ## Detection Thresholds
 
 ### `duplicate_threshold`
-Jaccard word-set similarity above which two pages are flagged as potential duplicates by the `duplicate-content` lint checker. Pages that share >70% word overlap typically indicate copy-paste drift.
+Jaccard word-set similarity above which two pages are flagged as potential duplicates by the `duplicate-content` lint checker (see [operations/lint.md](operations/lint.md)). Pages that share >70% word overlap typically indicate copy-paste drift.
 
 ```
 duplicate_threshold = 0.7
@@ -47,7 +47,7 @@ duplicate_threshold = 0.7
 | Disable | Set to `0` |
 
 ### `stale_days`
-Days since a page's last git commit before it is flagged as stale by the `stale-content` lint checker. Falls back to filesystem mtime when git history is unavailable. When the repo has active source changes (`wiki-engine changed` returns files), severity upgrades from `info` to `warn`.
+Days since a page's last git commit before it is flagged as stale by the `stale-content` lint checker (see [operations/lint.md](operations/lint.md)). Falls back to filesystem mtime when git history is unavailable. When the repo has active source changes (`wiki-engine changed` returns files), severity upgrades from `info` to `warn`.
 
 ```
 stale_days = 30
@@ -90,7 +90,7 @@ watch_interval = 0
 ## Ignored Paths
 
 ### `ignore`
-Paths excluded from candidate filtering by `wiki-engine candidates`. Three match modes:
+Paths excluded from candidate filtering by `wiki-engine candidates` — the exclusion contract is described in [schema.md](schema.md). Three match modes:
 
 | Pattern | Matches |
 |---------|---------|

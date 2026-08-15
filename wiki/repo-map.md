@@ -55,8 +55,8 @@ scaffold/               Human-readable reference copy of embedded templates
 | `search <query>` | Case-insensitive full-text search across wiki files |
 | `log-tail [n]` | Show last N log headings from `log.md` |
 | `changed [diff]` | `git diff --name-only` filtered to non-wiki, non-ignored files |
-| `candidates [diff]` | Same as changed, further filtered by `.wikirc` ignore rules |
-| `lint [--check=<a,b>] [--skip=<a,b>]` | Check required files, front matter, index format, bare URLs, broken links (index + cross-page), log heading format and chronology, open markers, orphans, heading hierarchy, phase consistency, external links to source files, duplicate content, stale content |
+| `candidates [diff]` | Same as changed, further filtered by `.wikirc` ignore rules (see [config.md](config.md)) |
+| `lint [--check=<a,b>] [--skip=<a,b>]` | Check required files, front matter, index format, bare URLs, broken links (index + cross-page), log heading format and chronology, open markers, orphans, heading hierarchy, phase consistency, external links to source files, duplicate content, stale content — repair guide: [operations/lint.md](operations/lint.md) |
 | `stats` | Aggregate statistics: file count, heading count, total lines, last-updated date |
 | `context [--minimal] [--active] [--sort=topo\|chrono] [--summarize]` | Condensed wiki snapshot, or the active-page graph from `index.md` with `--active` (`--sort=topo` by depth, default chronological) |
 | `summary <page>` | First heading + first paragraph preview of a page |
@@ -102,6 +102,8 @@ The workflow is:
 
 ## Configuration — .wikirc
 
+Full key reference: [config.md](config.md).
+
 | Key | Default | Purpose |
 |---|---|---|
 | `wiki_dir` | `wiki` | Directory name for the wiki |
@@ -139,3 +141,10 @@ Go module: `github.com/ramayac/go-wiki-engine`. No external dependencies — sta
 - `.wiki-instructions/` is the canonical source — edit here, not in the symlinked tool directories.
 - `bin/` is gitignored.
 - The wiki itself (`wiki/`) is excluded from candidate filtering.
+
+## Related Pages
+
+- [config.md](config.md) — full `.wikirc` reference.
+- [operations/lint.md](operations/lint.md) — checker-by-checker repair guide.
+- [operations/ingest.md](operations/ingest.md) — how architecture facts get updated.
+- [schema.md](schema.md) — the contract this page must satisfy.
