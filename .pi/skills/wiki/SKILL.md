@@ -3,7 +3,8 @@ name: wiki
 description: >
   Maintain a repo-local wiki for durable project knowledge.
   Use for ingesting repo changes, querying architecture, refreshing
-  stale docs, onboarding cold-start projects, and linting wiki health.
+  stale docs, onboarding cold-start projects, upgrading the wiki-engine
+  CLI, monitoring drift, and linting wiki health.
   Works with the wiki-engine CLI for filesystem-level inspection.
 license: MIT
 compatibility: "Requires wiki-engine CLI (go install github.com/ramayac/go-wiki-engine/cmd/wiki-engine@latest)"
@@ -18,34 +19,56 @@ commands and repeatable workflows for wiki operations.
 ## Quick Reference — wiki-engine CLI
 
 ```bash
-wiki-engine context           # Snapshot: catalog, recent log, phase status
-wiki-engine list              # List all wiki files
-wiki-engine search <term>     # Case-insensitive search across wiki
-wiki-engine headings          # All Markdown headings with file paths
-wiki-engine log-tail [n]      # Last N log entries
-wiki-engine changed           # Non-wiki files changed in git diff
-wiki-engine candidates        # Changed files worth ingesting (respects .wikirc ignore)
-wiki-engine lint              # Full wiki health check (structure, links, markers, orphans)
-wiki-engine refresh           # Combined snapshot: files + log + changed + candidates + lint
-wiki-engine stats             # File count, heading count, last-updated
-wiki-engine relevant <query>  # Rank pages by relevance to a query
+wiki-engine context --active          # Active-page graph from index.md (skips legacy/deprecated)
+wiki-engine context                   # Snapshot: catalog with statuses, recent log, phase
+wiki-engine context --summarize       # Snapshot with per-page previews (progressive disclosure)
+wiki-engine list [--active]           # List wiki files (optionally active pages only)
+wiki-engine search <term>             # Case-insensitive search across wiki
+wiki-engine headings                  # All Markdown headings with file paths
+wiki-engine log-tail [n]              # Last N log entries
+wiki-engine changed                   # Non-wiki files changed in git diff
+wiki-engine candidates                # Changed files worth ingesting (respects .wikirc ignore)
+wiki-engine lint                      # Full wiki health check (front matter, links, structure, markers)
+wiki-engine lint --check=<a,b> --skip=<c>  # Run selected checkers only
+wiki-engine refresh                   # Combined snapshot: files + log + changed + candidates + lint
+wiki-engine stats                     # File count, heading count, last-updated
+wiki-engine relevant <query>          # Rank pages by relevance to a query
+wiki-engine impact <file...>          # Which wiki pages mention changed files
+wiki-engine watch [--once]            # Poll for changes + lint issues (interval from .wikirc)
+wiki-engine diff <from> <to>          # Wiki changes between two git refs
 ```
+
+## Page Lifecycle
+
+Every wiki page has YAML front matter with a `status`:
+
+```yaml
+---
+status: current          # planned | current | legacy | deprecated
+description: "One-line summary of this page's purpose"
+superseded_by: ""        # required when status is deprecated
+---
+```
+
+- Read only `current` and `planned` pages by default.
+- Skip `legacy` and `deprecated` pages entirely (`context --active` filters them out).
+- When replacing a page, set it to `deprecated` and point `superseded_by` at the new page.
 
 ## Workflows
 
 ### 1. Ingest Changes (`/wiki-ingest`)
 Absorb repo changes into the wiki.
-1. Run `wiki-engine context` and `wiki-engine candidates`.
+1. Run `wiki-engine context --active` and `wiki-engine candidates`.
 2. Read only the changed source files relevant to the ingest.
-3. Update or create wiki pages with durable facts.
+3. Update or create active wiki pages with durable facts (with valid front matter).
 4. Update `wiki/index.md` if page coverage changed.
 5. Append a dated entry to `wiki/log.md`.
 6. Run `wiki-engine lint`.
 
 ### 2. Query the Repo (`/wiki-query`)
 Answer questions from the wiki first.
-1. Run `wiki-engine search <term>` for the topic.
-2. Read only the wiki pages with matches.
+1. Run `wiki-engine context --active` and `wiki-engine search <term>`.
+2. Read only the active wiki pages with matches.
 3. Use source files only if the wiki lacks evidence.
 4. File durable answers back into the wiki.
 
@@ -67,11 +90,30 @@ Bootstrap a wiki for a brand-new project or empty wiki.
 6. Append an ingest entry to `wiki/log.md`.
 7. Run `wiki-engine lint`.
 
-## Canonicial Instructions
+### 5. Lint the Wiki (`/wiki-lint`)
+Fix structural errors automatically.
+1. Run `wiki-engine lint --json`.
+2. Fix each issue category (front matter, index format, bare URLs, broken links,
+   orphans, heading hierarchy, log format/chronology).
+3. Re-run `wiki-engine lint` until clean.
+
+### 6. Upgrade the CLI (`/wiki-upgrade`)
+1. Run `wiki-engine upgrade`.
+2. Run `wiki-engine sync-prompts` to refresh all instruction layers.
+3. Verify with `wiki-engine lint` and `wiki-engine context --active`.
+
+### 7. Watch for Drift (`/wiki-watch`)
+1. Run `wiki-engine watch --once` before a work session.
+2. For continuous monitoring, set `watch_interval` in `.wikirc` and run `wiki-engine watch`.
+3. When candidates appear, run `wiki-engine impact <file>` and ingest the durable facts.
+
+## Canonical Instructions
 
 Full workflow definitions live in `.wiki-instructions/` — edit those files
 to update prompts for all supported tools (GitHub Copilot, Claude Code, pi).
-Run `wiki-engine sync-prompts` after upgrading the wiki-engine binary.
+Tool directories contain symlinks back to the canonical files, so edits
+propagate automatically. Run `wiki-engine sync-prompts` after upgrading the
+wiki-engine binary.
 
 ## What Makes a Good Wiki Page
 
@@ -79,3 +121,4 @@ Run `wiki-engine sync-prompts` after upgrading the wiki-engine binary.
 - **One concern per file.** Split when a page covers two unrelated subsystems.
 - **Grep-friendly headings.** Terms that appear in source code.
 - **Link, don't duplicate.** Reference `repo-map.md` rather than repeating.
+- **Standard markdown links only.** No bare URLs, no HTML `<a>` tags, no `[[wiki-links]]`.

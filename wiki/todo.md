@@ -70,4 +70,27 @@ Address **after** the main improvement plan (Phases 1–5). These are housekeepi
 | 51 | **Add front matter to all wiki pages** | 1h | ✅ Done — all wiki pages migrated to include YAML front matter |
 | 52 | **Update `phases.md` with forward-looking entries** | 15m | ✅ Done — updated project's own phases.md with all implementation phases |
 | 53 | **Clean up `todo.md` stale status markers** | 15m | ✅ Done — all status markers updated and validated |
-| 54 | **Add unit tests for `upgrade.go` download path** | 2h | ⬜ Deferred — SHA-256 checksum validation, tar.gz/zip extraction, and fallback logic need mock HTTP server coverage |
+| 54 | **Add unit tests for `upgrade.go` download path** | 2h | ⬜ Deferred — helper-function tests exist; mocked HTTP coverage for the download path still pending |
+
+---
+
+## Tier 8 — 2026-08 Audit Fixes (Completed)
+
+From the 2026-08-14 deep audit. All items implemented and verified.
+
+| # | Task | Status |
+|---|------|--------|
+| 55 | **Fix release workflow → upgrade mismatch** (archives + checksums.txt, underscore naming) | ✅ Done |
+| 56 | **Remove write-only cache subsystem** (engine_cache.go, cache_enabled/cache_max_mb, --rebuild-cache) | ✅ Done |
+| 57 | **Fix parseFloat** so `duplicate_threshold = 0` disables; consolidate ParsePositiveInt | ✅ Done |
+| 58 | **Wire context_summarize** as the default for `wiki-engine context` | ✅ Done |
+| 59 | **Honor watch_interval = 0** as disabled (exit with guidance; --once unaffected) | ✅ Done |
+| 60 | **Fix `--json init` arg handling and lint JSON `ok:false` envelope** | ✅ Done |
+| 61 | **Write tool-layer symlinks in user repos** (Windows falls back to copies) | ✅ Done |
+| 62 | **Wire /wiki-watch** symlinks into Copilot and Claude layers | ✅ Done |
+| 63 | **Git-based stale detection** (last commit date, mtime fallback) | ✅ Done |
+| 64 | **headingHierarchyChecker skips fenced code blocks**; span-based inline-code detection | ✅ Done |
+| 65 | **context --active reports active pages unreachable from index.md** | ✅ Done |
+| 66 | **Preserve existing .wikirc on init**; impact TTY guard; usage() refresh | ✅ Done |
+| 67 | **Doc sweep**: repo-map/config/schema/README/pi skill alignment | ✅ Done |
+| 68 | **CI**: run integration suite + scaffold-sync guard in test.yml | ✅ Done |

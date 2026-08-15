@@ -24,6 +24,7 @@ name: "Wiki Maintainer"
 | Periodic health check, fixing drift | `wiki-refresh` |
 | Structural issues, broken links, formatting errors, or missing metadata | `wiki-lint` |
 | Upgrading the CLI version and syncing prompt templates | `wiki-upgrade` |
+| Monitoring for un-ingested changes continuously | `wiki-watch` |
 
 ## Page Lifecycle Statuses
 

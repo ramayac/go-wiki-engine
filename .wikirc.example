@@ -7,7 +7,8 @@
 wiki_dir = "wiki"
 
 # Default git diff range used by changed, candidates, refresh, watch.
-default_diff = "master...HEAD"
+# Match this to the repository's default branch (main or master).
+default_diff = "main...HEAD"
 
 # Number of log entries shown by log-tail.
 log_lines = 10
@@ -19,16 +20,17 @@ log_lines = 10
 # Range: 0.0–1.0. Set to 0 to disable.
 duplicate_threshold = 0.7
 
-# Days before an unchanged wiki page is flagged as stale.
+# Days since a page's last git commit before it is flagged as stale.
+# Falls back to file mtime when git history is unavailable.
 # When the repo has active source changes, severity upgrades from info to warn.
 # Set to 0 to disable.
 stale_days = 30
 
 # --- Context loading ---
 
-# Enable --summarize flag on wiki-engine context.
-# When true, context output includes per-page previews (first heading + paragraph + line count).
-# Useful for large wikis where reading every page would waste tokens.
+# Default wiki-engine context to --summarize mode.
+# When true, context output includes per-page previews (first heading +
+# paragraph + line count).
 # When false (default), context returns lightweight one-line catalog entries.
 context_summarize = false
 
@@ -36,17 +38,8 @@ context_summarize = false
 
 # Polling interval in seconds for wiki-engine watch.
 # When > 0, watch runs changed + candidates + lint on every tick.
-# Set to 0 to disable.
+# Set to 0 to disable continuous watch (wiki-engine watch --once still works).
 watch_interval = 0
-
-# --- Performance ---
-
-# Use .wiki/.cache.json to speed up searches, context, and relevant lookups.
-# Cache is mtime-validated — auto-invalidates when any wiki file changes.
-# Run wiki-engine lint --rebuild-cache to force a rebuild.
-# Set cache_max_mb to limit cache file size (0 = unlimited).
-cache_enabled = true
-cache_max_mb = 0
 
 # --- Ignored paths ---
 

@@ -53,6 +53,7 @@ The primary interface is slash commands in your AI tool. All share canonical def
 | `/wiki-refresh` | Run the full maintenance cycle (changed → ingest → lint) |
 | `/wiki-onboard` | Bootstrap a wiki for a brand-new project or empty wiki |
 | `/wiki-lint` | Run the wiki linter and automatically fix structural errors, formatting, or metadata |
+| `/wiki-upgrade` | Upgrade the CLI binary, re-sync all prompt layers, and verify lint health |
 | `/wiki-watch` | Monitor for un-ingested changes and trigger auto-ingest |
 
 **Workflow:** You type `/wiki-ingest` (or `/wiki-lint`) → the agent inspects the repo with `wiki-engine` CLI commands → reads changed source files → writes durable facts to `wiki/` → runs `wiki-engine lint` to validate.
@@ -73,7 +74,7 @@ wiki-engine [--json] <command> [arguments]
 | `log-tail [n]` | Show the last N log headings |
 | `changed [diff-range]` | List non-wiki files changed in a git diff range |
 | `candidates [diff-range]` | Filter changed files to ingest-worthy candidates |
-| `context [--minimal] [--active] [--sort=topo\|chrono] [--summarize]` | Condensed wiki snapshot for agent context loading |
+| `context [--minimal] [--active] [--sort=topo\|chrono] [--summarize]` | Condensed wiki snapshot or active-page graph for agent context loading |
 | `summary <page>` | Show first heading and paragraph of a page |
 | `relevant <query> [n]` | Rank wiki pages by relevance to a query |
 | `impact <file...>` | Show which wiki pages mention changed files |
@@ -83,7 +84,7 @@ wiki-engine [--json] <command> [arguments]
 
 | Command | Description |
 |---------|-------------|
-| `lint [--check=<checkers>] [--skip=<checkers>] [--rebuild-cache]` | Full health check — front-matter, index-format, bare-urls, structure, links, markers, orphans, duplicates, stale content |
+| `lint [--check=<checkers>] [--skip=<checkers>]` | Full health check — front-matter, index-format, bare-urls, structure, links, markers, orphans, duplicates, stale content |
 | `watch [--once]` | Poll for changes and lint issues (interval from `.wikirc`) |
 | `diff <from> <to>` | Show wiki file changes between two git refs |
 
@@ -111,14 +112,12 @@ fail_severity = "warn"        # minimum severity to exit 1: error | warn | info
 
 # Detection thresholds
 duplicate_threshold = 0.7   # 0.0-1.0, similarity above which pages are flagged as duplicates
-stale_days = 30              # days before an unchanged page is flagged as stale
+stale_days = 30              # days since a page's last git commit before it is flagged as stale
 
 # Watch mode
-watch_interval = 0           # seconds between watch polls (0 = disabled)
+watch_interval = 0           # seconds between watch polls (0 disables continuous watch; --once still works)
 
-# Performance
-cache_enabled = true         # use .wiki/.cache.json for faster lookups
-cache_max_mb = 10            # max cache size in MB (0 = unlimited)
+# Context loading
 context_summarize = false    # default context command to --summarize mode
 
 ignore = [
@@ -137,10 +136,8 @@ ignore = [
 | `log_lines` | `10` | Number of log entries shown by log-tail |
 | `fail_severity` | `warn` | Minimum severity level that causes linter to fail with exit code 1 (`error`, `warn`, or `info`) |
 | `duplicate_threshold` | `0.7` | Similarity threshold for duplicate page detection (0 disables) |
-| `stale_days` | `30` | Days before an unchanged page is flagged as stale (0 disables) |
-| `watch_interval` | `0` | Seconds between watch polls (0 disables) |
-| `cache_enabled` | `true` | Use `.wiki/.cache.json` to speed up searches and context |
-| `cache_max_mb` | `0` | Maximum cache size in MB (0 is unlimited) |
+| `stale_days` | `30` | Days since a page's last git commit before it is flagged as stale (0 disables; falls back to file mtime outside git) |
+| `watch_interval` | `0` | Seconds between watch polls (0 disables continuous watch; `--once` still works) |
 | `context_summarize` | `false` | Default the `context` command to progressive summary disclosure mode |
 | `ignore` | see above | Paths excluded from ingest candidate filtering |
 
@@ -160,6 +157,8 @@ The wiki engine is a **read-only inspection and validation tool**. It never modi
 | `.claude/commands/` | Claude Code | Custom slash commands (symlinks) |
 | `.pi/skills/wiki/` | pi.dev | Agent Skills standard skill |
 | `AGENTS.md` / `CLAUDE.md` | All AI tools | Redirect shims → `wiki/index.md` |
+
+In repos initialized by `wiki-engine init` or updated by `wiki-engine sync-prompts`, the tool directories contain symlinks back to `.wiki-instructions/`, so edits to a canonical file propagate to every tool layer. On platforms where symlink creation fails (e.g. Windows without developer mode), regular copies are written instead — re-run `wiki-engine sync-prompts` after editing canonical files there.
 
 **Typical workflow:**
 

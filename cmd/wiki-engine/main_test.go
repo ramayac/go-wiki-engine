@@ -3,6 +3,8 @@ package main
 import (
 	"os"
 	"testing"
+
+	"github.com/ramayac/go-wiki-engine/internal/config"
 )
 
 func TestGetVersion(t *testing.T) {
@@ -26,9 +28,9 @@ func TestParsePositiveInt(t *testing.T) {
 		{"", 5, 5},
 	}
 	for _, tt := range tests {
-		got := parsePositiveInt(tt.input, tt.fallback)
+		got := config.ParsePositiveInt(tt.input, tt.fallback)
 		if got != tt.want {
-			t.Errorf("parsePositiveInt(%q, %d) = %d, want %d", tt.input, tt.fallback, got, tt.want)
+			t.Errorf("ParsePositiveInt(%q, %d) = %d, want %d", tt.input, tt.fallback, got, tt.want)
 		}
 	}
 }

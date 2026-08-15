@@ -2,9 +2,11 @@ package engine
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ramayac/go-wiki-engine/internal/config"
 )
@@ -543,75 +545,6 @@ func TestLintAnchorInLinks(t *testing.T) {
 	}
 }
 
-// --- Cache tests ---
-
-func TestCacheSaveLoad(t *testing.T) {
-	root := setupWiki(t)
-	eng := newTestEngine(root)
-	eng.Cfg.CacheEnabled = true
-
-	// Build cache.
-	if err := eng.RebuildCache(); err != nil {
-		t.Fatalf("RebuildCache failed: %v", err)
-	}
-
-	// Verify cache file exists.
-	if _, err := os.Stat(filepath.Join(root, "wiki", ".cache.json")); os.IsNotExist(err) {
-		t.Error("cache file not created")
-	}
-
-	// Load and validate.
-	c := eng.loadCache()
-	if c == nil {
-		t.Fatal("loadCache returned nil")
-	}
-	if len(c.Files) < 5 {
-		t.Errorf("cache has %d files, want >=5", len(c.Files))
-	}
-}
-
-func TestCacheDisabled(t *testing.T) {
-	root := setupWiki(t)
-	eng := newTestEngine(root)
-	eng.Cfg.CacheEnabled = false
-
-	// loadCache should return nil when cache is disabled.
-	c := eng.loadCache()
-	if c != nil {
-		t.Error("loadCache should return nil when cache is disabled")
-	}
-}
-
-func TestCacheInvalidation(t *testing.T) {
-	root := setupWiki(t)
-	eng := newTestEngine(root)
-	eng.Cfg.CacheEnabled = true
-
-	// Build initial cache.
-	if err := eng.RebuildCache(); err != nil {
-		t.Fatalf("RebuildCache failed: %v", err)
-	}
-
-	// Modify a wiki file to invalidate the cache.
-	repoMap := filepath.Join(root, "wiki", "repo-map.md")
-	os.WriteFile(repoMap, []byte("# Modified\n"), 0o644)
-
-	// Cache should now be invalid (mtime changed).
-	c := eng.loadCache()
-	if c != nil {
-		t.Error("cache should be nil after modifying a wiki file")
-	}
-
-	// Rebuild and verify it loads again.
-	if err := eng.RebuildCache(); err != nil {
-		t.Fatalf("RebuildCache after modification failed: %v", err)
-	}
-	c = eng.loadCache()
-	if c == nil {
-		t.Error("cache should load after rebuild")
-	}
-}
-
 // --- Impact tests ---
 
 func TestImpact(t *testing.T) {
@@ -1011,5 +944,98 @@ func TestLintWithOptions(t *testing.T) {
 	}
 	if foundMarkers || !foundIndexFormat {
 		t.Errorf("expected only index-format issue, got markers=%v, index-format=%v", foundMarkers, foundIndexFormat)
+	}
+}
+
+func TestStaleContentGitDate(t *testing.T) {
+	root := setupWiki(t)
+	eng := newTestEngine(root)
+	eng.Cfg.StaleDays = 1
+
+	// Put the wiki under git with an old commit date so stale detection
+	// uses the commit date instead of the (fresh) filesystem mtime.
+	gitCmd := func(args ...string) {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = root
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v failed: %v\n%s", args, err, out)
+		}
+	}
+	gitCmd("init", "-q", "-b", "main")
+	gitCmd("config", "user.email", "test@test")
+	gitCmd("config", "user.name", "Test")
+	gitCmd("add", ".")
+
+	commit := exec.Command("git", "commit", "-q", "-m", "init")
+	commit.Dir = root
+	commit.Env = append(os.Environ(),
+		"GIT_AUTHOR_DATE=2020-01-01T00:00:00+00:00",
+		"GIT_COMMITTER_DATE=2020-01-01T00:00:00+00:00",
+	)
+	if out, err := commit.CombinedOutput(); err != nil {
+		t.Fatalf("git commit failed: %v\n%s", err, out)
+	}
+
+	lr := eng.LintWithOptions([]string{"stale-content"}, nil)
+	stale := 0
+	for _, iss := range lr.Issues {
+		if iss.Check == "stale-content" {
+			stale++
+		}
+	}
+	if stale == 0 {
+		t.Error("expected stale-content issues for pages last committed in 2020")
+	}
+}
+
+func TestStaleContentMtimeFallback(t *testing.T) {
+	root := setupWiki(t)
+	eng := newTestEngine(root)
+	eng.Cfg.StaleDays = 1
+
+	// No git repo here: stale detection falls back to mtime, which we set
+	// to a date in the past.
+	old := time.Now().AddDate(-1, 0, 0)
+	for _, rel := range []string{"schema.md", "repo-map.md"} {
+		p := filepath.Join(root, "wiki", rel)
+		if err := os.Chtimes(p, old, old); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	lr := eng.LintWithOptions([]string{"stale-content"}, nil)
+	stale := 0
+	for _, iss := range lr.Issues {
+		if iss.Check == "stale-content" {
+			stale++
+		}
+	}
+	if stale == 0 {
+		t.Error("expected stale-content issues from mtime fallback")
+	}
+}
+
+func TestActiveUnlinkedPages(t *testing.T) {
+	root := setupWiki(t)
+	eng := newTestEngine(root)
+
+	// Add an active page that is not linked from index.md.
+	orphan := "---\nstatus: current\ndescription: Unlinked\n---\n# Unlinked\n"
+	if err := os.WriteFile(filepath.Join(root, "wiki", "unlinked.md"), []byte(orphan), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	unlinked, err := eng.ActiveUnlinkedPages()
+	if err != nil {
+		t.Fatalf("ActiveUnlinkedPages failed: %v", err)
+	}
+	found := false
+	for _, u := range unlinked {
+		if u == "unlinked.md" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected unlinked.md in active unlinked pages, got %v", unlinked)
 	}
 }

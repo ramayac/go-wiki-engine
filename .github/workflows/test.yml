@@ -18,3 +18,13 @@ jobs:
         run: go test ./...
       - name: lint
         run: make lint
+      - name: integration
+        run: make integration
+      - name: scaffold-sync check
+        run: |
+          make sync-scaffold
+          if ! git diff --quiet -- internal/scaffold/files; then
+            echo "scaffold/ and internal/scaffold/files are out of sync — run make sync-scaffold"
+            git diff -- internal/scaffold/files | head -50
+            exit 1
+          fi

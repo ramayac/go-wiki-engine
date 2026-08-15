@@ -15,4 +15,3 @@ Thumbs.db
 # Test artifacts
 *.test
 *.out
-wiki/.cache.json

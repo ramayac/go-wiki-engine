@@ -67,8 +67,15 @@ Every wiki page must include YAML front matter specifying its status and a brief
 status: current          # planned | current | legacy | deprecated
 description: "One-line summary of this page's purpose"
 superseded_by: ""        # (Conditional) path to the replacing page if status is deprecated
+created: "2026-01-15"     # (Optional) creation date used by chronological graph sorting
+updated: "2026-08-14"     # (Optional) last-updated date used by chronological graph sorting
+tags: ["foo", "bar"]     # (Optional) single-line tag list
 ---
 ```
+
+Optional fields:
+- `created` / `updated` — `YYYY-MM-DD` dates used by `wiki-engine context --active --sort=chrono`; filesystem mtime is the fallback when absent.
+- `tags` — single-line bracket list; reserved for future filtering.
 
 ### Status Definitions
 
@@ -83,5 +90,5 @@ superseded_by: ""        # (Conditional) path to the replacing page if status is
 |--------|--------------|---------------|---------------------|
 | `planned` | ✅ Yes | ✅ Yes (to fill in) | ✅ Marked as planned |
 | `current` | ✅ Yes | ✅ Yes | ✅ Default (active) |
-| `legacy` | ❌ No | ❌ No | ⚠️ Only with `--all` |
-| `deprecated` | ❌ No | ❌ No | ⚠️ Only with `--all` |
+| `legacy` | ❌ No | ❌ No | ⚠️ Only in plain `context` (excluded from `--active` and `--summarize`) |
+| `deprecated` | ❌ No | ❌ No | ⚠️ Only in plain `context` (excluded from `--active` and `--summarize`) |

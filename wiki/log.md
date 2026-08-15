@@ -7,6 +7,21 @@ superseded_by: ""
 
 Append-only timeline of wiki maintenance activity.
 
+## [2026-08-14] ingest | 2026-08 audit fixes — release loop, cache removal, symlink distribution, git staleness
+
+Triggered by the 2026-08-14 deep audit of the project concept, work loop, and gaps.
+
+- `.github/workflows/release.yml` — assets packaged as `wiki-engine_<tag>_<goos>_<goarch>.{tar.gz,zip}` with a generated `checksums.txt`, matching what `wiki-engine upgrade` expects (the checksum verification path is now reachable).
+- `internal/upgrade/upgrade.go` — shared HTTP client with 30s timeout.
+- Removed `internal/engine/engine_cache.go` — the `.wiki/.cache.json` layer was write-only dead code; dropped `cache_enabled`/`cache_max_mb` config keys and `lint --rebuild-cache`.
+- `internal/config/config.go` — `parseFloat` accepts 0 so `duplicate_threshold = 0` disables the checker; exported `ParsePositiveInt` (was duplicated in main.go).
+- `cmd/wiki-engine/main.go` — `context` defaults to `context_summarize`; `watch` honors `watch_interval = 0` (exits with guidance, `--once` unaffected); `--json init` uses filtered args; lint JSON emits `ok:false` on failure; `impact` no longer blocks on an interactive stdin; usage text refreshed.
+- `internal/scaffold/scaffold.go` — `init`/`sync-prompts` write tool-layer files as symlinks to `.wiki-instructions/` (regular-copy fallback where symlinks fail); `init` preserves an existing `.wikirc`; wired `/wiki-watch` into `.github/prompts/` and `.claude/commands/`.
+- `internal/engine/engine_lint.go` — stale detection now uses git last-commit dates (mtime fallback outside git); heading checker skips fenced code blocks; inline-code detection is span-based instead of backtick counting; `Lint()` delegates to `LintWithOptions()`.
+- `internal/engine/graph.go` — added `ActiveUnlinkedPages()`; `context --active` warns about active pages not reachable from `index.md`.
+- `.github/workflows/test.yml` + `Makefile` — integration suite runs in CI (`make integration`); added a scaffold-sync drift guard.
+- Wiki sweep — repo-map, config, schema, todo, progress, and the pi.dev skill refreshed; `.wikirc` templates standardized and cache keys removed.
+
 ## [2026-06-10] ingest | checksum verification, prompt restructures, bookkeeping
 
 - Added checksum validation to self-upgrade, downloading GitHub release asset, computing SHA-256 hash, and verifying against checksums.txt.

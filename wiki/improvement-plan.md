@@ -38,7 +38,7 @@ The project is at a transitional point — **v0.2.0** with most of the original 
 | [engine.go](../internal/engine/engine.go#L80-L96) | Multiple `os.Open()` calls without `defer f.Close()` — using manual `f.Close()` after scanner loop works but is fragile | Medium |
 | [main.go](../cmd/wiki-engine/main.go#L95) | `runSyncPrompts()` silently swallows `os.Getwd()` error: `dir, _ := os.Getwd()` | Low |
 | [config.go](../internal/config/config.go#L131) | Duplicate `parsePositiveInt()` function — exists in both `config.go` and `main.go` | Low |
-| [engine_cache.go](../internal/engine/engine_cache.go#L148-L153) | `cachedList()` is defined but **never called** — dead code | Low |
+| `engine_cache.go` (deleted 2026-08) | `cachedList()` is defined but **never called** — dead code | Low |
 | [engine_lint.go](../internal/engine/engine_lint.go#L201-L205) | `isInsideInlineCode()` logic is flawed — counting backticks before/after is unreliable for nested or escaped backticks | Low |
 
 #### Scaffold / Documentation Discrepancies
@@ -383,7 +383,7 @@ Ensure the linter is the single source of truth for wiki health. Any PR that int
 
 #### 5A. Remove dead code
 - Delete `jsonOK()` and `jsonErr()` from [engine.go](../internal/engine/engine.go#L247-L253)
-- Delete `cachedList()` from [engine_cache.go](../internal/engine/engine_cache.go#L148-L153)
+- Delete `cachedList()` from `engine_cache.go` (the whole cache subsystem was removed in the 2026-08 audit)
 
 #### 5B. Fix `todo.md` staleness
 - Mark `impact` (#19) as ✅ completed

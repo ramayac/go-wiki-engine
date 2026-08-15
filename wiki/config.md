@@ -47,7 +47,7 @@ duplicate_threshold = 0.7
 | Disable | Set to `0` |
 
 ### `stale_days`
-Days before an unchanged wiki page is flagged as stale by the `stale-content` lint checker. When the repo has active source changes (`wiki-engine changed` returns files), severity upgrades from `info` to `warn`.
+Days since a page's last git commit before it is flagged as stale by the `stale-content` lint checker. Falls back to filesystem mtime when git history is unavailable. When the repo has active source changes (`wiki-engine changed` returns files), severity upgrades from `info` to `warn`.
 
 ```
 stale_days = 30
@@ -59,14 +59,13 @@ stale_days = 30
 ## Context Loading
 
 ### `context_summarize`
-When `true`, `wiki-engine context` accepts `--summarize` to include per-page previews (first heading, first paragraph, line count) in catalog entries. Useful for wikis with large pages where reading everything would waste tokens.
+When `true`, `wiki-engine context` defaults to `--summarize` mode, including per-page previews (first heading, first paragraph, line count) in catalog entries. Useful for wikis with large pages where reading everything would waste tokens. The behavior can be toggled per invocation with the explicit flags.
 
 ```
 context_summarize = false
 ```
 | Default | `false` |
 |--------:|---------|
-| Prompt | `/wiki-summarize` (`.wiki-instructions/summarize.md`) |
 
 When enabled, agents can follow a progressive disclosure pattern:
 
@@ -79,37 +78,14 @@ When enabled, agents can follow a progressive disclosure pattern:
 ## Watch Mode
 
 ### `watch_interval`
-Polling interval in seconds for `wiki-engine watch`. When > 0, the watch loop runs `changed` + `candidates` + `lint` on every tick. Use `wiki-engine watch --once` for a single check.
+Polling interval in seconds for `wiki-engine watch`. When > 0, the watch loop runs `changed` + `candidates` + `lint` on every tick. When 0, continuous `wiki-engine watch` exits with guidance; use `wiki-engine watch --once` for a single check regardless.
 
 ```
 watch_interval = 0
 ```
-| Default | `0` (disabled) |
+| Default | `0` (continuous watch disabled) |
 |--------:|-----------------|
 | Typical | `60`–`300` |
-
-## Performance
-
-### `cache_enabled`
-Use `.wiki/.cache.json` (stored inside the wiki directory) to speed up `search`, `context`, `relevant`, and `stats` lookups. The cache is mtime-validated — it auto-invalidates when any wiki file changes. Run `wiki-engine lint --rebuild-cache` to force a rebuild.
-
-```
-cache_enabled = true
-```
-| Default | `true` |
-|--------:|-------|
-
-### `cache_max_mb`
-Maximum cache file size in megabytes. When the serialized cache JSON exceeds this limit, the cache is not written. Use this to prevent `.wiki/.cache.json` from growing too large in repos with hundreds of wiki pages or when `context_summarize` stores per-page previews.
-
-```
-cache_max_mb = 0
-```
-| Default | `0` (unlimited) |
-|--------:|-------------------|
-| Typical | `5`–`50` |
-
-The cache file is gitignored and recreated on demand.
 
 ## Ignored Paths
 

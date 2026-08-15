@@ -19,6 +19,49 @@ var files embed.FS
 // overwriting user-customised entrypoint files.
 var shimFiles = []string{"AGENTS.md", "CLAUDE.md"}
 
+// promptWorkflows are the canonical workflow files in .wiki-instructions/ that
+// are symlinked into the tool-specific directories.
+var promptWorkflows = []string{"ingest", "lint", "onboard", "query", "refresh", "upgrade", "watch"}
+
+// toolDirLinks maps destination-relative paths to symlink targets relative to
+// the directory containing the link. init and sync-prompts create these as
+// symlinks so that edits to the canonical .wiki-instructions/ files propagate
+// to every tool layer. On platforms where symlink creation fails (e.g.
+// Windows without developer mode), a regular copy is written instead.
+var toolDirLinks = buildToolDirLinks()
+
+func buildToolDirLinks() map[string]string {
+	links := map[string]string{
+		".github/instructions/wiki-maintainer.instructions.md": "../../.wiki-instructions/wiki-maintainer.md",
+	}
+	for _, w := range promptWorkflows {
+		target := "../../.wiki-instructions/" + w + ".md"
+		links[".github/prompts/wiki-"+w+".prompt.md"] = target
+		links[".claude/commands/wiki-"+w+".md"] = target
+	}
+	return links
+}
+
+// writeScaffoldFile writes an embedded scaffold file to dest. Files that have
+// a symlink mapping in toolDirLinks are written as symlinks to the canonical
+// .wiki-instructions/ source, falling back to a regular copy when symlink
+// creation fails.
+func writeScaffoldFile(dest, rel string, data []byte) error {
+	target, isLink := toolDirLinks[rel]
+	if !isLink {
+		return os.WriteFile(dest, data, 0o644)
+	}
+
+	// Replace any existing file (or stale symlink) at the destination.
+	if err := os.Remove(dest); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if err := os.Symlink(target, dest); err == nil {
+		return nil
+	}
+	return os.WriteFile(dest, data, 0o644)
+}
+
 // syncShims copies the shim files (AGENTS.md, CLAUDE.md) into destDir only
 // when they do not already exist. Returns the names of files written.
 func syncShims(destDir string) ([]string, error) {
@@ -75,6 +118,14 @@ func Init(destDir, wikiDir string) error {
 
 		dest := filepath.Join(destDir, rel)
 
+		// .wikirc is user-authored — never overwrite an existing one,
+		// matching the create-only semantics used for AGENTS.md/CLAUDE.md.
+		if rel == ".wikirc" {
+			if _, err := os.Stat(dest); err == nil {
+				return nil
+			}
+		}
+
 		if d.IsDir() {
 			return os.MkdirAll(dest, 0o755)
 		}
@@ -87,7 +138,7 @@ func Init(destDir, wikiDir string) error {
 		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
 			return err
 		}
-		return os.WriteFile(dest, data, 0o644)
+		return writeScaffoldFile(dest, rel, data)
 	}); err != nil {
 		return err
 	}
@@ -195,7 +246,7 @@ func syncEmbeddedDir(destDir, embedRoot string, updated *[]string) error {
 		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
 			return err
 		}
-		if err := os.WriteFile(dest, data, 0o644); err != nil {
+		if err := writeScaffoldFile(dest, rel, data); err != nil {
 			return err
 		}
 		*updated = append(*updated, rel)

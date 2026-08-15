@@ -53,7 +53,6 @@ If no candidates have durable wiki impact, report "no wiki update needed" and mo
 Enable and tune in `.wikirc`:
 
 ```ini
-watch_interval = 60   # seconds between polls (0 = disabled)
-stale_days = 30        # warn on pages unchanged for N days
-cache_enabled = true   # use .wiki/.cache.json for faster lookups
+watch_interval = 60   # seconds between polls (0 disables continuous watch)
+stale_days = 30        # warn on pages whose last git commit is older than N days
 ```

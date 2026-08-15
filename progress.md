@@ -1,9 +1,11 @@
 # Progress
 
 ## Status
-All improvement plan phases (1–5) implemented. Tier 7 bookkeeping items (see wiki/todo.md) remain deferred.
+All improvement plan phases (1–5) and the 2026-08 audit fixes implemented.
+Remaining backlog: agy integration (#9), recursive .wikirc lookup (#25), wiki templates (#31),
+multi-repo aggregation (#32), upgrade download-path mock tests (#54) — see wiki/todo.md.
 
-## Tasks
+## Tasks — Improvement Plan
 - [x] 1A. Document front matter schema in scaffold/wiki/schema.md and add front matter to all scaffold/wiki/*.md
 - [x] 1B. Add ParseFrontMatter() to internal/engine/ (minimal hand-written YAML parser)
 - [x] 1C. Add frontMatterChecker (required fields, valid status values, superseded_by linkage)
@@ -30,6 +32,20 @@ All improvement plan phases (1–5) implemented. Tier 7 bookkeeping items (see w
 - [x] 5D. Fix .wikirc vs .wikirc.example branch inconsistency (master...HEAD → main...HEAD)
 - [x] 5E. Replace manual f.Close() calls with defer f.Close() in engine.go
 
+## Tasks — 2026-08 Audit
+- [x] Release workflow: archive assets + checksums.txt matching `wiki-engine upgrade`
+- [x] Remove write-only cache subsystem (engine_cache.go, cache keys, --rebuild-cache)
+- [x] duplicate_threshold = 0 disables; ParsePositiveInt consolidated into config
+- [x] context_summarize wired as context default; watch honors watch_interval = 0
+- [x] --json init uses filtered args; lint JSON emits ok:false on failure; impact TTY guard
+- [x] Tool-layer symlinks in user repos (copy fallback); /wiki-watch wired to all tools
+- [x] Git-based stale detection (last commit date, mtime fallback)
+- [x] headingHierarchyChecker skips fenced code; span-based inline-code detection
+- [x] context --active reports active pages unreachable from index.md
+- [x] Init preserves existing .wikirc; usage() refreshed
+- [x] Doc sweep (repo-map, config, schema, README, pi skill, .wikirc templates)
+- [x] CI: integration suite + scaffold-sync drift guard
+
 ## Files Changed
 - `scaffold/wiki/*.md` and `scaffold/wiki/operations/*.md` (added front matter)
 - `wiki/*.md` and `wiki/operations/*.md` (added front matter to the project's own wiki pages)
@@ -51,7 +67,22 @@ All improvement plan phases (1–5) implemented. Tier 7 bookkeeping items (see w
 - `AGENTS.md` (replaced with the standard redirect shim pointing to the wiki)
 - `wiki/improvement-plan.md` & `wiki/todo.md` (updated status tracking of all implementation phases and bookkeeping items)
 - `README.md` (documented active lifecycles, linter selection check/skip flags, `/wiki-lint`, and newly supported .wikirc parameters)
+- `.github/workflows/release.yml` (packaged archives + checksums.txt for verified self-upgrade)
+- `internal/upgrade/upgrade.go` (shared HTTP client with timeout)
+- `internal/engine/engine_cache.go` (deleted)
+- `internal/config/config.go` + `config_test.go` (parseFloat 0 handling, ParsePositiveInt export)
+- `cmd/wiki-engine/main.go` + `main_test.go` (JSON envelope, init args, watch semantics, summarize default, impact guard, usage)
+- `internal/engine/engine_lint.go` (git staleness, code-fence heading skip, span-based inline code, Lint delegation)
+- `internal/engine/graph.go` + `graph_test.go` (ActiveUnlinkedPages, unlinked graph output)
+- `internal/scaffold/scaffold.go` + `scaffold_test.go` (symlink distribution, .wikirc preservation)
+- `scaffold/.github/prompts/wiki-watch.prompt.md`, `scaffold/.claude/commands/wiki-watch.md` (new symlinks)
+- `scaffold/.pi/skills/wiki/SKILL.md` (lifecycle-aware rewrite)
+- `scaffold/.wikirc`, `.wikirc.example`, `.wikirc` (cache keys removed, git staleness notes)
+- `wiki/repo-map.md`, `wiki/config.md`, `wiki/schema.md`, `wiki/todo.md`, `wiki/log.md`, `progress.md`
+- `test/integration_test.sh`, `Makefile`, `.github/workflows/test.yml` (CI integration + sync guard)
+- `.wiki-instructions/*` + scaffold copies (watch wiring, wiki-maintainer table)
 
 ## Notes
-- All rollout and polish phases are fully completed and verified via go unit tests, integration_test.sh, and make lint.
-- All integration and unit tests pass successfully.
+- All rollout, polish, and audit phases are completed and verified via go unit tests, integration_test.sh, and make lint.
+- CI now runs the integration suite and guards against scaffold/ ↔ internal/scaffold/files drift.
+- Verified upgrades require a release published with the new release.yml (assets + checksums.txt); older release tags lack checksums.txt and fall back to go install.
