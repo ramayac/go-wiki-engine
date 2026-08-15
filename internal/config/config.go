@@ -18,8 +18,6 @@ type Config struct {
 	StaleDays          int     // days after which an unchanged wiki page is flagged as stale
 	ContextSummarize   bool    // enable --summarize on wiki-engine context
 	WatchInterval      int     // seconds between watch polls (0 = disabled)
-	CacheEnabled       bool    // use .wiki/.cache.json for faster lookups
-	CacheMaxMB         int     // max cache file size in MB (0 = unlimited)
 	FailSeverity       string  // severity above/equal to which lint fails: error, warn, info
 }
 
@@ -33,8 +31,6 @@ func DefaultConfig() *Config {
 		StaleDays:          30,
 		ContextSummarize:   false,
 		WatchInterval:      0, // disabled by default
-		CacheEnabled:       true,
-		CacheMaxMB:         0, // unlimited
 		FailSeverity:       "warn",
 		Ignore: []string{
 			"wiki/",
@@ -116,11 +112,7 @@ func Load(dir string) (*Config, error) {
 		case "context_summarize":
 			cfg.ContextSummarize = parseBool(val, false)
 		case "watch_interval":
-			cfg.WatchInterval = parsePositiveInt(val, 0)
-		case "cache_enabled":
-			cfg.CacheEnabled = parseBool(val, true)
-		case "cache_max_mb":
-			cfg.CacheMaxMB = parsePositiveInt(val, 0)
+			cfg.WatchInterval = ParsePositiveInt(val, 0)
 		case "fail_severity":
 			cfg.FailSeverity = strings.ToLower(strings.TrimSpace(val))
 		}
@@ -129,10 +121,17 @@ func Load(dir string) (*Config, error) {
 }
 
 func parseLogLines(s string) int {
-	return parsePositiveInt(s, 10)
+	return ParsePositiveInt(s, 10)
 }
 
-func parsePositiveInt(s string, fallback int) int {
+// ParsePositiveInt parses a positive integer, returning fallback for
+// invalid, zero, or negative input. Zero is deliberately treated as
+// invalid here; callers that want zero (e.g. watch_interval) pass 0
+// as the fallback so "0" maps to 0.
+func ParsePositiveInt(s string, fallback int) int {
+	if strings.HasPrefix(strings.TrimSpace(s), "-") {
+		return fallback
+	}
 	n := parseInt(s, fallback)
 	if n <= 0 {
 		return fallback
@@ -167,12 +166,14 @@ func parseFloat(s string, fallback float64) float64 {
 	var result float64
 	decimal := false
 	divisor := 1.0
+	hasDigit := false
 	for _, c := range s {
 		if c == '.' && !decimal {
 			decimal = true
 			continue
 		}
 		if c >= '0' && c <= '9' {
+			hasDigit = true
 			d := float64(c - '0')
 			if decimal {
 				divisor *= 10
@@ -182,7 +183,10 @@ func parseFloat(s string, fallback float64) float64 {
 			}
 		}
 	}
-	if result <= 0 || result > 1 {
+	if !hasDigit {
+		return fallback
+	}
+	if result < 0 || result > 1 {
 		return fallback
 	}
 	return result

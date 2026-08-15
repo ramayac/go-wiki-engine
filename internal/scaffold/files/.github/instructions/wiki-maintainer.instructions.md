@@ -24,6 +24,7 @@ name: "Wiki Maintainer"
 | Periodic health check, fixing drift | `wiki-refresh` |
 | Structural issues, broken links, formatting errors, or missing metadata | `wiki-lint` |
 | Upgrading the CLI version and syncing prompt templates | `wiki-upgrade` |
+| Monitoring for un-ingested changes continuously | `wiki-watch` |
 
 ## Page Lifecycle Statuses
 
@@ -48,6 +49,17 @@ When writing or modifying any wiki page, always follow this checklist:
    description: "One-line summary of this page."
    ---
    ```
+7. **Cross-link pages:** Every page you create or update must link to its related pages (and link back where useful). The only intentional leaf is `log.md`. Verify with `wiki-engine context --active` that the page appears in the active graph and no unlinked warnings remain. `wiki-engine lint` surfaces violations via the `leaf-pages` check (info severity).
+
+## Graph Navigation & Search
+
+`wiki-engine context --active` is the **map** of the wiki — use it to navigate, not just to verify:
+
+- **Hierarchical map:** `wiki-engine context --active --sort=topo` lists pages parents-before-children, so you can read from the root outward.
+- **Recency map:** `--sort=chrono` lists recently-updated pages first — useful when chasing recent changes.
+- **Machine map:** `wiki-engine --json context --active` returns structured `nodes` + `edges` (+ `unlinked`) for programmatic navigation.
+- **Follow the edges:** the `->` lines are the wiki's cross-links — after reading a page, follow its outgoing links to its related pages.
+- **Find content, then read it:** locate topics with `wiki-engine search <term>` or `wiki-engine relevant <term>`, then read along the graph instead of opening every file.
 
 ## Progressive Disclosure & Summaries
 

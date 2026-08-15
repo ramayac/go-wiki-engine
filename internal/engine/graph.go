@@ -78,8 +78,9 @@ type WikiEdge struct {
 
 // WikiGraphJSON holds the serializable active wiki graph representation.
 type WikiGraphJSON struct {
-	Nodes []WikiNode `json:"nodes"`
-	Edges []WikiEdge `json:"edges"`
+	Nodes    []WikiNode `json:"nodes"`
+	Edges    []WikiEdge `json:"edges"`
+	Unlinked []string   `json:"unlinked,omitempty"`
 }
 
 // BuildWikiGraph constructs the active wiki graph starting BFS from index.md.
@@ -133,6 +134,9 @@ func (e *Engine) BuildWikiGraph() ([]WikiNode, []WikiEdge, error) {
 		}
 
 		links := ExtractLinks(content, filepath.Dir(absPath), wikiDir)
+		if links == nil {
+			links = []string{} // ensure JSON emits [] instead of null
+		}
 
 		nodesMap[cleanRel] = &WikiNode{
 			File:        cleanRel,
@@ -163,7 +167,7 @@ func (e *Engine) BuildWikiGraph() ([]WikiNode, []WikiEdge, error) {
 
 	// Filter node links to only reference active/reached nodes
 	for _, node := range nodesMap {
-		var activeLinks []string
+		activeLinks := make([]string, 0, len(node.Links))
 		for _, link := range node.Links {
 			if nodesMap[link] != nil {
 				activeLinks = append(activeLinks, link)
@@ -215,4 +219,43 @@ func resolveTime(node WikiNode) time.Time {
 		}
 	}
 	return node.ModTime
+}
+
+// ActiveUnlinkedPages returns active (current/planned) wiki pages that are
+// not reachable from index.md in the active graph. These pages are valid
+// but invisible to `context --active` until they are linked from the index.
+func (e *Engine) ActiveUnlinkedPages() ([]string, error) {
+	nodes, _, err := e.BuildWikiGraph()
+	if err != nil {
+		return nil, err
+	}
+	reachable := make(map[string]bool, len(nodes))
+	for _, n := range nodes {
+		reachable[n.File] = true
+	}
+
+	files, err := e.List()
+	if err != nil {
+		return nil, err
+	}
+	var unlinked []string
+	for _, rel := range files {
+		if !strings.HasSuffix(rel, ".md") {
+			continue
+		}
+		wikiRel, err := filepath.Rel(e.WikiPath(), filepath.Join(e.RootDir, rel))
+		if err != nil {
+			continue
+		}
+		wikiRel = filepath.ToSlash(wikiRel)
+		if reachable[wikiRel] {
+			continue
+		}
+		fm, _ := e.PageFrontMatter(rel)
+		if fm.Status == "current" || fm.Status == "planned" {
+			unlinked = append(unlinked, wikiRel)
+		}
+	}
+	sort.Strings(unlinked)
+	return unlinked, nil
 }

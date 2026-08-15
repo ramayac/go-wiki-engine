@@ -15,3 +15,9 @@ superseded_by: ""
 | 3 | Slash command coherence | completed | Prompts use active context and no overlap |
 | 4 | CI & self-linting | completed | Linter gates PRs in GitHub Actions pipeline |
 | 5 | Cleanup & polish | completed | Dead code removed and todo backlog cleaned |
+
+## Related
+
+- Open work: [todo.md](todo.md)
+- Activity history: [log.md](log.md)
+- Conventions: [README.md](README.md), [schema.md](schema.md)

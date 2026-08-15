@@ -13,8 +13,8 @@ superseded_by: ""
 - [repo-map.md](repo-map.md) | Current repo architecture, subcommands, multi-tool integration model, config, build path.
 - [log.md](log.md) | Append-only timeline of wiki maintenance.
 - [lessons.md](lessons.md) | Design insights and gap post-mortems from real usage sessions.
-- [todo.md](todo.md) | Improvement backlog ranked by difficulty.
-- [improvement-plan.md](improvement-plan.md) | Comprehensive deep analysis and phased improvement plan.
+- [todo.md](todo.md) | Open improvement backlog ranked by difficulty.
+- [improvement-plan.md](improvement-plan.md) | Deprecated — completed hardening roadmap; design decisions archived in lessons.md.
 - [config.md](config.md) | Full `.wikirc` configuration reference.
 
 ## Operations

@@ -16,7 +16,18 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 )
+
+// upgradeHTTPClient is shared by all upgrade network calls. Redirects are
+// followed manually via ErrUseLastResponse so getLatestTag can read the
+// Location header of GitHub's /releases/latest redirect.
+var upgradeHTTPClient = &http.Client{
+	Timeout: 30 * time.Second,
+	CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	},
+}
 
 const repoURL = "https://github.com/ramayac/go-wiki-engine"
 const module = "github.com/ramayac/go-wiki-engine/cmd/wiki-engine@latest"
@@ -99,12 +110,7 @@ func Run() error {
 }
 
 func getLatestTag() (string, error) {
-	client := &http.Client{
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
-	}
-	resp, err := client.Get(repoURL + "/releases/latest")
+	resp, err := upgradeHTTPClient.Get(repoURL + "/releases/latest")
 	if err != nil {
 		return "", err
 	}
@@ -128,7 +134,7 @@ func getLatestTag() (string, error) {
 }
 
 func downloadBytes(url string) ([]byte, error) {
-	resp, err := http.Get(url)
+	resp, err := upgradeHTTPClient.Get(url)
 	if err != nil {
 		return nil, err
 	}

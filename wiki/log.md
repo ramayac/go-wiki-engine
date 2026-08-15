@@ -7,6 +7,59 @@ superseded_by: ""
 
 Append-only timeline of wiki maintenance activity.
 
+## [2026-08-14] lint | document graph navigation and search in all instruction layers
+
+- Audit found the graph feature was only taught as a health check, not as a map. Added a "Graph Navigation & Search" section to `wiki-maintainer.md`: hierarchical map (`context --active --sort=topo`), recency map (`--sort=chrono`), machine map (`--json context --active` nodes/edges/unlinked), following `->` edges, and map-then-search flow.
+- Updated the query workflows (canonical prompt + live and scaffold `operations/query.md`) to map first, then search/relevant, then read along edges.
+- Added `wiki-engine context --active --sort=topo` to `wiki/README.md` shell-first navigation and to the pi.dev skill quick reference.
+- Propagated via `make sync-scaffold` + `wiki-engine sync-prompts`.
+
+## [2026-08-14] lint | removed progress.md, slimmed todo.md to open backlog
+
+- Deleted the root-level `progress.md` — its completion records are redundant with `wiki/log.md` and git history, and it was durable knowledge living outside the wiki.
+- Rewrote `wiki/todo.md` to track only the 5 open items (agy integration #9, recursive .wikirc lookup #25, wiki templates #31, multi-repo aggregation #32, upgrade download-path tests #54). All completed tiers were dropped; history stays in `log.md`.
+- Updated the index catalog description.
+
+## [2026-08-14] lint | leaf-pages checker enforces wiki connectivity
+
+- Added the `leaf-pages` checker (17th): flags active pages with no outgoing links at info severity — visible but non-failing by default (`fail_severity` defaults to `warn`). `log.md` is the only exempt leaf.
+- CLI now prints info-level issues even when lint passes ("wiki lint OK (info issues above)") so non-failing reminders are not hidden.
+- Cross-linked the scaffold wiki templates (README, schema, phases, repo-map, operations/\*) so a fresh `wiki-engine init` produces an already-connected wiki with zero leaf warnings.
+- Documented the checker in `schema.md`, `operations/lint.md`, `repo-map.md`, `README.md`, and the canonical `.wiki-instructions/`; propagated via `make sync-scaffold` + `wiki-engine sync-prompts`.
+
+## [2026-08-14] lint | enforce cross-linking in schema, operations, and instructions
+
+- Added a "Cross-Linking Rules" section to `wiki/schema.md` and the scaffold template: every active page must link to its related pages, `index.md` remains the reachability root, `log.md` is the only intentional leaf, and `wiki-engine context --active` verifies connectivity after edits.
+- Updated the ingest/query/lint operations docs (live + scaffold) with cross-link steps and checks so the rule is part of the repeatable procedures.
+- Extended the canonical `.wiki-instructions/` maintainer checklist (rule 7) and the ingest/refresh/query/lint/watch prompts to cross-link on every write and verify the graph after linting.
+- Propagated via `make sync-scaffold` + `wiki-engine sync-prompts`.
+
+## [2026-08-14] lint | cross-linked wiki pages into a navigable graph
+
+- Converted plain-text page references into standard relative Markdown links across `README.md`, `schema.md`, `phases.md`, `repo-map.md`, `config.md`, `lessons.md`, `todo.md`, and the three `operations/` pages.
+- The active graph is no longer a star: pages now encode their conceptual relationships (`schema → operations/config`, `repo-map → config/lint/ingest`, `operations → index/log/schema/config`, etc.) so `wiki-engine context --active` gives agents real traversal paths.
+- Replaced the stale `improvement-plan.md` reference in `todo.md` with links to `repo-map.md` and `lessons.md`.
+
+## [2026-08-14] lint | reference-style link checker, improvement plan retirement
+
+- Added a warn-level reference-style link check (`[text][ref]`) to the markdown-format checker with unit tests (improvement plan Goal 4, optional item).
+- Deprecated `wiki/improvement-plan.md` (`superseded_by: repo-map.md`) after folding its Part 7 design decisions into `wiki/lessons.md`.
+
+## [2026-08-14] ingest | 2026-08 audit fixes — release loop, cache removal, symlink distribution, git staleness
+
+Triggered by the 2026-08-14 deep audit of the project concept, work loop, and gaps.
+
+- `.github/workflows/release.yml` — assets packaged as `wiki-engine_<tag>_<goos>_<goarch>.{tar.gz,zip}` with a generated `checksums.txt`, matching what `wiki-engine upgrade` expects (the checksum verification path is now reachable).
+- `internal/upgrade/upgrade.go` — shared HTTP client with 30s timeout.
+- Removed `internal/engine/engine_cache.go` — the `.wiki/.cache.json` layer was write-only dead code; dropped `cache_enabled`/`cache_max_mb` config keys and `lint --rebuild-cache`.
+- `internal/config/config.go` — `parseFloat` accepts 0 so `duplicate_threshold = 0` disables the checker; exported `ParsePositiveInt` (was duplicated in main.go).
+- `cmd/wiki-engine/main.go` — `context` defaults to `context_summarize`; `watch` honors `watch_interval = 0` (exits with guidance, `--once` unaffected); `--json init` uses filtered args; lint JSON emits `ok:false` on failure; `impact` no longer blocks on an interactive stdin; usage text refreshed.
+- `internal/scaffold/scaffold.go` — `init`/`sync-prompts` write tool-layer files as symlinks to `.wiki-instructions/` (regular-copy fallback where symlinks fail); `init` preserves an existing `.wikirc`; wired `/wiki-watch` into `.github/prompts/` and `.claude/commands/`.
+- `internal/engine/engine_lint.go` — stale detection now uses git last-commit dates (mtime fallback outside git); heading checker skips fenced code blocks; inline-code detection is span-based instead of backtick counting; `Lint()` delegates to `LintWithOptions()`.
+- `internal/engine/graph.go` — added `ActiveUnlinkedPages()`; `context --active` warns about active pages not reachable from `index.md`.
+- `.github/workflows/test.yml` + `Makefile` — integration suite runs in CI (`make integration`); added a scaffold-sync drift guard.
+- Wiki sweep — repo-map, config, schema, todo, progress, and the pi.dev skill refreshed; `.wikirc` templates standardized and cache keys removed.
+
 ## [2026-06-10] ingest | checksum verification, prompt restructures, bookkeeping
 
 - Added checksum validation to self-upgrade, downloading GitHub release asset, computing SHA-256 hash, and verifying against checksums.txt.

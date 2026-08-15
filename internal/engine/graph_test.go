@@ -128,6 +128,13 @@ created: 2026-05-15
 			t.Errorf("edges from %s: got %q, want %q", from, actual, exp)
 		}
 	}
+
+	// Every node must serialize Links as an array, not null.
+	for _, n := range nodes {
+		if n.Links == nil {
+			t.Errorf("node %s has nil Links; want empty slice so JSON emits []", n.File)
+		}
+	}
 }
 
 func TestSortNodes(t *testing.T) {

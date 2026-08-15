@@ -3,6 +3,8 @@ package scaffold
 import (
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -50,6 +52,8 @@ func TestInit(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dest, ".wikirc")); os.IsNotExist(err) {
 		t.Error("missing .wikirc")
 	}
+
+	assertPromptSymlinks(t, dest)
 }
 
 func TestInitRefuses(t *testing.T) {
@@ -58,6 +62,26 @@ func TestInitRefuses(t *testing.T) {
 	err := Init(dest, "wiki")
 	if err == nil {
 		t.Error("Init should refuse when wiki/ already exists")
+	}
+}
+
+func TestInitPreservesExistingWikirc(t *testing.T) {
+	dest := t.TempDir()
+	custom := []byte("wiki_dir = \"custom\"\n")
+	if err := os.WriteFile(filepath.Join(dest, ".wikirc"), custom, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Init(dest, "wiki"); err != nil {
+		t.Fatalf("Init failed: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dest, ".wikirc"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != string(custom) {
+		t.Errorf(".wikirc was overwritten by Init:\n%s", data)
 	}
 }
 
@@ -153,6 +177,8 @@ func TestSyncPrompts(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dest, ".wikirc")); !os.IsNotExist(err) {
 		t.Error("SyncPrompts should not create .wikirc")
 	}
+
+	assertPromptSymlinks(t, dest)
 }
 
 func TestSyncPromptsOverwrites(t *testing.T) {
@@ -178,6 +204,41 @@ func TestSyncPromptsOverwrites(t *testing.T) {
 	}
 	if string(data) == "old content" {
 		t.Error("SyncPrompts did not overwrite stale file")
+	}
+}
+
+// assertPromptSymlinks verifies that the tool-layer files are real symlinks
+// pointing into .wiki-instructions/. Symlinks may not be available on all
+// platforms (e.g. Windows without developer mode), so the check is skipped
+// there — those platforms fall back to regular copies.
+func assertPromptSymlinks(t *testing.T, dest string) {
+	if runtime.GOOS == "windows" {
+		return
+	}
+	for _, f := range []string{
+		".github/prompts/wiki-ingest.prompt.md",
+		".github/prompts/wiki-watch.prompt.md",
+		".claude/commands/wiki-watch.md",
+		".github/instructions/wiki-maintainer.instructions.md",
+	} {
+		p := filepath.Join(dest, f)
+		fi, err := os.Lstat(p)
+		if err != nil {
+			t.Errorf("missing %s: %v", f, err)
+			continue
+		}
+		if fi.Mode()&os.ModeSymlink == 0 {
+			t.Errorf("%s should be a symlink, got mode %s", f, fi.Mode())
+			continue
+		}
+		target, err := os.Readlink(p)
+		if err != nil {
+			t.Errorf("readlink %s: %v", f, err)
+			continue
+		}
+		if !strings.Contains(target, ".wiki-instructions/") {
+			t.Errorf("%s symlink target %q does not point into .wiki-instructions/", f, target)
+		}
 	}
 }
 

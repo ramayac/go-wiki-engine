@@ -15,14 +15,24 @@ jobs:
         include:
           - goos: linux
             goarch: amd64
+            ext: ""
+            archive: tar.gz
           - goos: linux
             goarch: arm64
+            ext: ""
+            archive: tar.gz
           - goos: darwin
             goarch: amd64
+            ext: ""
+            archive: tar.gz
           - goos: darwin
             goarch: arm64
+            ext: ""
+            archive: tar.gz
           - goos: windows
             goarch: amd64
+            ext: ".exe"
+            archive: zip
     steps:
       - uses: actions/checkout@v4
 
@@ -30,7 +40,11 @@ jobs:
         with:
           go-version: "1.24"
 
-      - name: Build
+      # Asset names follow the convention expected by `wiki-engine upgrade`
+      # (matchAsset in internal/upgrade): wiki-engine_<tag>_<goos>_<goarch>.{tar.gz,zip}
+      # with the binary inside named wiki-engine(.exe).
+      - name: Build and package
+        id: build
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
@@ -39,14 +53,40 @@ jobs:
           VERSION="${GITHUB_REF_NAME}"
           COMMIT="$(git rev-parse --short HEAD)"
           DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          EXT=""
-          if [ "$GOOS" = "windows" ]; then EXT=".exe"; fi
-          BINARY="wiki-engine-${GOOS}-${GOARCH}${EXT}"
+          BINARY="wiki-engine${{ matrix.ext }}"
+          ARCHIVE="wiki-engine_${VERSION}_${{ matrix.goos }}_${{ matrix.goarch }}.${{ matrix.archive }}"
           go build -ldflags "-s -w -X main.version=${VERSION}-${COMMIT}-${DATE}" \
             -o "${BINARY}" ./cmd/wiki-engine
-          echo "BINARY=${BINARY}" >> "$GITHUB_ENV"
+          if [ "${{ matrix.archive }}" = "tar.gz" ]; then
+            tar -czf "${ARCHIVE}" "${BINARY}"
+          else
+            zip -q "${ARCHIVE}" "${BINARY}"
+          fi
+          echo "archive=${ARCHIVE}" >> "$GITHUB_OUTPUT"
 
-      - name: Upload release asset
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ steps.build.outputs.archive }}
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum * > checksums.txt
+          cat checksums.txt
+
+      - name: Upload release assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "$GITHUB_REF_NAME" "$BINARY"
+        run: |
+          gh release upload "$GITHUB_REF_NAME" dist/*

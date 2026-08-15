@@ -30,6 +30,30 @@ test -f .github/prompts/wiki-ingest.prompt.md || { echo "FAIL: prompts missing";
 test -d .pi/skills/wiki || { echo "FAIL: pi skill missing"; exit 1; }
 echo "  ok"
 
+# Test: tool layers are symlinks (skip on platforms without symlink support)
+echo "--- prompt symlinks ---"
+case "$(uname -s 2>/dev/null || echo Windows)" in
+  Windows|MINGW*|MSYS*|CYGWIN*) echo "  skipped (no symlinks)" ;;
+  *)
+    test -L .github/prompts/wiki-ingest.prompt.md || { echo "FAIL: prompts should be symlinks"; exit 1; }
+    test -L .github/prompts/wiki-watch.prompt.md || { echo "FAIL: watch prompt symlink missing"; exit 1; }
+    test -L .claude/commands/wiki-watch.md || { echo "FAIL: claude watch symlink missing"; exit 1; }
+    echo "  ok"
+    ;;
+esac
+
+# Test: --json init creates wiki/ (not a directory named after the flag)
+echo "--- json init ---"
+mkdir -p "$TMPDIR/jsontest"
+cd "$TMPDIR/jsontest"
+git init -q -b main
+git config user.email "test@test"
+git config user.name "Test"
+"$BIN" --json init
+test -d wiki || { echo "FAIL: --json init did not create wiki/"; exit 1; }
+cd "$TMPDIR"
+echo "  ok"
+
 # Test: list
 echo "--- list ---"
 count=$("$BIN" list | wc -l)
@@ -100,19 +124,15 @@ git add main.go && git commit -q -m "source change"
 "$BIN" impact main.go | grep -q "main.go" || { echo "FAIL: impact failed"; exit 1; }
 echo "  ok"
 
-# Test: lint --rebuild-cache (cache enabled by default)
-echo "--- lint --rebuild-cache ---"
-"$BIN" lint --rebuild-cache 2>&1 || true
-test -f wiki/.cache.json || { echo "FAIL: cache file not created"; exit 1; }
-echo "  ok"
-
-# Test: duplicate detection (disabled by threshold, but check it doesn't crash)
+# Test: duplicate detection (low threshold)
 echo "--- duplicate detection ---"
 echo -e "---\nstatus: current\ndescription: dup1\n---\n# Duplicate page" > wiki/dup1.md
 echo -e "---\nstatus: current\ndescription: dup2\n---\n# Duplicate page" > wiki/dup2.md
 # Set a very low threshold to trigger it
 echo 'duplicate_threshold = 0.1' >> .wikirc
-"$BIN" lint 2>&1 | grep -q "duplicate-content" && echo "  duplicate detected" || echo "  ok (no false positive)"
+out=$("$BIN" lint 2>&1 || true)
+echo "$out" | grep -q "duplicate-content" || { echo "FAIL: duplicate detection missing"; exit 1; }
+echo "  duplicate detected"
 
 # Test: active flag on list and context
 echo "--- active flag ---"
@@ -149,6 +169,36 @@ echo 'duplicate_threshold = 0.1' >> .wikirc
 
 # 3. normal lint should fail because of duplicate-content
 "$BIN" lint && { echo "FAIL: expected duplicate lint failure"; exit 1; } || true
+echo "  ok"
+
+# Test: failing lint reports ok:false in JSON envelope
+echo "--- lint json envelope ---"
+if "$BIN" --json lint >/dev/null 2>&1; then
+  echo "FAIL: failing lint should exit non-zero"
+  exit 1
+fi
+out=$("$BIN" --json lint 2>/dev/null || true)
+echo "$out" | grep -q '"ok": false' || { echo "FAIL: failing lint should report ok:false"; exit 1; }
+echo "  ok"
+
+# Test: duplicate_threshold = 0 disables duplicate detection
+echo "--- duplicate_threshold 0 ---"
+echo 'duplicate_threshold = 0' >> .wikirc
+"$BIN" lint --check=duplicate-content || { echo "FAIL: duplicate-content should be disabled with threshold 0"; exit 1; }
+echo "  ok"
+
+# Test: context_summarize = true defaults context to --summarize mode
+echo "--- context_summarize default ---"
+echo 'context_summarize = true' >> .wikirc
+"$BIN" --json context | grep -q '"summarized": true' || { echo "FAIL: context_summarize should default context to summarize mode"; exit 1; }
+echo "  ok"
+
+# Test: continuous watch is disabled when watch_interval = 0
+echo "--- watch disabled ---"
+if "$BIN" watch >/dev/null 2>&1; then
+  echo "FAIL: watch with watch_interval=0 should exit non-zero"
+  exit 1
+fi
 echo "  ok"
 
 echo ""

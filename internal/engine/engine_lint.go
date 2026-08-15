@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -17,7 +18,7 @@ import (
 type Severity int
 
 const (
-	SevInfo  Severity = iota
+	SevInfo Severity = iota
 	SevWarn
 	SevError
 )
@@ -198,10 +199,21 @@ func (c *crossPageLinksChecker) Check(e *Engine) ([]Issue, error) {
 	return issues, nil
 }
 
+// inlineCodeSpanRe matches single and double backtick inline code spans.
+// Double-backtick spans must be attempted first so that the empty span
+// between two adjacent backticks does not win the leftmost match.
+var inlineCodeSpanRe = regexp.MustCompile("``[^`]+``|`[^`]*`")
+
+// isInsideInlineCode reports whether the byte range [start, end) overlaps an
+// inline code span on the line. Span-based detection replaces the previous
+// naive backtick counting, which misfired on runs of backticks.
 func isInsideInlineCode(line string, start, end int) bool {
-	before := line[:start]
-	after := line[end:]
-	return strings.Count(before, "`")%2 != 0 && strings.Count(after, "`")%2 != 0
+	for _, loc := range inlineCodeSpanRe.FindAllStringIndex(line, -1) {
+		if start < loc[1] && end > loc[0] {
+			return true
+		}
+	}
+	return false
 }
 
 // markdownFormatChecker detects malformed markdown links or non-standard link formats (like wiki-style [[links]]).
@@ -210,11 +222,12 @@ type markdownFormatChecker struct{}
 func (c *markdownFormatChecker) Name() string { return "markdown-format" }
 
 var (
-	wikiLinkRe   = regexp.MustCompile(`\[\[([^\]]+)\]\]`)
-	spacedLinkRe = regexp.MustCompile(`\[([^\]]*)\]\s+\(([^)]*)\)`)
-	emptyLinkRe  = regexp.MustCompile(`\[([^\]]*)\]\(\s*\)`) // empty target like `[text]()`
-	emptyTextRe  = regexp.MustCompile(`\[\s*\]\(([^)]+)\)`)  // empty link text like `[](target)`
-	linkOpenRe   = regexp.MustCompile(`\[([^\]]+)\]\(([^)]*)`)
+	wikiLinkRe      = regexp.MustCompile(`\[\[([^\]]+)\]\]`)
+	spacedLinkRe    = regexp.MustCompile(`\[([^\]]*)\]\s+\(([^)]*)\)`)
+	emptyLinkRe     = regexp.MustCompile(`\[([^\]]*)\]\(\s*\)`) // empty target like `[text]()`
+	emptyTextRe     = regexp.MustCompile(`\[\s*\]\(([^)]+)\)`)  // empty link text like `[](target)`
+	linkOpenRe      = regexp.MustCompile(`\[([^\]]+)\]\(([^)]*)`)
+	referenceLinkRe = regexp.MustCompile(`\[[^\]]+\]\[[^\]]*\]`) // reference-style links like `[text][ref]`
 )
 
 func (c *markdownFormatChecker) Check(e *Engine) ([]Issue, error) {
@@ -321,6 +334,21 @@ func (c *markdownFormatChecker) Check(e *Engine) ([]Issue, error) {
 					})
 				}
 			}
+
+			// 6. Check for reference-style links [text][ref]
+			for _, loc := range referenceLinkRe.FindAllStringIndex(line, -1) {
+				if isInsideInlineCode(line, loc[0], loc[1]) {
+					continue
+				}
+				m := line[loc[0]:loc[1]]
+				issues = append(issues, Issue{
+					Severity: SevWarn,
+					Check:    c.Name(),
+					File:     rel,
+					Line:     lineNo + 1,
+					Message:  fmt.Sprintf("reference-style link: %s (use [text](path) instead)", m),
+				})
+			}
 		}
 	}
 	return issues, nil
@@ -394,59 +422,72 @@ func (c *headingHierarchyChecker) Check(e *Engine) ([]Issue, error) {
 			continue
 		}
 		abs := filepath.Join(e.RootDir, rel)
-		f, err := os.Open(abs)
-		if err != nil {
-			continue
-		}
-		scanner := bufio.NewScanner(f)
-		lineNo := 0
-		lastLevel := 0
-		h1Count := 0
-		inHTMLComment := false
-		for scanner.Scan() {
-			lineNo++
-			text := scanner.Text()
-			trimmed := strings.TrimSpace(text)
-
-			// Track HTML comments (<!-- ... -->).
-			if strings.Contains(trimmed, "<!--") {
-				inHTMLComment = true
+		func() {
+			f, err := os.Open(abs)
+			if err != nil {
+				return
 			}
-			if inHTMLComment {
-				if strings.Contains(trimmed, "-->") {
-					inHTMLComment = false
+			defer f.Close()
+
+			scanner := bufio.NewScanner(f)
+			lineNo := 0
+			lastLevel := 0
+			h1Count := 0
+			inHTMLComment := false
+			inCodeBlock := false
+			for scanner.Scan() {
+				lineNo++
+				text := scanner.Text()
+				trimmed := strings.TrimSpace(text)
+
+				// Skip fenced code blocks: `#` lines inside ``` fences are code, not headings.
+				if strings.HasPrefix(trimmed, "```") {
+					inCodeBlock = !inCodeBlock
+					continue
 				}
-				continue
-			}
+				if inCodeBlock {
+					continue
+				}
 
-			m := headingLevelRe.FindStringSubmatch(text)
-			if m == nil {
-				continue
+				// Track HTML comments (<!-- ... -->).
+				if strings.Contains(trimmed, "<!--") {
+					inHTMLComment = true
+				}
+				if inHTMLComment {
+					if strings.Contains(trimmed, "-->") {
+						inHTMLComment = false
+					}
+					continue
+				}
+
+				m := headingLevelRe.FindStringSubmatch(text)
+				if m == nil {
+					continue
+				}
+				level := len(m[1])
+				if level == 1 {
+					h1Count++
+				}
+				if lastLevel > 0 && level > lastLevel+1 {
+					issues = append(issues, Issue{
+						Severity: SevWarn,
+						Check:    c.Name(),
+						File:     rel,
+						Line:     lineNo,
+						Message:  fmt.Sprintf("heading level skip: h%d → h%d", lastLevel, level),
+					})
+				}
+				lastLevel = level
 			}
-			level := len(m[1])
-			if level == 1 {
-				h1Count++
-			}
-			if lastLevel > 0 && level > lastLevel+1 {
+			if h1Count > 1 {
 				issues = append(issues, Issue{
-					Severity: SevWarn,
+					Severity: SevInfo,
 					Check:    c.Name(),
 					File:     rel,
-					Line:     lineNo,
-					Message:  fmt.Sprintf("heading level skip: h%d → h%d", lastLevel, level),
+					Message:  fmt.Sprintf("multiple h1 headings (%d)", h1Count),
 				})
 			}
-			lastLevel = level
-		}
-		f.Close()
-		if h1Count > 1 {
-			issues = append(issues, Issue{
-				Severity: SevInfo,
-				Check:    c.Name(),
-				File:     rel,
-				Message:  fmt.Sprintf("multiple h1 headings (%d)", h1Count),
-			})
-		}
+		}()
 	}
 	return issues, nil
 }
@@ -740,7 +781,7 @@ func (c *duplicateContentChecker) Check(e *Engine) ([]Issue, error) {
 
 	// Collect .md files with their word-sets.
 	type page struct {
-		file string
+		file  string
 		words map[string]bool
 	}
 	var pages []page
@@ -802,6 +843,30 @@ func jaccardSimilarity(a, b map[string]bool) float64 {
 	return float64(intersection) / float64(union)
 }
 
+// pageLastModified returns the date the page was last modified, preferring the
+// last commit date from git history. This avoids the false "everything is
+// stale" signal that filesystem mtimes produce after a fresh clone (all files
+// share the checkout time). Falls back to mtime outside git repos or when git
+// fails.
+func (e *Engine) pageLastModified(rel string, info os.FileInfo) time.Time {
+	gitPath := filepath.ToSlash(filepath.Join(e.Cfg.WikiDir, rel))
+	cmd := exec.Command("git", "log", "-1", "--format=%cd", "--date=short", "--", gitPath)
+	cmd.Dir = e.RootDir
+	out, err := cmd.Output()
+	if err != nil {
+		return info.ModTime()
+	}
+	s := strings.TrimSpace(string(out))
+	if s == "" {
+		return info.ModTime()
+	}
+	t, err := time.Parse("2006-01-02", s)
+	if err != nil {
+		return info.ModTime()
+	}
+	return t
+}
+
 // staleContentChecker detects wiki pages that haven't been updated recently
 // despite active source-file changes. Stale threshold comes from .wikirc stale_days.
 type staleContentChecker struct{}
@@ -839,7 +904,7 @@ func (c *staleContentChecker) Check(e *Engine) ([]Issue, error) {
 			return nil
 		}
 
-		if info.ModTime().Before(staleThreshold) {
+		if e.pageLastModified(rel, info).Before(staleThreshold) {
 			severity := SevInfo
 			msg := fmt.Sprintf("not updated in %d+ days", e.Cfg.StaleDays)
 			if hasSourceChanges {
@@ -1026,7 +1091,7 @@ func (c *indexFormatChecker) Check(e *Engine) ([]Issue, error) {
 
 		if bulletLinkRe.MatchString(line) {
 			parts := strings.SplitN(line, "|", 2)
-			
+
 			match := linkRe.FindStringSubmatch(parts[0])
 			if len(match) < 3 {
 				issues = append(issues, Issue{
@@ -1089,7 +1154,7 @@ func (c *bareUrlChecker) Check(e *Engine) ([]Issue, error) {
 	}
 
 	htmlAnchorRe := regexp.MustCompile(`</?[aA]\b`)
-	inlineCodeRe := regexp.MustCompile("`[^`]*`|``[^`]+``")
+	inlineCodeRe := regexp.MustCompile("``[^`]+``|`[^`]*`")
 	markdownLinkRe := regexp.MustCompile(`!?\[[^\]]*\]\([^)]+\)`)
 	bareUrlRe := regexp.MustCompile("https?://[^\\s`<>\\)]+")
 
@@ -1144,6 +1209,62 @@ func (c *bareUrlChecker) Check(e *Engine) ([]Issue, error) {
 	return issues, nil
 }
 
+// leafPagesChecker flags active pages with no outgoing links to other wiki
+// pages. A connected wiki is a graph, not a star: every active page should
+// reference its related pages. log.md is the only intentional leaf because it
+// is append-only. Severity is info so violations surface without failing the
+// default lint gate (fail_severity defaults to warn).
+type leafPagesChecker struct{}
+
+func (c *leafPagesChecker) Name() string { return "leaf-pages" }
+
+func (c *leafPagesChecker) Check(e *Engine) ([]Issue, error) {
+	var issues []Issue
+	wikiDir := e.WikiPath()
+	files, err := e.List()
+	if err != nil {
+		return nil, err
+	}
+	for _, rel := range files {
+		if !strings.HasSuffix(rel, ".md") {
+			continue
+		}
+		wikiRel, err := filepath.Rel(wikiDir, filepath.Join(e.RootDir, rel))
+		if err != nil {
+			continue
+		}
+		wikiRel = filepath.ToSlash(wikiRel)
+
+		// The append-only timeline is the one intentional leaf.
+		if wikiRel == "log.md" {
+			continue
+		}
+
+		abs := filepath.Join(e.RootDir, rel)
+		data, err := os.ReadFile(abs)
+		if err != nil {
+			continue
+		}
+		fm, _, _ := ParseFrontMatter(string(data))
+
+		// Only active pages participate in the graph.
+		if fm.Status == "legacy" || fm.Status == "deprecated" {
+			continue
+		}
+
+		links := ExtractLinks(string(data), filepath.Dir(abs), wikiDir)
+		if len(links) == 0 {
+			issues = append(issues, Issue{
+				Severity: SevInfo,
+				Check:    c.Name(),
+				File:     rel,
+				Message:  "leaf page: no outgoing links to related pages (log.md is the only intentional leaf)",
+			})
+		}
+	}
+	return issues, nil
+}
+
 // allCheckers returns the default set of lint checkers, ordered by priority.
 func allCheckers() []Checker {
 	return []Checker{
@@ -1155,6 +1276,7 @@ func allCheckers() []Checker {
 		&crossPageLinksChecker{},
 		&markdownFormatChecker{},
 		&orphansChecker{},
+		&leafPagesChecker{},
 		&headingHierarchyChecker{},
 		&logHeadingsChecker{},
 		&logChronologyChecker{},
@@ -1168,63 +1290,7 @@ func allCheckers() []Checker {
 
 // Lint runs all registered checkers and aggregates the results.
 func (e *Engine) Lint() LintResult {
-	var allIssues []Issue
-	allIssues = make([]Issue, 0)
-	for _, c := range allCheckers() {
-		issues, err := c.Check(e)
-		if err != nil {
-			allIssues = append(allIssues, Issue{
-				Severity: SevError,
-				Check:    c.Name(),
-				Message:  fmt.Sprintf("checker %s failed: %v", c.Name(), err),
-			})
-			continue
-		}
-		allIssues = append(allIssues, issues...)
-	}
-
-	// Stable sort by file then line.
-	sort.SliceStable(allIssues, func(i, j int) bool {
-		if allIssues[i].File != allIssues[j].File {
-			return allIssues[i].File < allIssues[j].File
-		}
-		return allIssues[i].Line < allIssues[j].Line
-	})
-
-	// Build backward-compatible Messages.
-	var msgs []string
-	for _, iss := range allIssues {
-		if iss.Line > 0 {
-			msgs = append(msgs, fmt.Sprintf("%s:%d: [%s] %s", iss.File, iss.Line, iss.Check, iss.Message))
-		} else {
-			msgs = append(msgs, fmt.Sprintf("%s: [%s] %s", iss.File, iss.Check, iss.Message))
-		}
-	}
-
-	// Parse fail threshold
-	failThreshold := SevWarn // default fallback
-	switch strings.ToLower(e.Cfg.FailSeverity) {
-	case "info":
-		failThreshold = SevInfo
-	case "warn":
-		failThreshold = SevWarn
-	case "error":
-		failThreshold = SevError
-	}
-
-	hasFailure := false
-	for _, iss := range allIssues {
-		if iss.Severity >= failThreshold {
-			hasFailure = true
-			break
-		}
-	}
-
-	return LintResult{
-		OK:       !hasFailure,
-		Messages: msgs,
-		Issues:   allIssues,
-	}
+	return e.LintWithOptions(nil, nil)
 }
 
 // LintWithOptions runs specified checkers, skipping any listed in skip.

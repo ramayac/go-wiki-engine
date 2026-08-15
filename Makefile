@@ -8,7 +8,7 @@ LDFLAGS   := -s -w -X main.version=$(VERSION)-$(BUILD_DATE)
 
 .DEFAULT_GOAL := help
 
-.PHONY: help build install test lint vet clean sync-scaffold wiki-lint
+.PHONY: help build install test lint vet clean sync-scaffold wiki-lint integration
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-18s %s\n", $$1, $$2}'
@@ -40,3 +40,6 @@ sync-scaffold: ## Copy scaffold/ into internal/scaffold/files/ for embedding (fo
 	rm -rf internal/scaffold/files
 	cp -rL scaffold internal/scaffold/files
 	@echo "synced scaffold → internal/scaffold/files"
+
+integration: build ## Run the end-to-end integration test suite
+	bash test/integration_test.sh

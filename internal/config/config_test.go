@@ -113,14 +113,49 @@ func TestParseLogLines(t *testing.T) {
 	}
 }
 
+func TestParsePositiveInt(t *testing.T) {
+	tests := []struct {
+		input    string
+		fallback int
+		want     int
+	}{
+		{"10", 5, 10},
+		{"0", 5, 5},
+		{"0", 0, 0},
+		{"abc", 5, 5},
+		{"25", 5, 25},
+		{"-1", 5, 5},
+		{"", 5, 5},
+	}
+	for _, tt := range tests {
+		got := ParsePositiveInt(tt.input, tt.fallback)
+		if got != tt.want {
+			t.Errorf("ParsePositiveInt(%q, %d) = %d, want %d", tt.input, tt.fallback, got, tt.want)
+		}
+	}
+}
+
+func TestDuplicateThresholdZeroDisables(t *testing.T) {
+	dir := t.TempDir()
+	content := "duplicate_threshold = 0\n"
+	if err := os.WriteFile(filepath.Join(dir, ".wikirc"), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.DuplicateThreshold != 0 {
+		t.Errorf("DuplicateThreshold = %f, want 0 (disabled)", cfg.DuplicateThreshold)
+	}
+}
+
 func TestLoadNewKeys(t *testing.T) {
 	dir := t.TempDir()
 	content := `wiki_dir = "docs"
 duplicate_threshold = 0.5
 stale_days = 14
 context_summarize = true
-cache_enabled = false
-cache_max_mb = 10
 watch_interval = 120
 fail_severity = "error"
 `
@@ -139,12 +174,6 @@ fail_severity = "error"
 	}
 	if !cfg.ContextSummarize {
 		t.Error("ContextSummarize should be true")
-	}
-	if cfg.CacheEnabled {
-		t.Error("CacheEnabled should be false")
-	}
-	if cfg.CacheMaxMB != 10 {
-		t.Errorf("CacheMaxMB = %d, want 10", cfg.CacheMaxMB)
 	}
 	if cfg.WatchInterval != 120 {
 		t.Errorf("WatchInterval = %d, want 120", cfg.WatchInterval)
@@ -185,9 +214,9 @@ func TestParseFloat(t *testing.T) {
 	}{
 		{"0.7", 0.5, 0.7},
 		{"1.0", 0.5, 1.0},
-		{"0.0", 0.5, 0.5},     // <=0 falls back
-		{"2.0", 0.5, 0.5},     // >1 falls back
-		{"abc", 0.3, 0.3},     // non-numeric falls back
+		{"0.0", 0.5, 0.0}, // 0 disables the checker
+		{"2.0", 0.5, 0.5}, // >1 falls back
+		{"abc", 0.3, 0.3}, // non-numeric falls back
 		{"0.555", 0.5, 0.555},
 	}
 	for _, tt := range tests {

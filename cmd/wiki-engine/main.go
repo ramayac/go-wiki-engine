@@ -44,20 +44,21 @@ func argsAfterFilters() ([]string, bool) {
 	return filtered, useJSON
 }
 
+// writeJSON writes the standard success envelope.
 func writeJSON(data interface{}) {
+	writeJSONResult(data, true, "")
+}
+
+// writeJSONResult writes the standard envelope with an explicit OK status.
+// errMsg is emitted only when ok is false.
+func writeJSONResult(data interface{}, ok bool, errMsg string) {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
-	out := engine.JSONOutput{OK: true, Data: data}
+	out := engine.JSONOutput{OK: ok, Data: data, Error: errMsg}
 	if err := enc.Encode(out); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
-}
-
-func writeJSONError(err error) {
-	enc := json.NewEncoder(os.Stdout)
-	out := engine.JSONOutput{OK: false, Error: err.Error()}
-	enc.Encode(out)
 }
 
 func main() {
@@ -73,7 +74,7 @@ func main() {
 
 	switch cmd {
 	case "init":
-		runInit()
+		runInit(args)
 	case "sync-prompts":
 		runSyncPrompts()
 	case "version":
@@ -92,7 +93,10 @@ func main() {
 }
 
 func runSyncPrompts() {
-	dir, _ := os.Getwd()
+	dir, err := os.Getwd()
+	if err != nil {
+		fatal(err)
+	}
 
 	var preExistingShims []string
 	for _, name := range []string{"AGENTS.md", "CLAUDE.md"} {
@@ -116,16 +120,19 @@ func runSyncPrompts() {
 
 	if len(preExistingShims) > 0 {
 		fmt.Fprintf(os.Stdout, "\ntip: %s already exist and were not modified.\n", strings.Join(preExistingShims, " and "))
-		fmt.Fprintln(os.Stdout, "     If they contain custom instructions, run /wiki-migrate-shims to migrate")
-		fmt.Fprintln(os.Stdout, "     that content into the wiki and replace the files with standard redirect shims.")
+		fmt.Fprintln(os.Stdout, "     Custom content in these files is preserved. Review it against wiki/README.md,")
+		fmt.Fprintln(os.Stdout, "     then run wiki-engine sync-prompts again after adopting the standard redirect shims.")
 	}
 }
 
-func runInit() {
-	dir, _ := os.Getwd()
+func runInit(args []string) {
+	dir, err := os.Getwd()
+	if err != nil {
+		fatal(err)
+	}
 	wikiDir := "wiki"
-	if len(os.Args) > 2 {
-		wikiDir = os.Args[2]
+	if len(args) > 2 {
+		wikiDir = args[2]
 	}
 	if err := scaffold.Init(dir, wikiDir); err != nil {
 		fatal(err)
@@ -214,7 +221,7 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 	case "log-tail":
 		n := cfg.LogLines
 		if len(args) > 2 {
-			n = parsePositiveInt(args[2], cfg.LogLines)
+			n = config.ParsePositiveInt(args[2], cfg.LogLines)
 		}
 		lines, err := eng.LogTail(n)
 		if err != nil {
@@ -266,13 +273,7 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 		var check []string
 		var skip []string
 		for _, a := range args[2:] {
-			if a == "--rebuild-cache" {
-				if err := eng.RebuildCache(); err != nil {
-					fmt.Fprintf(os.Stderr, "warning: cache rebuild failed: %v\n", err)
-				} else {
-					fmt.Fprintln(os.Stderr, "cache rebuilt")
-				}
-			} else if strings.HasPrefix(a, "--check=") {
+			if strings.HasPrefix(a, "--check=") {
 				val := strings.TrimPrefix(a, "--check=")
 				if val != "" {
 					check = strings.Split(val, ",")
@@ -286,14 +287,26 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 		}
 		result := eng.LintWithOptions(check, skip)
 		if useJSON {
-			writeJSON(result.Issues)
+			errMsg := ""
+			if !result.OK {
+				errMsg = "lint issues found"
+			}
+			writeJSONResult(result.Issues, result.OK, errMsg)
 			if !result.OK {
 				os.Exit(1)
 			}
 			return
 		}
 		if result.OK {
-			fmt.Println("wiki lint OK")
+			if len(result.Messages) > 0 {
+				// Info-only issues pass the gate but should still be visible.
+				for _, m := range result.Messages {
+					fmt.Fprintln(os.Stderr, m)
+				}
+				fmt.Println("wiki lint OK (info issues above)")
+			} else {
+				fmt.Println("wiki lint OK")
+			}
 		} else {
 			for _, m := range result.Messages {
 				fmt.Fprintln(os.Stderr, m)
@@ -330,7 +343,7 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 
 	case "context":
 		minimal := false
-		summarize := false
+		summarize := cfg.ContextSummarize
 		active := false
 		sortBy := "chrono"
 		for _, a := range args[2:] {
@@ -355,8 +368,13 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 			}
 			engine.SortNodes(nodes, sortBy)
 
+			unlinked, uerr := eng.ActiveUnlinkedPages()
+			if uerr != nil {
+				unlinked = nil
+			}
+
 			if useJSON {
-				writeJSON(engine.WikiGraphJSON{Nodes: nodes, Edges: edges})
+				writeJSON(engine.WikiGraphJSON{Nodes: nodes, Edges: edges, Unlinked: unlinked})
 				return
 			}
 
@@ -367,6 +385,12 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 					fmt.Printf("  -> %s\n", dest)
 				}
 				fmt.Println()
+			}
+			if len(unlinked) > 0 {
+				fmt.Println("== warning: active pages not linked from index.md ==")
+				for _, u := range unlinked {
+					fmt.Printf("  %s\n", u)
+				}
 			}
 			return
 		}
@@ -432,7 +456,7 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 		query := args[2]
 		topN := 5
 		if len(args) > 3 {
-			topN = parsePositiveInt(args[3], 5)
+			topN = config.ParsePositiveInt(args[3], 5)
 		}
 		results, err := eng.Relevant(query, topN)
 		if err != nil {
@@ -452,6 +476,12 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 		if len(args) > 2 {
 			changedFiles = args[2:]
 		} else {
+			// If stdin is an interactive terminal, there is nothing to read —
+			// show usage instead of blocking.
+			if fi, err := os.Stdin.Stat(); err == nil && fi.Mode()&os.ModeCharDevice != 0 {
+				fmt.Fprintln(os.Stderr, "usage: wiki-engine impact <file...>  (or pipe from wiki-engine changed)")
+				os.Exit(1)
+			}
 			// Read from stdin (pipe from wiki-engine changed).
 			scanner := bufio.NewScanner(os.Stdin)
 			for scanner.Scan() {
@@ -524,14 +554,17 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 				once = true
 			}
 		}
-		interval := cfg.WatchInterval
-		if interval <= 0 {
-			interval = 60
-		}
 
 		if once {
 			runWatchCycle(eng, useJSON)
 			return
+		}
+
+		interval := cfg.WatchInterval
+		if interval <= 0 {
+			fmt.Fprintln(os.Stderr, "watch_interval is 0 in .wikirc — continuous watch is disabled.")
+			fmt.Fprintln(os.Stderr, "Set watch_interval to a positive number of seconds to enable, or run: wiki-engine watch --once")
+			os.Exit(1)
 		}
 
 		// Continuous polling.
@@ -568,11 +601,12 @@ Commands:
   changed [diff-range]    List non-wiki files changed in a git diff range
   candidates [diff-range] Filter changed files to ingest-worthy candidates
   stats                   Show aggregate wiki statistics
-  context [--minimal] [--summarize] Condensed wiki snapshot for agent context loading
+  context [--minimal] [--summarize] [--active] [--sort=topo|chrono]
+                           Condensed wiki snapshot / active graph for agent context loading
   summary <page>          Show first heading and paragraph of a page
   relevant <query> [n]    Rank wiki pages by relevance to a query
   impact <file...>        Show which wiki pages mention changed files (or pipe from changed)
-  lint [--rebuild-cache] Check wiki structure, links, and markers
+  lint [--check=<a,b>] [--skip=<a,b>]  Check wiki structure, links, and markers
   diff <from> <to>        Show wiki file changes between two git refs
   watch [--once]          Poll for changes and lint issues (interval from .wikirc)
   refresh [diff-range]    Run the full maintenance snapshot
@@ -586,22 +620,6 @@ Add --json before the command for structured JSON output.`)
 func fatal(err error) {
 	fmt.Fprintf(os.Stderr, "error: %v\n", err)
 	os.Exit(1)
-}
-
-func parsePositiveInt(s string, fallback int) int {
-	if strings.HasPrefix(s, "-") {
-		return fallback
-	}
-	n := 0
-	for _, c := range s {
-		if c >= '0' && c <= '9' {
-			n = n*10 + int(c-'0')
-		}
-	}
-	if n <= 0 {
-		return fallback
-	}
-	return n
 }
 
 func runWatchCycle(eng *engine.Engine, useJSON bool) {
