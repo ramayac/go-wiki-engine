@@ -7,7 +7,7 @@ superseded_by: ""
 
 Accumulated design insights from real usage sessions. Each entry records a gap that was discovered, the consequence, and what was built to close it.
 
-Related: [log.md](log.md) — chronological record of every change; [todo.md](todo.md) — gaps still open; [repo-map.md](repo-map.md) — the architecture these lessons shaped.
+Related: [log.md](../prologue/log.md) — chronological record of every change; [todo.md](todo.md) — gaps still open; [repo-map.md](../prologue/repo-map.md) — the architecture these lessons shaped.
 
 ---
 
@@ -213,3 +213,23 @@ The `wiki/improvement-plan.md` roadmap (phases 1–5) was fully implemented and 
 ### Key design principle confirmed
 
 **Retire plans into their artifacts.** A roadmap's value ends when it ships; its decisions don't. Archive the decisions in `lessons.md` and deprecate the plan page with `superseded_by`, instead of maintaining an indefinitely "current" plan document.
+
+---
+
+## 2026-08-15 — Wiki directory structure: canonical paths need fallback candidates
+
+### What happened
+
+Issue #5 asked for wiki pages grouped into subdirectories (`prologue/`, `decisions/`, `architectures/`) instead of one flat folder. Most of the engine already handled nesting (search, graph, link resolution are directory-relative), but six call sites hardcoded root-level paths: `LogTail`, `currentPhase`, and the `log-headings`, `log-chronology`, `phase-consistency`, `required-files` checkers, plus the `leaf-pages` and `stale-content` exemptions.
+
+### Why it matters
+
+Moving `log.md` and `phases.md` into `prologue/` would have silently broken `log-tail` and four lint checkers for every existing flat wiki. A hard break forces all current users to migrate on upgrade; a graceful one keeps old and new layouts valid during the transition.
+
+### The fix
+
+Added `canonicalPathCandidates` in `internal/engine/paths.go`: each logical file maps to an ordered list of accepted paths, organized layout first, legacy flat path second. `resolveWikiFile` picks the first existing candidate, and `required-files` reports a file missing only when every candidate is absent. Nested-layout fixtures and a legacy flat-layout block in the integration test lock the back-compat behavior in.
+
+### Key design principle confirmed
+
+**Prefer candidate lists over hardcoded paths for structural files.** When a directory convention changes, resolve logical files through a small indirection layer with legacy fallbacks — consumers stay readable, old layouts keep working, and the migration pressure lands only on new scaffolds.

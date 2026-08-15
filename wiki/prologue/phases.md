@@ -19,11 +19,11 @@ superseded_by: ""
 ## Post-Completion
 
 All rollout phases are complete; the board is now a historical record. Open work
-lives in [todo.md](todo.md). Reopen or append phases when a new feature wave
+lives in [todo.md](../decisions/todo.md). Reopen or append phases when a new feature wave
 (e.g. a hardening cycle) needs staged tracking again.
 
 ## Related
 
-- Open work: [todo.md](todo.md)
+- Open work: [todo.md](../decisions/todo.md)
 - Activity history: [log.md](log.md)
-- Conventions: [README.md](README.md), [schema.md](schema.md)
+- Conventions: [README.md](../README.md), [schema.md](schema.md)

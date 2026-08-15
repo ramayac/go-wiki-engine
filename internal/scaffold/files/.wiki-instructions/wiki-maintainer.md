@@ -72,11 +72,11 @@ When the wiki is large, use **progressive disclosure** to manage token usage and
 
 ## Cold-start checklist
 
-When `wiki/log.md` has no prior entries:
+When `wiki/prologue/log.md` has no prior entries:
 
 1. Run `wiki-engine candidates` before assuming there's nothing to do.
 2. Check for external knowledge files outside `wiki/`: `docs/`, `AGENTS.md`, `CLAUDE.md`, `CONTRIBUTING.md`, `ARCHITECTURE.md`.
-3. Fill in `wiki/repo-map.md` completely — no placeholder comments.
+3. Fill in `wiki/prologue/repo-map.md` completely — no placeholder comments.
 4. Create at least one topic page before closing the session.
 5. Mark `phases.md` Phase 1 and Phase 2 as completed.
 
@@ -85,5 +85,5 @@ When `wiki/log.md` has no prior entries:
 If the repo has existing docs outside `wiki/` that contain durable knowledge:
 - Move content to `wiki/<name>.md`.
 - Replace the original file with a stub: `> This file has moved to [wiki/<name>.md](wiki/<name>.md)`.
-- Log the migration in `wiki/log.md`.
+- Log the migration in `wiki/prologue/log.md`.
 - Update any references in `README.md` to point to the new wiki location.

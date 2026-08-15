@@ -151,7 +151,8 @@ func (e *Engine) LogTail(n int) ([]string, error) {
 	if n <= 0 {
 		n = e.Cfg.LogLines
 	}
-	logFile := filepath.Join(e.WikiPath(), "log.md")
+	logRel := e.resolveWikiFile("log.md")
+	logFile := filepath.Join(e.WikiPath(), filepath.FromSlash(logRel))
 	f, err := os.Open(logFile)
 	if err != nil {
 		return nil, err
@@ -430,7 +431,8 @@ func parseIndexCatalog(content string) []ContextEntry {
 
 // currentPhase reads the active phase status from phases.md.
 func (e *Engine) currentPhase() string {
-	phasesPath := filepath.Join(e.WikiPath(), "phases.md")
+	phasesRel := e.resolveWikiFile("phases.md")
+	phasesPath := filepath.Join(e.WikiPath(), filepath.FromSlash(phasesRel))
 	f, err := os.Open(phasesPath)
 	if err != nil {
 		return "unknown"

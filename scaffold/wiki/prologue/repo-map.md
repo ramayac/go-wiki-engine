@@ -44,6 +44,6 @@ make run
 ## Related
 
 - [schema.md](schema.md) — the contract this page must satisfy.
-- [operations/ingest.md](operations/ingest.md) — how this page gets updated.
-- [README.md](README.md) — wiki rules and navigation.
+- [operations/ingest.md](../operations/ingest.md) — how this page gets updated.
+- [README.md](../README.md) — wiki rules and navigation.
 

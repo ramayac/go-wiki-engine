@@ -15,7 +15,7 @@ superseded_by: ""
 
 ## Related
 
-- Catalog: [index.md](index.md)
+- Catalog: [../index.md](../index.md)
 - Activity history: [log.md](log.md)
-- Conventions: [README.md](README.md), [schema.md](schema.md)
+- Conventions: [../README.md](../README.md), [schema.md](schema.md)
 - Architecture the phases build toward: [repo-map.md](repo-map.md)

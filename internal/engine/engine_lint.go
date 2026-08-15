@@ -65,17 +65,27 @@ type LintResult struct {
 
 // --- Checker implementations ---
 
+// requiredFile is a logical wiki file required by the contract, with the
+// accepted candidate paths (organized layout first, legacy flat layout for
+// backward compatibility). The file is missing only when none of its
+// candidates exist.
+type requiredFile struct {
+	name       string
+	candidates []string
+	preferred  string // path shown in the issue when missing
+}
+
 // requiredFiles list (used by requiredFilesChecker).
-var requiredFiles = []string{
-	"README.md",
-	"index.md",
-	"log.md",
-	"schema.md",
-	"phases.md",
-	"repo-map.md",
-	"operations/ingest.md",
-	"operations/query.md",
-	"operations/lint.md",
+var requiredFiles = []requiredFile{
+	{"README.md", []string{"README.md"}, "README.md"},
+	{"index.md", []string{"index.md"}, "index.md"},
+	{"log.md", canonicalPathCandidates["log.md"], "prologue/log.md"},
+	{"schema.md", canonicalPathCandidates["schema.md"], "prologue/schema.md"},
+	{"phases.md", canonicalPathCandidates["phases.md"], "prologue/phases.md"},
+	{"repo-map.md", canonicalPathCandidates["repo-map.md"], "prologue/repo-map.md"},
+	{"operations/ingest.md", []string{"operations/ingest.md"}, "operations/ingest.md"},
+	{"operations/query.md", []string{"operations/query.md"}, "operations/query.md"},
+	{"operations/lint.md", []string{"operations/lint.md"}, "operations/lint.md"},
 }
 
 type requiredFilesChecker struct{}
@@ -86,15 +96,23 @@ func (c *requiredFilesChecker) Check(e *Engine) ([]Issue, error) {
 	var issues []Issue
 	wikiDir := e.WikiPath()
 	for _, req := range requiredFiles {
-		p := filepath.Join(wikiDir, req)
-		if _, err := os.Stat(p); os.IsNotExist(err) {
-			issues = append(issues, Issue{
-				Severity: SevError,
-				Check:    c.Name(),
-				File:     filepath.Join(e.Cfg.WikiDir, req),
-				Message:  fmt.Sprintf("missing required wiki file: %s/%s", e.Cfg.WikiDir, req),
-			})
+		found := false
+		for _, cand := range req.candidates {
+			p := filepath.Join(wikiDir, filepath.FromSlash(cand))
+			if _, err := os.Stat(p); err == nil {
+				found = true
+				break
+			}
 		}
+		if found {
+			continue
+		}
+		issues = append(issues, Issue{
+			Severity: SevError,
+			Check:    c.Name(),
+			File:     filepath.Join(e.Cfg.WikiDir, req.preferred),
+			Message:  fmt.Sprintf("missing required wiki file: %s/%s", e.Cfg.WikiDir, req.preferred),
+		})
 	}
 	return issues, nil
 }
@@ -501,8 +519,8 @@ var logHeadingValidRe = regexp.MustCompile(`^## \[\d{4}-\d{2}-\d{2}\] [^|]+ \| .
 
 func (c *logHeadingsChecker) Check(e *Engine) ([]Issue, error) {
 	var issues []Issue
-	wikiDir := e.WikiPath()
-	logPath := filepath.Join(wikiDir, "log.md")
+	logRel := e.resolveWikiFile("log.md")
+	logPath := filepath.Join(e.WikiPath(), filepath.FromSlash(logRel))
 	f, err := os.Open(logPath)
 	if err != nil {
 		return issues, nil
@@ -518,7 +536,7 @@ func (c *logHeadingsChecker) Check(e *Engine) ([]Issue, error) {
 			issues = append(issues, Issue{
 				Severity: SevError,
 				Check:    c.Name(),
-				File:     filepath.Join(e.Cfg.WikiDir, "log.md"),
+				File:     filepath.Join(e.Cfg.WikiDir, logRel),
 				Line:     lineNo,
 				Message:  fmt.Sprintf("invalid log heading format: %s", line),
 			})
@@ -536,8 +554,8 @@ var logDateRe = regexp.MustCompile(`^## \[(\d{4}-\d{2}-\d{2})\]`)
 
 func (c *logChronologyChecker) Check(e *Engine) ([]Issue, error) {
 	var issues []Issue
-	wikiDir := e.WikiPath()
-	logPath := filepath.Join(wikiDir, "log.md")
+	logRel := e.resolveWikiFile("log.md")
+	logPath := filepath.Join(e.WikiPath(), filepath.FromSlash(logRel))
 	f, err := os.Open(logPath)
 	if err != nil {
 		return issues, nil
@@ -563,7 +581,7 @@ func (c *logChronologyChecker) Check(e *Engine) ([]Issue, error) {
 			issues = append(issues, Issue{
 				Severity: SevWarn,
 				Check:    c.Name(),
-				File:     filepath.Join(e.Cfg.WikiDir, "log.md"),
+				File:     filepath.Join(e.Cfg.WikiDir, logRel),
 				Line:     dateLines[i],
 				Message:  fmt.Sprintf("log entries not in descending date order: %s after %s", dates[i], dates[i-1]),
 			})
@@ -629,8 +647,8 @@ func (c *phaseConsistencyChecker) Name() string { return "phase-consistency" }
 
 func (c *phaseConsistencyChecker) Check(e *Engine) ([]Issue, error) {
 	var issues []Issue
-	wikiDir := e.WikiPath()
-	phasesPath := filepath.Join(wikiDir, "phases.md")
+	phasesRel := e.resolveWikiFile("phases.md")
+	phasesPath := filepath.Join(e.WikiPath(), filepath.FromSlash(phasesRel))
 	f, err := os.Open(phasesPath)
 	if err != nil {
 		return issues, nil
@@ -676,7 +694,7 @@ func (c *phaseConsistencyChecker) Check(e *Engine) ([]Issue, error) {
 			issues = append(issues, Issue{
 				Severity: SevWarn,
 				Check:    c.Name(),
-				File:     filepath.Join(e.Cfg.WikiDir, "phases.md"),
+				File:     filepath.Join(e.Cfg.WikiDir, phasesRel),
 				Line:     p.line,
 				Message:  fmt.Sprintf("unknown phase status: %q", p.status),
 			})
@@ -692,7 +710,7 @@ func (c *phaseConsistencyChecker) Check(e *Engine) ([]Issue, error) {
 			issues = append(issues, Issue{
 				Severity: SevWarn,
 				Check:    c.Name(),
-				File:     filepath.Join(e.Cfg.WikiDir, "phases.md"),
+				File:     filepath.Join(e.Cfg.WikiDir, phasesRel),
 				Line:     p.line,
 				Message:  fmt.Sprintf("phase %d is %s but phase %d is not completed", p.num, p.status, p.num-1),
 			})
@@ -898,9 +916,11 @@ func (c *staleContentChecker) Check(e *Engine) ([]Issue, error) {
 			return nil
 		}
 		rel, _ := filepath.Rel(wikiDir, path)
+		wikiRel := filepath.ToSlash(rel)
 
 		// Skip infrastructure files.
-		if rel == "index.md" || rel == "README.md" || rel == "log.md" || rel == "phases.md" {
+		if wikiRel == "index.md" || wikiRel == "README.md" ||
+			isCanonicalFile("log.md", wikiRel) || isCanonicalFile("phases.md", wikiRel) {
 			return nil
 		}
 
@@ -1236,7 +1256,7 @@ func (c *leafPagesChecker) Check(e *Engine) ([]Issue, error) {
 		wikiRel = filepath.ToSlash(wikiRel)
 
 		// The append-only timeline is the one intentional leaf.
-		if wikiRel == "log.md" {
+		if isCanonicalFile("log.md", wikiRel) {
 			continue
 		}
 

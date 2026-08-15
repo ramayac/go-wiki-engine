@@ -65,7 +65,7 @@ Absorb repo changes into the wiki.
 2. Read only the changed source files relevant to the ingest.
 3. Update or create active wiki pages with durable facts (with valid front matter).
 4. Update `wiki/index.md` if page coverage changed.
-5. Append a dated entry to `wiki/log.md`.
+5. Append a dated entry to `wiki/prologue/log.md`.
 6. Run `wiki-engine lint`.
 
 ### 2. Query the Repo (`/wiki-query`)
@@ -88,10 +88,10 @@ Periodic maintenance cycle.
 Bootstrap a wiki for a brand-new project or empty wiki.
 1. Run `wiki-engine candidates` (fall back to manual repo survey).
 2. Check for external docs outside `wiki/` to migrate.
-3. Fill in `wiki/repo-map.md` completely.
+3. Fill in `wiki/prologue/repo-map.md` completely.
 4. Create initial topic pages (architecture, data-model, api, etc.).
-5. Update `wiki/index.md` and `wiki/phases.md`.
-6. Append an ingest entry to `wiki/log.md`.
+5. Update `wiki/index.md` and `wiki/prologue/phases.md`.
+6. Append an ingest entry to `wiki/prologue/log.md`.
 7. Run `wiki-engine lint`.
 
 ### 5. Lint the Wiki (`/wiki-lint`)

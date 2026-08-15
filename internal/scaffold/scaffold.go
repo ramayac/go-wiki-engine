@@ -135,6 +135,15 @@ func Init(destDir, wikiDir string) error {
 			return err
 		}
 
+		// Rewrite the scaffold's default wiki_dir and ignore-list wiki/ entry to
+		// the requested name so `init docs` produces a .wikirc that actually
+		// points at docs/.
+		if rel == ".wikirc" {
+			content := strings.Replace(string(data), `wiki_dir = "wiki"`, `wiki_dir = "`+wikiDir+`"`, 1)
+			content = strings.Replace(content, `"wiki/"`, `"`+wikiDir+`/"`, 1)
+			data = []byte(content)
+		}
+
 		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
 			return err
 		}

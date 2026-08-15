@@ -41,7 +41,8 @@ scaffold/               Human-readable reference copy of embedded templates
 - `cmd/wiki-engine/main.go` — CLI dispatcher; version injected via `-ldflags`; `--json` flag support on all commands
 - `internal/engine/engine.go` — all read-only wiki operations plus Diff, Watch, Impact; `Lint` delegates to composable checkers
 - `internal/engine/engine_lint.go` — `Checker` interface + 17 implementations: required-files, front-matter, index-format, bare-urls, index-links, cross-page-links, markdown-format, orphans, leaf-pages, heading-hierarchy, log-headings, log-chronology, markers, phase-consistency, external-links, duplicate-content, stale-content
-- `internal/scaffold/scaffold.go` — `Init()` walks the embedded FS and remaps `wiki/` to the user-specified dir name; `SyncPrompts()` overwrites `.wiki-instructions/`, `.github/`, `.claude/commands/`, and `.pi/skills/` via `syncEmbeddedDir()` helper; tool-layer files are written as symlinks to `.wiki-instructions/` with a regular-copy fallback on platforms without symlink support; `syncShims()` creates `AGENTS.md`/`CLAUDE.md` only when absent (never overwrites user content); `Init()` preserves an existing `.wikirc`
+- `internal/engine/paths.go` — canonical file resolution: `log.md`, `phases.md`, `schema.md`, `repo-map.md` resolve at `prologue/<name>` first with legacy root-level fallback; `required-files` accepts either layout
+- `internal/scaffold/scaffold.go` — `Init()` walks the embedded FS, remaps `wiki/` to the user-specified dir name, and rewrites the scaffolded `.wikirc` `wiki_dir` to match; `SyncPrompts()` overwrites `.wiki-instructions/`, `.github/`, `.claude/commands/`, and `.pi/skills/` via `syncEmbeddedDir()` helper; tool-layer files are written as symlinks to `.wiki-instructions/` with a regular-copy fallback on platforms without symlink support; `syncShims()` creates `AGENTS.md`/`CLAUDE.md` only when absent (never overwrites user content); `Init()` preserves an existing `.wikirc`
 - `internal/config/config.go` — parses `.wikirc` (key=value + array format, no external deps); returns defaults when file is absent
 - `scaffold/` — source of truth for scaffold templates; `make sync-scaffold` copies it to `internal/scaffold/files/`
 
@@ -57,7 +58,7 @@ scaffold/               Human-readable reference copy of embedded templates
 | `log-tail [n]` | Show last N log headings from `log.md` |
 | `changed [diff]` | `git diff --name-only` filtered to non-wiki, non-ignored files |
 | `candidates [diff]` | Same as changed, further filtered by `.wikirc` ignore rules (see [config.md](config.md)) |
-| `lint [--check=<a,b>] [--skip=<a,b>]` | Check required files, front matter, index format, bare URLs, broken links (index + cross-page), log heading format and chronology, open markers, orphans, leaf pages, heading hierarchy, phase consistency, external links to source files, duplicate content, stale content — repair guide: [operations/lint.md](operations/lint.md) |
+| `lint [--check=<a,b>] [--skip=<a,b>]` | Check required files, front matter, index format, bare URLs, broken links (index + cross-page), log heading format and chronology, open markers, orphans, leaf pages, heading hierarchy, phase consistency, external links to source files, duplicate content, stale content — repair guide: [operations/lint.md](../operations/lint.md) |
 | `stats` | Aggregate statistics: file count, heading count, total lines, last-updated date |
 | `context [--minimal] [--active] [--sort=topo\|chrono] [--summarize]` | Condensed wiki snapshot, or the active-page graph from `index.md` with `--active` (`--sort=topo` by depth, default chronological) |
 | `summary <page>` | First heading + first paragraph preview of a page |
@@ -94,7 +95,7 @@ Frontmatter is compatible: both tools use `description`. Copilot-specific fields
 
 The workflow is:
 1. `wiki-engine init` — run once to scaffold
-2. Developer customizes `wiki/repo-map.md` and `.wikirc`
+2. Developer customizes `wiki/prologue/repo-map.md` and `.wikirc`
 3. Agent (via `/wiki-ingest`, `/wiki-refresh`, or `/wiki-onboard`) calls `wiki-engine changed` + `wiki-engine candidates` to discover what changed, then reads and writes wiki content itself
 4. Agent calls `wiki-engine lint` to validate hygiene before finishing
 5. After a binary upgrade, run `wiki-engine sync-prompts` in each repo to pull in new or updated prompts and instructions for all tools
@@ -160,6 +161,6 @@ Go module: `github.com/ramayac/go-wiki-engine`. No external dependencies — sta
 ## Related Pages
 
 - [config.md](config.md) — full `.wikirc` reference.
-- [operations/lint.md](operations/lint.md) — checker-by-checker repair guide.
-- [operations/ingest.md](operations/ingest.md) — how architecture facts get updated.
+- [operations/lint.md](../operations/lint.md) — checker-by-checker repair guide.
+- [operations/ingest.md](../operations/ingest.md) — how architecture facts get updated.
 - [schema.md](schema.md) — the contract this page must satisfy.

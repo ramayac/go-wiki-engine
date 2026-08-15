@@ -125,4 +125,4 @@ ignore = [
 
 ## Example
 
-See [`.wikirc.example`](../.wikirc.example) at the repo root for a fully commented template.
+See [`.wikirc.example`](../../.wikirc.example) at the repo root for a fully commented template.

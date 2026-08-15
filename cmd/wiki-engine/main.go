@@ -140,7 +140,7 @@ func runInit(args []string) {
 	fmt.Fprintf(os.Stderr, "initialized %s/ with wiki scaffold, .wikirc, prompts, instructions, AGENTS.md/CLAUDE.md shims, .claude/commands/, and .pi/skills/\n", wikiDir)
 	fmt.Fprintln(os.Stderr, "next steps:")
 	fmt.Fprintln(os.Stderr, "  1. Edit .wikirc to set your ignore patterns")
-	fmt.Fprintln(os.Stderr, "  2. Edit wiki/repo-map.md with your project's architecture")
+	fmt.Fprintf(os.Stderr, "  2. Edit %s/prologue/repo-map.md with your project's architecture\n", wikiDir)
 	fmt.Fprintln(os.Stderr, "  3. Run: wiki-engine lint")
 }
 

@@ -1,12 +1,12 @@
 ---
 status: deprecated
 description: "Completed hardening roadmap — design decisions archived in lessons.md."
-superseded_by: "repo-map.md"
+superseded_by: "../prologue/repo-map.md"
 ---
 # go-wiki-engine — Deep Analysis & Improvement Plan
 
 > [!NOTE]
-> **This roadmap is fully implemented and deprecated.** All phases 1–5 shipped (see [log.md](log.md)). The durable design decisions from Part 7 were archived in [lessons.md](lessons.md); the current architecture lives in [repo-map.md](repo-map.md). Numbers inside this page (e.g. 13 checkers, v0.2.0) describe the state at the time of writing and are historical — the current linter has 17 checkers.
+> **This roadmap is fully implemented and deprecated.** All phases 1–5 shipped (see [log.md](../prologue/log.md)). The durable design decisions from Part 7 were archived in [lessons.md](lessons.md); the current architecture lives in [repo-map.md](../prologue/repo-map.md). Numbers inside this page (e.g. 13 checkers, v0.2.0) describe the state at the time of writing and are historical — the current linter has 17 checkers.
 
 ## Executive Summary
 
@@ -36,20 +36,20 @@ The project is at a transitional point — **v0.2.0** with most of the original 
 
 | File | Issue | Severity |
 |------|-------|----------|
-| [engine.go](../internal/engine/engine.go#L247-L253) | `jsonOK()` and `jsonErr()` helper functions are **dead code** — never called anywhere | Low |
-| [engine_lint.go](../internal/engine/engine_lint.go#L920-L924) | `Lint()` treats **all severities** as failures — a `SevInfo` issue causes `lint` to exit 1. This means stale-content info notes block CI. | **High** |
-| [engine.go](../internal/engine/engine.go#L80-L96) | Multiple `os.Open()` calls without `defer f.Close()` — using manual `f.Close()` after scanner loop works but is fragile | Medium |
-| [main.go](../cmd/wiki-engine/main.go#L95) | `runSyncPrompts()` silently swallows `os.Getwd()` error: `dir, _ := os.Getwd()` | Low |
-| [config.go](../internal/config/config.go#L131) | Duplicate `parsePositiveInt()` function — exists in both `config.go` and `main.go` | Low |
+| [engine.go](../../internal/engine/engine.go#L247-L253) | `jsonOK()` and `jsonErr()` helper functions are **dead code** — never called anywhere | Low |
+| [engine_lint.go](../../internal/engine/engine_lint.go#L920-L924) | `Lint()` treats **all severities** as failures — a `SevInfo` issue causes `lint` to exit 1. This means stale-content info notes block CI. | **High** |
+| [engine.go](../../internal/engine/engine.go#L80-L96) | Multiple `os.Open()` calls without `defer f.Close()` — using manual `f.Close()` after scanner loop works but is fragile | Medium |
+| [main.go](../../cmd/wiki-engine/main.go#L95) | `runSyncPrompts()` silently swallows `os.Getwd()` error: `dir, _ := os.Getwd()` | Low |
+| [config.go](../../internal/config/config.go#L131) | Duplicate `parsePositiveInt()` function — exists in both `config.go` and `main.go` | Low |
 | `engine_cache.go` (deleted 2026-08) | `cachedList()` is defined but **never called** — dead code | Low |
-| [engine_lint.go](../internal/engine/engine_lint.go#L201-L205) | `isInsideInlineCode()` logic is flawed — counting backticks before/after is unreliable for nested or escaped backticks | Low |
+| [engine_lint.go](../../internal/engine/engine_lint.go#L201-L205) | `isInsideInlineCode()` logic is flawed — counting backticks before/after is unreliable for nested or escaped backticks | Low |
 
 #### Scaffold / Documentation Discrepancies
 
 | Issue | Detail |
 |-------|--------|
 | **Missing `summarize.md` in live `.wiki-instructions/`** | Scaffold has 8 instruction files, live repo has only 7 — `summarize.md` is missing from `.wiki-instructions/`. This means `make sync-scaffold` was not run, or the live repo drifted. |
-| **`todo.md` says impact (#19) is "⬜ Not started"** | But `impact` is fully implemented in [engine.go](../internal/engine/engine.go#L604-L661) and tested. The `todo.md` is stale. |
+| **`todo.md` says impact (#19) is "⬜ Not started"** | But `impact` is fully implemented in [engine.go](../../internal/engine/engine.go#L604-L661) and tested. The `todo.md` is stale. |
 | **Wiki operations/ has 8 files but only 3 are in required list** | `operations/` contains `ingest.md`, `lint.md`, `query.md`, `migrate-shims.md`, `onboard.md`, `refresh.md`, `summarize.md`, `watch.md`, `wiki-maintainer.md`. But `requiredFiles` in lint only checks `ingest.md`, `query.md`, `lint.md`. |
 | **Prompt `argument-hint` values are inconsistent** | Some prompts have `argument-hint: "none"`, others have useful hints. `summarize.md` and `watch.md` have `"none"` but both could accept arguments. |
 | **`.wikirc.example` uses `main...HEAD`, live `.wikirc` uses `master...HEAD`** | Inconsistent default branch naming |
@@ -202,7 +202,7 @@ Add YAML front matter to the wiki schema and all scaffold wiki templates:
     ---
 
 **Files to change:**
-- [scaffold/wiki/schema.md](../scaffold/wiki/schema.md) — document the front matter contract
+- [scaffold/wiki/prologue/schema.md](../../scaffold/wiki/prologue/schema.md) — document the front matter contract
 - All `scaffold/wiki/*.md` — add front matter with `status: current`
 - All `scaffold/wiki/operations/*.md` — add front matter
 - Run `make sync-scaffold`
@@ -385,7 +385,7 @@ Ensure the linter is the single source of truth for wiki health. Any PR that int
 ### Phase 5 — Cleanup & Polish (0.5 day)
 
 #### 5A. Remove dead code
-- Delete `jsonOK()` and `jsonErr()` from [engine.go](../internal/engine/engine.go#L247-L253)
+- Delete `jsonOK()` and `jsonErr()` from [engine.go](../../internal/engine/engine.go#L247-L253)
 - Delete `cachedList()` from `engine_cache.go` (the whole cache subsystem was removed in the 2026-08 audit)
 
 #### 5B. Fix `todo.md` staleness

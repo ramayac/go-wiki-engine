@@ -33,7 +33,7 @@ wiki-engine search "TODO:"
 
 1. Fix stale or incorrect topic pages.
 2. Fix [index.md](../index.md) links or summaries.
-3. Append a log entry to [log.md](../log.md) if the lint changed durable content.
+3. Append a log entry to [log.md](../prologue/log.md) if the lint changed durable content.
 
 ## Log Format
 

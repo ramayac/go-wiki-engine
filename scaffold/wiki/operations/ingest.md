@@ -11,16 +11,16 @@ Absorb a repo change into the wiki without rediscovering the entire codebase.
 
 ## Procedure
 
-1. Read [index.md](../index.md) and the latest entries in [log.md](../log.md).
+1. Read [index.md](../index.md) and the latest entries in [log.md](../prologue/log.md).
 2. If `wiki-engine changed` returns no output **and** `wiki/log.md` has no prior ingest entries, this is a cold start — run the full onboarding survey instead of an incremental ingest (see Wiki Onboard prompt).
 3. Inspect the changed files first.
 4. Check for external knowledge files that belong in the wiki: `docs/`, `AGENTS.md`, `CONTRIBUTING.md`, `ARCHITECTURE.md`. If found and not yet migrated, add a migration step to this ingest.
 5. Ignore repo-specific excluded paths from `.wikirc`.
 6. Decide whether the change updates an existing page or needs a new page.
-7. Update the relevant wiki page with the durable facts only — and cross-link it to its related pages per [schema.md](../schema.md).
+7. Update the relevant wiki page with the durable facts only — and cross-link it to its related pages per [schema.md](../prologue/schema.md).
 8. Update [index.md](../index.md) if page coverage changed.
 9. Advance `wiki/phases.md` if phases were completed during this ingest.
-10. Append an entry to [log.md](../log.md).
+10. Append an entry to [log.md](../prologue/log.md).
 
 ## Shell-First Inputs
 
