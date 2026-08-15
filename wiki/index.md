@@ -22,3 +22,7 @@ superseded_by: ""
 - [operations/ingest.md](operations/ingest.md) | How to absorb a repo change into the wiki.
 - [operations/query.md](operations/query.md) | How to answer questions from the wiki first.
 - [operations/lint.md](operations/lint.md) | How to health-check and repair wiki drift.
+
+## Prompt Workflows
+
+The slash-command prompts live outside the wiki in `.wiki-instructions/` (canonical source, symlinked into `.github/prompts/` and `.claude/commands/`). `/wiki-ingest`, `/wiki-query`, and `/wiki-lint` mirror the workflows under [operations/](operations/ingest.md); `/wiki-onboard`, `/wiki-refresh`, `/wiki-watch`, and `/wiki-upgrade` are documented in [repo-map.md](repo-map.md).

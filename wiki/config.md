@@ -56,6 +56,18 @@ stale_days = 30
 |--------:|------|
 | Disable | Set to `0` |
 
+## Lint Severity Gate
+
+### `fail_severity`
+Minimum severity that causes `wiki-engine lint` to fail with exit code 1. Issues below this level are still printed (e.g. info-level reminders like `leaf-pages`) but do not fail the run. The same gate drives the exit code of `wiki-engine watch --once` (see [repo-map.md](repo-map.md)).
+
+```
+fail_severity = "warn"
+```
+| Default | `"warn"` |
+|--------:|-----------|
+| Values | `error`, `warn`, `info` |
+
 ## Context Loading
 
 ### `context_summarize`

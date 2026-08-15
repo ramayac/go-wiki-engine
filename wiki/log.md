@@ -7,6 +7,25 @@ superseded_by: ""
 
 Append-only timeline of wiki maintenance activity.
 
+## [2026-08-15] ingest | filed GitHub issue #5 as todo #58
+
+- Added issue #5 (Define a wiki organized structure — group related pages into subdirectories like `prologue/`, `decisions/`, `architectures/`, with `index.md` at the root) to the backlog as todo #58. The design would touch the scaffold layout, `required-files`/`orphans`/graph handling, and the `wiki_dir` remap in `init`.
+
+## [2026-08-15] ingest | audit follow-up — docs, backlog restoration, CLI hardening
+
+Follow-up to the 2026-08-15 deep audit of the project concept, work loop, and documentation gaps.
+
+- Restored the three backlog items dropped from `wiki/todo.md` during the progress.md cleanup (#9 agy integration, #31 wiki template system, #32 multi-repo aggregation) — the previous log entry claimed 5 items were tracked but only 2 remained. Added #57 for release tag naming.
+- Added `fail_severity` documentation to `wiki/config.md`, the `repo-map.md` config table, `scaffold/.wikirc`, and `.wikirc.example` — it was previously only in the root README.
+- Corrected `upgrade` descriptions in `README.md`, `wiki/repo-map.md`, and the CLI usage text: `upgrade` downloads the checksum-verified GitHub release binary with `go install` as fallback.
+- Added a JSON Output Contract section to `wiki/repo-map.md` (`{ok, data, error}` envelope, `lint --json` exit behavior, `context --active --json` nodes/edges, `watch --once --json`).
+- Added the missing dated heading to the original bootstrap entry at the bottom of this file.
+- `wiki-engine watch --once` now exits 1 when the lint gate fails (matching `lint` exit semantics); documented in `repo-map.md` and `config.md`.
+- Removed the dead `active` parameter from `engine.Context()` — `context --active` is served by `BuildWikiGraph()`.
+- Added wiki-dir containment to `engine.Summary()` with a path-traversal unit test.
+- `wiki/phases.md` gained a post-completion maintenance-mode note; `wiki/index.md` gained a prompt-workflow cross-reference; the deprecated `improvement-plan.md` banner now warns its numbers are historical.
+- Rebuilt `bin/wiki-engine` at HEAD. Legacy release tags stay in place because `upgrade` asset URLs embed them; the next release should use a clean `vX.Y.Z` tag (todo #57).
+
 ## [2026-08-14] lint | document graph navigation and search in all instruction layers
 
 - Audit found the graph feature was only taught as a health check, not as a map. Added a "Graph Navigation & Search" section to `wiki-maintainer.md`: hierarchical map (`context --active --sort=topo`), recency map (`--sort=chrono`), machine map (`--json context --active` nodes/edges/unlinked), following `->` edges, and map-then-search flow.
@@ -192,7 +211,7 @@ Triggered by a full onboarding session on Mana-world-shift and the resulting imp
 
 **Needs human review:** nothing.
 
-
+## [2026-04-16] ingest | wiki bootstrap — init, repo map, phases 0–2
 
 - Bootstrapped wiki scaffold via `wiki-engine init`.
 - Wrote `wiki/repo-map.md` with full architecture: subcommand inventory, Copilot integration model (prompts vs instructions vs CLI), .wikirc config table, build and release path, and exclusion rules.

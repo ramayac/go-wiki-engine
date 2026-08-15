@@ -6,7 +6,7 @@ superseded_by: "repo-map.md"
 # go-wiki-engine — Deep Analysis & Improvement Plan
 
 > [!NOTE]
-> **This roadmap is fully implemented and deprecated.** All phases 1–5 shipped (see [log.md](log.md)). The durable design decisions from Part 7 were archived in [lessons.md](lessons.md); the current architecture lives in [repo-map.md](repo-map.md).
+> **This roadmap is fully implemented and deprecated.** All phases 1–5 shipped (see [log.md](log.md)). The durable design decisions from Part 7 were archived in [lessons.md](lessons.md); the current architecture lives in [repo-map.md](repo-map.md). Numbers inside this page (e.g. 13 checkers, v0.2.0) describe the state at the time of writing and are historical — the current linter has 17 checkers.
 
 ## Executive Summary
 

@@ -85,7 +85,7 @@ wiki-engine [--json] <command> [arguments]
 | Command | Description |
 |---------|-------------|
 | `lint [--check=<checkers>] [--skip=<checkers>]` | Full health check — front-matter, index-format, bare-urls, structure, links, markers, orphans, leaf pages, duplicates, stale content |
-| `watch [--once]` | Poll for changes and lint issues (interval from `.wikirc`) |
+| `watch [--once]` | Poll for changes and lint issues (interval from `.wikirc`); `--once` runs a single cycle and exits 1 when the lint gate fails |
 | `diff <from> <to>` | Show wiki file changes between two git refs |
 
 ### Maintenance
@@ -95,7 +95,7 @@ wiki-engine [--json] <command> [arguments]
 | `init [wiki-dir]` | Scaffold a new wiki into the current repo |
 | `sync-prompts` | Update all tool instruction layers to the latest version |
 | `refresh [diff-range]` | Run the full maintenance snapshot |
-| `upgrade` | Self-upgrade to the latest version via `go install` |
+| `upgrade` | Self-upgrade from the latest GitHub release (SHA-256 checksum verified; falls back to `go install`) |
 | `version` | Print the version |
 
 Add `--json` before any command for structured output: `wiki-engine --json lint`.

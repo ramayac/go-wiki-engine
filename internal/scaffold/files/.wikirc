@@ -13,6 +13,10 @@ context_summarize = false
 # Watch mode
 watch_interval = 0
 
+# Lint severity gate: minimum severity that fails lint with exit 1
+# (error | warn | info). Issues below the gate are still printed.
+fail_severity = "warn"
+
 # Duplicate detection: pages with similarity above this threshold (0.0-1.0)
 # are flagged. Set to 0 to disable.
 # Stale detection: pages whose last git commit is older than this many days
