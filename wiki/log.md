@@ -7,6 +7,12 @@ superseded_by: ""
 
 Append-only timeline of wiki maintenance activity.
 
+## [2026-08-14] lint | removed progress.md, slimmed todo.md to open backlog
+
+- Deleted the root-level `progress.md` — its completion records are redundant with `wiki/log.md` and git history, and it was durable knowledge living outside the wiki.
+- Rewrote `wiki/todo.md` to track only the 5 open items (agy integration #9, recursive .wikirc lookup #25, wiki templates #31, multi-repo aggregation #32, upgrade download-path tests #54). All completed tiers were dropped; history stays in `log.md`.
+- Updated the index catalog description.
+
 ## [2026-08-14] lint | leaf-pages checker enforces wiki connectivity
 
 - Added the `leaf-pages` checker (17th): flags active pages with no outgoing links at info severity — visible but non-failing by default (`fail_severity` defaults to `warn`). `log.md` is the only exempt leaf.
