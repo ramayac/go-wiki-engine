@@ -36,7 +36,7 @@ log_lines = 10
 ## Detection Thresholds
 
 ### `duplicate_threshold`
-Jaccard word-set similarity above which two pages are flagged as potential duplicates by the `duplicate-content` lint checker (see [operations/lint.md](operations/lint.md)). Pages that share >70% word overlap typically indicate copy-paste drift.
+Jaccard word-set similarity above which two pages are flagged as potential duplicates by the `duplicate-content` lint checker (see [operations/lint.md](../operations/lint.md)). Pages that share >70% word overlap typically indicate copy-paste drift.
 
 ```
 duplicate_threshold = 0.7
@@ -47,7 +47,7 @@ duplicate_threshold = 0.7
 | Disable | Set to `0` |
 
 ### `stale_days`
-Days since a page's last git commit before it is flagged as stale by the `stale-content` lint checker (see [operations/lint.md](operations/lint.md)). Falls back to filesystem mtime when git history is unavailable. When the repo has active source changes (`wiki-engine changed` returns files), severity upgrades from `info` to `warn`.
+Days since a page's last git commit before it is flagged as stale by the `stale-content` lint checker (see [operations/lint.md](../operations/lint.md)). Falls back to filesystem mtime when git history is unavailable. When the repo has active source changes (`wiki-engine changed` returns files), severity upgrades from `info` to `warn`.
 
 ```
 stale_days = 30
@@ -125,4 +125,4 @@ ignore = [
 
 ## Example
 
-See [`.wikirc.example`](../.wikirc.example) at the repo root for a fully commented template.
+See [`.wikirc.example`](../../.wikirc.example) at the repo root for a fully commented template.

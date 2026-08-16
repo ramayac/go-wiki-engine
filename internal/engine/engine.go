@@ -151,7 +151,8 @@ func (e *Engine) LogTail(n int) ([]string, error) {
 	if n <= 0 {
 		n = e.Cfg.LogLines
 	}
-	logFile := filepath.Join(e.WikiPath(), "log.md")
+	logRel := e.resolveWikiFile("log.md")
+	logFile := filepath.Join(e.WikiPath(), filepath.FromSlash(logRel))
 	f, err := os.Open(logFile)
 	if err != nil {
 		return nil, err
@@ -170,8 +171,10 @@ func (e *Engine) LogTail(n int) ([]string, error) {
 		return nil, err
 	}
 
+	// Entries are prepended (newest first) — the log-chronology checker
+	// enforces descending dates. Keep the most recent n.
 	if len(headings) > n {
-		headings = headings[len(headings)-n:]
+		headings = headings[:n]
 	}
 	return headings, nil
 }
@@ -430,7 +433,8 @@ func parseIndexCatalog(content string) []ContextEntry {
 
 // currentPhase reads the active phase status from phases.md.
 func (e *Engine) currentPhase() string {
-	phasesPath := filepath.Join(e.WikiPath(), "phases.md")
+	phasesRel := e.resolveWikiFile("phases.md")
+	phasesPath := filepath.Join(e.WikiPath(), filepath.FromSlash(phasesRel))
 	f, err := os.Open(phasesPath)
 	if err != nil {
 		return "unknown"

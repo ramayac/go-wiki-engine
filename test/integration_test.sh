@@ -147,7 +147,7 @@ echo -e "---\nstatus: legacy\ndescription: Legacy lint procedure\n---\n# Legacy 
 # Should show the active wiki graph format
 "$BIN" context --active | grep -q "== active wiki graph ==" || { echo "FAIL: active graph header missing"; exit 1; }
 "$BIN" context --active | grep -q "index.md \[current\]" || { echo "FAIL: active node index.md missing in graph"; exit 1; }
-"$BIN" context --active | grep -q "  -> schema.md" || { echo "FAIL: active edge in graph missing"; exit 1; }
+"$BIN" context --active | grep -q "  -> prologue/schema.md" || { echo "FAIL: active edge in graph missing"; exit 1; }
 # Sort topo check
 "$BIN" context --active --sort=topo | grep -q "== active wiki graph ==" || { echo "FAIL: topo sort failed"; exit 1; }
 # JSON graph format check
@@ -199,6 +199,77 @@ if "$BIN" watch >/dev/null 2>&1; then
   echo "FAIL: watch with watch_interval=0 should exit non-zero"
   exit 1
 fi
+echo "  ok"
+
+# Test: legacy flat wiki layout still lints (backward compatibility)
+echo "--- legacy flat layout ---"
+mkdir -p "$TMPDIR/legacytest"
+cd "$TMPDIR/legacytest"
+git init -q -b main
+git config user.email "test@test"
+git config user.name "Test"
+mkdir -p wiki/operations
+cat > wiki/index.md <<'EOF'
+---
+status: current
+description: "Index"
+---
+# Index
+
+- [README.md](README.md) | README
+- [log.md](log.md) | Log
+- [schema.md](schema.md) | Schema
+- [phases.md](phases.md) | Phases
+- [repo-map.md](repo-map.md) | Repo Map
+- [operations/ingest.md](operations/ingest.md) | Ingest
+- [operations/query.md](operations/query.md) | Query
+- [operations/lint.md](operations/lint.md) | Lint
+EOF
+for f in README log schema phases repo-map; do
+  cat > "wiki/$f.md" <<EOF
+---
+status: current
+description: "$f"
+---
+# $f
+
+See [index.md](index.md).
+EOF
+done
+cat > wiki/operations/ingest.md <<'EOF'
+---
+status: current
+description: "ingest"
+---
+# ingest
+
+See [../index.md](../index.md).
+EOF
+cat > wiki/operations/query.md <<'EOF'
+---
+status: current
+description: "query"
+---
+# query
+
+See [ingest.md](ingest.md).
+EOF
+cat > wiki/operations/lint.md <<'EOF'
+---
+status: current
+description: "lint"
+---
+# lint
+
+See [query.md](query.md).
+EOF
+cat > .wikirc <<'EOF'
+wiki_dir = "wiki"
+EOF
+git add .
+git commit -q -m "legacy flat wiki"
+"$BIN" lint || { echo "FAIL: legacy flat layout should still lint"; exit 1; }
+cd "$TMPDIR"
 echo "  ok"
 
 echo ""

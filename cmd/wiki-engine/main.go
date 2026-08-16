@@ -140,7 +140,7 @@ func runInit(args []string) {
 	fmt.Fprintf(os.Stderr, "initialized %s/ with wiki scaffold, .wikirc, prompts, instructions, AGENTS.md/CLAUDE.md shims, .claude/commands/, and .pi/skills/\n", wikiDir)
 	fmt.Fprintln(os.Stderr, "next steps:")
 	fmt.Fprintln(os.Stderr, "  1. Edit .wikirc to set your ignore patterns")
-	fmt.Fprintln(os.Stderr, "  2. Edit wiki/repo-map.md with your project's architecture")
+	fmt.Fprintf(os.Stderr, "  2. Edit %s/prologue/repo-map.md with your project's architecture\n", wikiDir)
 	fmt.Fprintln(os.Stderr, "  3. Run: wiki-engine lint")
 }
 
@@ -601,7 +601,7 @@ Commands:
   list                    List all wiki files
   headings                List all Markdown headings with file paths
   search <query>          Case-insensitive search across wiki files
-  log-tail [n]            Show the last N log headings
+  log-tail [n]            Show the most recent N log headings
   changed [diff-range]    List non-wiki files changed in a git diff range
   candidates [diff-range] Filter changed files to ingest-worthy candidates
   stats                   Show aggregate wiki statistics

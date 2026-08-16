@@ -7,6 +7,24 @@ superseded_by: ""
 
 Append-only timeline of wiki maintenance activity.
 
+## [2026-08-16] lint | log-tail showed oldest entries instead of most recent
+
+- Fixed a logic bug in `LogTail`: entries are prepended newest-first (the `log-chronology` checker enforces descending dates), but the function sliced the *last* N headings — so `log-tail` and the `context` recent-log section returned the oldest entries. It now keeps the first N (most recent). Added an ordering assertion to `TestLogTail` and clarified the `repo-map.md` subcommand description.
+
+## [2026-08-15] lint | audit hardening — repo-wide reference integrity
+
+- Removed the wiki-root fallback in the `cross-page-links` checker: links are now strictly page-relative, so a subdirectory page must use `../` to reach siblings. The fallback had masked the `prologue/config.md` → `operations/lint.md` class of broken link.
+- Added `internal/audit` — Go tests that run under `go test ./...` and the new `make audit` target: strict wiki/scaffold link resolution, front matter + `superseded_by` validation, graph reachability, duplicate basenames, active leaves, `wiki/<path>.md` references in all non-wiki `.md` files, `.wiki-instructions`/`.pi` vs `scaffold/` identity, and embedded-scaffold sync. Wired into CI.
+- Fixed remaining flat references the new audit surfaced: root `README.md` wiki-contract tree, `scaffold/wiki/operations/ingest.md` prose refs, and the page-relative links in `config.md`.
+- Documented strict page-relative links and the `make audit` step in `operations/lint.md`, the lint workflow, and the wiki-maintainer checklist.
+
+## [2026-08-15] ingest | organized wiki structure — todo #58 (issue #5)
+
+- Implemented the organized wiki layout: `index.md` and `README.md` stay at the root, `prologue/` holds `schema.md`, `repo-map.md`, `phases.md`, `log.md`, `config.md`, `decisions/` holds `lessons.md`/`todo.md`/`improvement-plan.md`, and `operations/` is unchanged.
+- Engine: added canonical-path resolution in `internal/engine/paths.go` — `log.md`, `phases.md`, `schema.md`, `repo-map.md` resolve at `prologue/<name>` first with legacy flat-layout fallback; `required-files` accepts either layout; leaf-pages/stale-content exemptions are canonical-aware. Back-compat verified by existing flat fixtures and a new integration-test block.
+- Scaffold: reorganized `scaffold/wiki/` with placeholder category pages (`decisions/example.md`, `architectures/example.md`); `init` now rewrites the scaffolded `.wikirc` `wiki_dir` to the requested dir name and prints the new `prologue/` next-steps paths.
+- Dogfood: migrated this repo's own `wiki/` to the new layout and updated `.wiki-instructions/` + `.pi/skills/wiki/SKILL.md` path references (`wiki/log.md` → `wiki/prologue/log.md`, etc.).
+
 ## [2026-08-15] ingest | filed GitHub issue #5 as todo #58
 
 - Added issue #5 (Define a wiki organized structure — group related pages into subdirectories like `prologue/`, `decisions/`, `architectures/`, with `index.md` at the root) to the backlog as todo #58. The design would touch the scaffold layout, `required-files`/`orphans`/graph handling, and the `wiki_dir` remap in `init`.

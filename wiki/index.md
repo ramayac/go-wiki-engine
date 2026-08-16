@@ -5,17 +5,20 @@ superseded_by: ""
 ---
 # Wiki Index
 
-## Core
+## Prologue
 
 - [README.md](README.md) | Purpose, rules, and shell-first navigation.
-- [schema.md](schema.md) | Required structure and maintenance contract.
-- [phases.md](phases.md) | Phase rollout plan.
-- [repo-map.md](repo-map.md) | Current repo architecture, subcommands, multi-tool integration model, config, build path.
-- [log.md](log.md) | Append-only timeline of wiki maintenance.
-- [lessons.md](lessons.md) | Design insights and gap post-mortems from real usage sessions.
-- [todo.md](todo.md) | Open improvement backlog ranked by difficulty.
-- [improvement-plan.md](improvement-plan.md) | Deprecated — completed hardening roadmap; design decisions archived in lessons.md.
-- [config.md](config.md) | Full `.wikirc` configuration reference.
+- [prologue/schema.md](prologue/schema.md) | Required structure and maintenance contract.
+- [prologue/phases.md](prologue/phases.md) | Phase rollout plan.
+- [prologue/repo-map.md](prologue/repo-map.md) | Current repo architecture, subcommands, multi-tool integration model, config, build path.
+- [prologue/log.md](prologue/log.md) | Append-only timeline of wiki maintenance.
+- [prologue/config.md](prologue/config.md) | Full `.wikirc` configuration reference.
+
+## Decisions
+
+- [decisions/lessons.md](decisions/lessons.md) | Design insights and gap post-mortems from real usage sessions.
+- [decisions/todo.md](decisions/todo.md) | Open improvement backlog ranked by difficulty.
+- [decisions/improvement-plan.md](decisions/improvement-plan.md) | Deprecated — completed hardening roadmap; design decisions archived in lessons.md.
 
 ## Operations
 
@@ -25,4 +28,4 @@ superseded_by: ""
 
 ## Prompt Workflows
 
-The slash-command prompts live outside the wiki in `.wiki-instructions/` (canonical source, symlinked into `.github/prompts/` and `.claude/commands/`). `/wiki-ingest`, `/wiki-query`, and `/wiki-lint` mirror the workflows under [operations/](operations/ingest.md); `/wiki-onboard`, `/wiki-refresh`, `/wiki-watch`, and `/wiki-upgrade` are documented in [repo-map.md](repo-map.md).
+The slash-command prompts live outside the wiki in `.wiki-instructions/` (canonical source, symlinked into `.github/prompts/` and `.claude/commands/`). `/wiki-ingest`, `/wiki-query`, and `/wiki-lint` mirror the workflows under [operations/](operations/ingest.md); `/wiki-onboard`, `/wiki-refresh`, `/wiki-watch`, and `/wiki-upgrade` are documented in [prologue/repo-map.md](prologue/repo-map.md).

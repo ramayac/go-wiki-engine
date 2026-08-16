@@ -125,6 +125,10 @@ func TestLogTail(t *testing.T) {
 	if len(lines) != 2 {
 		t.Errorf("LogTail returned %d lines, want 2", len(lines))
 	}
+	// Entries are prepended newest-first; LogTail must return the most recent.
+	if len(lines) > 0 && lines[0] != "## [2026-04-16] ingest | initial scaffold" {
+		t.Errorf("LogTail should return newest entries first, got %q", lines[0])
+	}
 
 	// With limit.
 	lines1, err := eng.LogTail(1)

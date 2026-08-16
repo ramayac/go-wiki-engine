@@ -25,150 +25,41 @@ make build
 cd your-repo
 wiki-engine init
 # Edit .wikirc to set your ignore patterns
-# Edit wiki/repo-map.md with your project's architecture
+# Edit wiki/prologue/repo-map.md with your project's architecture
 wiki-engine lint
 ```
 
-This scaffolds:
+The two files to customize after `init` are [`.wikirc`](wiki/prologue/config.md) — full reference in the wiki — and `wiki/prologue/repo-map.md`.
 
-| What | Purpose |
-|------|---------|
-| `wiki/` | Required pages + operations docs |
-| `.wikirc` | Per-repo config (wiki dir, diff base, ignore patterns, detection thresholds) |
-| `.wiki-instructions/` | **Canonical workflow definitions** — single source of truth for all tools |
-| `.pi/skills/wiki/` | pi.dev Agent Skills standard skill |
-| `.claude/commands/` | Claude Code slash commands |
-| `.github/prompts/` | GitHub Copilot slash commands (`/wiki-ingest`, `/wiki-query`, `/wiki-refresh`, `/wiki-onboard`, `/wiki-lint`) |
-| `.github/instructions/` | Copilot instruction file |
-| `AGENTS.md` / `CLAUDE.md` | Redirect shims pointing AI tools to `wiki/index.md` |
+It scaffolds the [wiki structure](#wiki-contract), the canonical `.wiki-instructions/` workflows, and tool-specific layers for Copilot, Claude Code, and pi.dev — see [How It Works](#how-it-works).
 
 ## Slash Commands
 
-The primary interface is slash commands in your AI tool. All share canonical definitions in `.wiki-instructions/`:
-
-| Command | When to use |
-|---------|-------------|
-| `/wiki-ingest` | Absorb a feature branch or batch of commits into the wiki |
-| `/wiki-query` | Answer architecture questions from the wiki first |
-| `/wiki-refresh` | Run the full maintenance cycle (changed → ingest → lint) |
-| `/wiki-onboard` | Bootstrap a wiki for a brand-new project or empty wiki |
-| `/wiki-lint` | Run the wiki linter and automatically fix structural errors, formatting, or metadata |
-| `/wiki-upgrade` | Upgrade the CLI binary, re-sync all prompt layers, and verify lint health |
-| `/wiki-watch` | Monitor for un-ingested changes and trigger auto-ingest |
-
-**Workflow:** You type `/wiki-ingest` (or `/wiki-lint`) → the agent inspects the repo with `wiki-engine` CLI commands → reads changed source files → writes durable facts to `wiki/` → runs `wiki-engine lint` to validate.
+The primary interface is slash commands in your AI tool, all sharing canonical definitions in `.wiki-instructions/`: `/wiki-ingest`, `/wiki-query`, `/wiki-refresh`, `/wiki-onboard`, `/wiki-lint`, `/wiki-upgrade`, `/wiki-watch`. The multi-tool integration model is documented in [wiki/prologue/repo-map.md](wiki/prologue/repo-map.md).
 
 ## Commands
 
-```
-wiki-engine [--json] <command> [arguments]
-```
+Run `wiki-engine help` for the full list, or `wiki-engine --json <command>` for structured output. Command-by-command details: [wiki/prologue/repo-map.md](wiki/prologue/repo-map.md).
 
-### Inspection
-
-| Command | Description |
-|---------|-------------|
-| `list [--active]` | List all wiki files (optionally filtering by active lifecycle status) |
-| `headings` | List all Markdown headings with file paths |
-| `search <query>` | Case-insensitive search across wiki files |
-| `log-tail [n]` | Show the last N log headings |
-| `changed [diff-range]` | List non-wiki files changed in a git diff range |
-| `candidates [diff-range]` | Filter changed files to ingest-worthy candidates |
-| `context [--minimal] [--active] [--sort=topo\|chrono] [--summarize]` | Condensed wiki snapshot or active-page graph for agent context loading |
-| `summary <page>` | Show first heading and paragraph of a page |
-| `relevant <query> [n]` | Rank wiki pages by relevance to a query |
-| `impact <file...>` | Show which wiki pages mention changed files |
-| `stats` | Aggregate wiki statistics (files, headings, lines) |
-
-### Validation
-
-| Command | Description |
-|---------|-------------|
-| `lint [--check=<checkers>] [--skip=<checkers>]` | Full health check — front-matter, index-format, bare-urls, structure, links, markers, orphans, leaf pages, duplicates, stale content |
-| `watch [--once]` | Poll for changes and lint issues (interval from `.wikirc`); `--once` runs a single cycle and exits 1 when the lint gate fails |
-| `diff <from> <to>` | Show wiki file changes between two git refs |
-
-### Maintenance
-
-| Command | Description |
-|---------|-------------|
-| `init [wiki-dir]` | Scaffold a new wiki into the current repo |
-| `sync-prompts` | Update all tool instruction layers to the latest version |
-| `refresh [diff-range]` | Run the full maintenance snapshot |
-| `upgrade` | Self-upgrade from the latest GitHub release (SHA-256 checksum verified; falls back to `go install`) |
-| `version` | Print the version |
-
-Add `--json` before any command for structured output: `wiki-engine --json lint`.
+Core commands: `init`, `list`, `search`, `context --active`, `summary`, `log-tail`, `changed`, `candidates`, `lint`, `watch --once`, `diff`, `refresh`, `sync-prompts`, `upgrade`.
 
 ## Configuration (`.wikirc`)
 
-Place a `.wikirc` file in your repo root:
-
-```ini
-wiki_dir = "wiki"
-default_diff = "main...HEAD"
-log_lines = 10
-fail_severity = "warn"        # minimum severity to exit 1: error | warn | info
-
-# Detection thresholds
-duplicate_threshold = 0.7   # 0.0-1.0, similarity above which pages are flagged as duplicates
-stale_days = 30              # days since a page's last git commit before it is flagged as stale
-
-# Watch mode
-watch_interval = 0           # seconds between watch polls (0 disables continuous watch; --once still works)
-
-# Context loading
-context_summarize = false    # default context command to --summarize mode
-
-ignore = [
-  "wiki/",
-  "bin/",
-  "vendor/",
-  "*.log",
-  "*.tmp",
-]
-```
-
-| Key | Default | Purpose |
-|-----|---------|---------|
-| `wiki_dir` | `wiki` | Directory name for the wiki |
-| `default_diff` | `main...HEAD` | Default git diff range for changed/candidates/refresh |
-| `log_lines` | `10` | Number of log entries shown by log-tail |
-| `fail_severity` | `warn` | Minimum severity level that causes linter to fail with exit code 1 (`error`, `warn`, or `info`) |
-| `duplicate_threshold` | `0.7` | Similarity threshold for duplicate page detection (0 disables) |
-| `stale_days` | `30` | Days since a page's last git commit before it is flagged as stale (0 disables; falls back to file mtime outside git) |
-| `watch_interval` | `0` | Seconds between watch polls (0 disables continuous watch; `--once` still works) |
-| `context_summarize` | `false` | Default the `context` command to progressive summary disclosure mode |
-| `ignore` | see above | Paths excluded from ingest candidate filtering |
-
-If `.wikirc` is absent, sensible defaults are used.
+Config lives in a `.wikirc` file at the repo root (sensible defaults apply when absent). Full reference: [wiki/prologue/config.md](wiki/prologue/config.md).
 
 ## How It Works
 
 The wiki engine is a **read-only inspection and validation tool**. It never modifies wiki content — that's the agent's job.
 
-`wiki-engine init` scaffolds multiple tool layers into your repo, all sharing a single canonical source in `.wiki-instructions/`:
-
-| Layer | Tool | Format |
-|-------|------|--------|
-| `.wiki-instructions/` | All tools | Canonical workflow definitions (edit here) |
-| `.github/prompts/` | GitHub Copilot | Slash commands (symlinks) |
-| `.github/instructions/` | GitHub Copilot | Agent instructions (symlink) |
-| `.claude/commands/` | Claude Code | Custom slash commands (symlinks) |
-| `.pi/skills/wiki/` | pi.dev | Agent Skills standard skill |
-| `AGENTS.md` / `CLAUDE.md` | All AI tools | Redirect shims → `wiki/index.md` |
-
-In repos initialized by `wiki-engine init` or updated by `wiki-engine sync-prompts`, the tool directories contain symlinks back to `.wiki-instructions/`, so edits to a canonical file propagate to every tool layer. On platforms where symlink creation fails (e.g. Windows without developer mode), regular copies are written instead — re-run `wiki-engine sync-prompts` after editing canonical files there.
+`wiki-engine init` scaffolds tool layers for GitHub Copilot, Claude Code, and pi.dev — one canonical source in `.wiki-instructions/` with symlinks in each tool directory (regular-copy fallback where symlinks fail). The full multi-tool integration model: [wiki/prologue/repo-map.md](wiki/prologue/repo-map.md).
 
 **Typical workflow:**
 
-1. You run `wiki-engine init` once, then customize `wiki/repo-map.md` and `.wikirc`.
+1. You run `wiki-engine init` once, then customize [`.wikirc`](wiki/prologue/config.md) and [wiki/prologue/repo-map.md](wiki/prologue/repo-map.md).
 2. You type `/wiki-ingest`, `/wiki-query`, or `/wiki-refresh` in your AI tool.
 3. The agent runs `wiki-engine context` to get a lightweight snapshot, then `wiki-engine changed` + `wiki-engine candidates` to see what changed.
-4. The agent reads affected source files, writes durable facts into `wiki/`, and appends to `wiki/log.md`.
+4. The agent reads affected source files, writes durable facts into `wiki/`, and appends to `wiki/prologue/log.md`.
 5. The agent runs `wiki-engine lint` to validate before finishing.
-
-`wiki-engine` provides the plumbing. The slash commands provide the intelligence.
 
 ## Wiki Contract
 
@@ -177,16 +68,20 @@ Every wiki managed by this tool has at least:
 ```
 wiki/
 ├── README.md
-├── index.md          # Catalog of all wiki pages
-├── log.md            # Append-only maintenance timeline
-├── schema.md         # Required structure and rules
-├── phases.md         # Rollout tracking
-├── repo-map.md       # Architecture and exclusions
+├── index.md              # Catalog of all wiki pages
+├── prologue/
+│   ├── log.md            # Append-only maintenance timeline
+│   ├── schema.md         # Required structure and rules
+│   ├── phases.md         # Rollout tracking
+│   └── repo-map.md       # Architecture and exclusions
+├── decisions/            # Topic pages grouped by domain
 └── operations/
-    ├── ingest.md     # How to absorb repo changes
-    ├── query.md      # How to answer questions wiki-first
-    └── lint.md       # How to health-check the wiki
+    ├── ingest.md         # How to absorb repo changes
+    ├── query.md          # How to answer questions wiki-first
+    └── lint.md           # How to health-check the wiki
 ```
+
+Category directories such as `decisions/` and `architectures/` are conventions, not requirements — the scaffold ships placeholder examples in both. The full contract and directory convention: [wiki/prologue/schema.md](wiki/prologue/schema.md).
 
 ## Development
 
@@ -194,12 +89,11 @@ wiki/
 make help             # Show all targets
 make build            # Build to bin/wiki-engine
 make test             # Run all unit tests
-make lint             # Run go vet
+make lint             # Run go vet + wiki-engine lint
+make audit            # Repo-wide wiki reference integrity audit
 make sync-scaffold    # Sync scaffold/ → internal/scaffold/files/ for embedding
+make integration      # End-to-end integration test suite
 make install          # go install globally
-
-# Integration tests
-bash test/integration_test.sh
 ```
 
 When editing scaffold templates in `scaffold/`, run `make sync-scaffold` before building so the embedded copies are updated.

@@ -43,7 +43,7 @@ When `wiki-engine watch` reports changed candidates:
    - Ensure all new pages include a valid YAML front matter block (with `status: current` or `status: planned`, and a `description`).
    - If replacing or retiring an existing page, set its front matter `status` to `deprecated` and specify the replacing page path in `superseded_by: "target-page.md"`.
    - Update pages with durable facts only, using standard relative Markdown links (e.g., `[Text](file.md)`), and cross-link to related pages.
-6. Append a dated entry to [wiki/log.md](../../wiki/log.md).
+6. Append a dated entry to [wiki/log.md](../../wiki/prologue/log.md).
 7. Run `wiki-engine lint`.
 
 If no candidates have durable wiki impact, report "no wiki update needed" and move on.

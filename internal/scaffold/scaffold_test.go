@@ -19,13 +19,15 @@ func TestInit(t *testing.T) {
 	required := []string{
 		"wiki/README.md",
 		"wiki/index.md",
-		"wiki/log.md",
-		"wiki/schema.md",
-		"wiki/phases.md",
-		"wiki/repo-map.md",
+		"wiki/prologue/log.md",
+		"wiki/prologue/schema.md",
+		"wiki/prologue/phases.md",
+		"wiki/prologue/repo-map.md",
 		"wiki/operations/ingest.md",
 		"wiki/operations/query.md",
 		"wiki/operations/lint.md",
+		"wiki/decisions/example.md",
+		"wiki/architectures/example.md",
 	}
 	for _, f := range required {
 		p := filepath.Join(dest, f)
@@ -97,6 +99,18 @@ func TestInitCustomDir(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dest, ".wikirc")); os.IsNotExist(err) {
 		t.Error("missing .wikirc")
+	}
+
+	// The scaffolded .wikirc must point at the remapped dir, not the default.
+	data, err := os.ReadFile(filepath.Join(dest, ".wikirc"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `wiki_dir = "docs"`) {
+		t.Errorf(".wikirc should remap wiki_dir to docs, got:\n%s", data)
+	}
+	if !strings.Contains(string(data), `"docs/"`) {
+		t.Errorf(".wikirc should remap the ignore-list wiki/ entry to docs/, got:\n%s", data)
 	}
 }
 

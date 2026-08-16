@@ -15,28 +15,45 @@ It should reduce repeated repo rediscovery by storing stable summaries, operatin
 
 Every repo that adopts this pattern should have at least these files:
 
-- [README.md](README.md)
-- [index.md](index.md)
+- [README.md](../README.md)
+- [index.md](../index.md)
 - [log.md](log.md)
 - `schema.md` (this file)
 - [phases.md](phases.md)
 - [repo-map.md](repo-map.md)
-- [operations/ingest.md](operations/ingest.md)
-- [operations/query.md](operations/query.md)
-- [operations/lint.md](operations/lint.md)
+- [operations/ingest.md](../operations/ingest.md)
+- [operations/query.md](../operations/query.md)
+- [operations/lint.md](../operations/lint.md)
+
+## Directory Structure
+
+The wiki is organized into subdirectories. Only [index.md](../index.md) and
+[README.md](../README.md) live at the root:
+
+| Path | Role |
+|---|---|
+| `index.md` | Root catalog — the graph BFS start point. |
+| `README.md` | Wiki rules and navigation. |
+| `prologue/` | Wiki-about-the-wiki files: `schema.md`, `repo-map.md`, `phases.md`, `log.md`. |
+| `operations/` | Repeatable workflow pages (`ingest.md`, `query.md`, `lint.md`). |
+| `decisions/`, `architectures/`, … | Topic pages grouped by domain. Create new category directories as needed. |
+
+The engine resolves the canonical files (`log.md`, `phases.md`, `schema.md`,
+`repo-map.md`) at `prologue/<name>` first and falls back to the legacy
+root-level paths, so older flat wikis keep working.
 
 ## Read Order
 
-1. Read [index.md](index.md).
+1. Read [index.md](../index.md).
 2. Read the latest entries in [log.md](log.md).
-3. Read the relevant [operations](operations/ingest.md) page.
+3. Read the relevant [operations](../operations/ingest.md) page.
 4. Read only the linked topic pages needed for the task.
 5. Read source files only after the wiki has been consulted.
 
 ## Write Order
 
 1. Update the topic page that changed.
-2. Update [index.md](index.md) if a page was added or its role changed.
+2. Update [index.md](../index.md) if a page was added or its role changed.
 3. Append a dated entry to [log.md](log.md).
 
 ## File Style
@@ -49,14 +66,14 @@ Every repo that adopts this pattern should have at least these files:
 
 ## Durable Knowledge Rules
 
-- Put repeatable procedures in [operations/](operations/ingest.md).
-- Put repo facts in [repo-map.md](repo-map.md) or another topic page referenced by [index.md](index.md).
+- Put repeatable procedures in [operations/](../operations/ingest.md).
+- Put repo facts in [repo-map.md](repo-map.md) or another topic page referenced by [index.md](../index.md).
 - Put longer-lived decisions or answers into the wiki instead of leaving them only in chat history.
 - Keep [log.md](log.md) append-only.
 
 ## Repo-Specific Exclusions
 
-Each repo should document high-noise or user-authored areas that should not be routinely ingested in `.wikirc` under the `ignore` list — see [config.md](config.md).
+Each repo should document high-noise or user-authored areas that should not be routinely ingested in `.wikirc` under the `ignore` list.
 
 ## Cross-Linking Rules
 
