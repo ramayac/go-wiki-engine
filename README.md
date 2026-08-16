@@ -25,7 +25,7 @@ make build
 cd your-repo
 wiki-engine init
 # Edit .wikirc to set your ignore patterns
-# Edit wiki/repo-map.md with your project's architecture
+# Edit wiki/prologue/repo-map.md with your project's architecture
 wiki-engine lint
 ```
 
@@ -162,10 +162,10 @@ In repos initialized by `wiki-engine init` or updated by `wiki-engine sync-promp
 
 **Typical workflow:**
 
-1. You run `wiki-engine init` once, then customize `wiki/repo-map.md` and `.wikirc`.
+1. You run `wiki-engine init` once, then customize `wiki/prologue/repo-map.md` and `.wikirc`.
 2. You type `/wiki-ingest`, `/wiki-query`, or `/wiki-refresh` in your AI tool.
 3. The agent runs `wiki-engine context` to get a lightweight snapshot, then `wiki-engine changed` + `wiki-engine candidates` to see what changed.
-4. The agent reads affected source files, writes durable facts into `wiki/`, and appends to `wiki/log.md`.
+4. The agent reads affected source files, writes durable facts into `wiki/`, and appends to `wiki/prologue/log.md`.
 5. The agent runs `wiki-engine lint` to validate before finishing.
 
 `wiki-engine` provides the plumbing. The slash commands provide the intelligence.
@@ -177,15 +177,17 @@ Every wiki managed by this tool has at least:
 ```
 wiki/
 ├── README.md
-├── index.md          # Catalog of all wiki pages
-├── log.md            # Append-only maintenance timeline
-├── schema.md         # Required structure and rules
-├── phases.md         # Rollout tracking
-├── repo-map.md       # Architecture and exclusions
+├── index.md              # Catalog of all wiki pages
+├── prologue/
+│   ├── log.md            # Append-only maintenance timeline
+│   ├── schema.md         # Required structure and rules
+│   ├── phases.md         # Rollout tracking
+│   └── repo-map.md       # Architecture and exclusions
+├── decisions/            # Topic pages grouped by domain
 └── operations/
-    ├── ingest.md     # How to absorb repo changes
-    ├── query.md      # How to answer questions wiki-first
-    └── lint.md       # How to health-check the wiki
+    ├── ingest.md         # How to absorb repo changes
+    ├── query.md          # How to answer questions wiki-first
+    └── lint.md           # How to health-check the wiki
 ```
 
 ## Development

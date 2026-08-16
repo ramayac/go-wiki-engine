@@ -40,7 +40,7 @@ If any file contains custom instructions (not just a redirect shim), migrate the
 - Coding conventions or team workflow → add to [wiki/README.md](../../wiki/README.md).
 - Architecture or component notes → add to [wiki/repo-map.md](../../wiki/prologue/repo-map.md).
 - Broad AI guidance (how the agent should behave) → add an **AI Agent Guidance** section in [wiki/README.md](../../wiki/README.md).
-- If it is large or specialized, copy into a dedicated wiki page (e.g. `wiki/agents-guide.md`) with a valid front matter block.
+- If it is large or specialized, copy into a dedicated wiki page in the appropriate category directory (e.g. `wiki/architectures/agents-guide.md`) with a valid front matter block.
 - Once migrated, replace `AGENTS.md` and `CLAUDE.md` with standard redirect shims:
   ```markdown
   # AI Agent Instructions (or Claude Instructions)
