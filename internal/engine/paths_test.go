@@ -173,6 +173,37 @@ func TestRequiredFilesMissingBothCandidates(t *testing.T) {
 	}
 }
 
+// TestLintSubdirLinkMustBePageRelative guards the strict cross-page link
+// resolution: a page inside a subdirectory must use ../ to reach siblings in
+// other directories. The removed wiki-root fallback used to mask this class
+// of broken link.
+func TestLintSubdirLinkMustBePageRelative(t *testing.T) {
+	root := setupNestedWiki(t)
+	repoMap := filepath.Join(root, "wiki", "prologue", "repo-map.md")
+	// links operations/lint.md WITHOUT ../ — resolves to prologue/operations/lint.md.
+	os.WriteFile(repoMap, []byte("---\nstatus: current\ndescription: Repo Map\n---\n# Repo Map\n\nSee [Lint](operations/lint.md).\n"), 0o644)
+	eng := newTestEngine(root)
+	result := eng.LintWithOptions([]string{"cross-page-links"}, nil)
+	found := false
+	for _, iss := range result.Issues {
+		if iss.Check == "cross-page-links" && strings.Contains(iss.Message, "operations/lint.md") {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("cross-page-links should flag a subdir page linking a sibling without ../")
+	}
+
+	// The corrected ../ link must pass.
+	os.WriteFile(repoMap, []byte("---\nstatus: current\ndescription: Repo Map\n---\n# Repo Map\n\nSee [Lint](../operations/lint.md).\n"), 0o644)
+	result = eng.LintWithOptions([]string{"cross-page-links"}, nil)
+	for _, iss := range result.Issues {
+		if iss.Check == "cross-page-links" {
+			t.Errorf("correct ../ link should pass, got issue: %v", iss)
+		}
+	}
+}
+
 func TestIsCanonicalFile(t *testing.T) {
 	tests := []struct {
 		name    string

@@ -43,6 +43,7 @@ scaffold/               Human-readable reference copy of embedded templates
 - `internal/engine/engine_lint.go` — `Checker` interface + 17 implementations: required-files, front-matter, index-format, bare-urls, index-links, cross-page-links, markdown-format, orphans, leaf-pages, heading-hierarchy, log-headings, log-chronology, markers, phase-consistency, external-links, duplicate-content, stale-content
 - `internal/engine/paths.go` — canonical file resolution: `log.md`, `phases.md`, `schema.md`, `repo-map.md` resolve at `prologue/<name>` first with legacy root-level fallback; `required-files` accepts either layout
 - `internal/scaffold/scaffold.go` — `Init()` walks the embedded FS, remaps `wiki/` to the user-specified dir name, and rewrites the scaffolded `.wikirc` `wiki_dir` to match; `SyncPrompts()` overwrites `.wiki-instructions/`, `.github/`, `.claude/commands/`, and `.pi/skills/` via `syncEmbeddedDir()` helper; tool-layer files are written as symlinks to `.wiki-instructions/` with a regular-copy fallback on platforms without symlink support; `syncShims()` creates `AGENTS.md`/`CLAUDE.md` only when absent (never overwrites user content); `Init()` preserves an existing `.wikirc`
+- `internal/audit/` — repo-wide reference integrity tests (strict page-relative wiki links, stale `wiki/<path>.md` references outside the wiki, graph reachability, instruction-layer identity, embedded scaffold sync); run via `make audit` and as part of `go test ./...` in CI
 - `internal/config/config.go` — parses `.wikirc` (key=value + array format, no external deps); returns defaults when file is absent
 - `scaffold/` — source of truth for scaffold templates; `make sync-scaffold` copies it to `internal/scaffold/files/`
 
@@ -144,6 +145,7 @@ make build           # Compile to bin/wiki-engine (version=dev)
 make test            # Run all tests
 make lint            # go vet
 make sync-scaffold   # Copy scaffold/ → internal/scaffold/files/
+make audit           # Repo-wide wiki reference integrity audit
 make install         # go install globally
 ```
 

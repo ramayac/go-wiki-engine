@@ -7,6 +7,13 @@ superseded_by: ""
 
 Append-only timeline of wiki maintenance activity.
 
+## [2026-08-15] lint | audit hardening — repo-wide reference integrity
+
+- Removed the wiki-root fallback in the `cross-page-links` checker: links are now strictly page-relative, so a subdirectory page must use `../` to reach siblings. The fallback had masked the `prologue/config.md` → `operations/lint.md` class of broken link.
+- Added `internal/audit` — Go tests that run under `go test ./...` and the new `make audit` target: strict wiki/scaffold link resolution, front matter + `superseded_by` validation, graph reachability, duplicate basenames, active leaves, `wiki/<path>.md` references in all non-wiki `.md` files, `.wiki-instructions`/`.pi` vs `scaffold/` identity, and embedded-scaffold sync. Wired into CI.
+- Fixed remaining flat references the new audit surfaced: root `README.md` wiki-contract tree, `scaffold/wiki/operations/ingest.md` prose refs, and the page-relative links in `config.md`.
+- Documented strict page-relative links and the `make audit` step in `operations/lint.md`, the lint workflow, and the wiki-maintainer checklist.
+
 ## [2026-08-15] ingest | organized wiki structure — todo #58 (issue #5)
 
 - Implemented the organized wiki layout: `index.md` and `README.md` stay at the root, `prologue/` holds `schema.md`, `repo-map.md`, `phases.md`, `log.md`, `config.md`, `decisions/` holds `lessons.md`/`todo.md`/`improvement-plan.md`, and `operations/` is unchanged.

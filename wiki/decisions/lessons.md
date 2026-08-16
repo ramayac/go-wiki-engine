@@ -233,3 +233,25 @@ Added `canonicalPathCandidates` in `internal/engine/paths.go`: each logical file
 ### Key design principle confirmed
 
 **Prefer candidate lists over hardcoded paths for structural files.** When a directory convention changes, resolve logical files through a small indirection layer with legacy fallbacks — consumers stay readable, old layouts keep working, and the migration pressure lands only on new scaffolds.
+
+---
+
+## 2026-08-15 — Tolerance in validators hides the bugs they exist to find
+
+### What happened
+
+The follow-up audit of the organized-structure migration found real gaps that `wiki-engine lint` had reported as clean: `prologue/config.md` linked `operations/lint.md` (missing `../`), and the root `README.md`, scaffold templates, and prompt files still referenced `wiki/log.md`-style flat paths in prose. Lint passed because `crossPageLinksChecker` had a "try relative to wiki dir" fallback that made subdirectory pages resolve as if they lived at the root, and because lint only scans markdown links inside `wiki/` — prose references and non-wiki files are invisible to it.
+
+### Why it matters
+
+Every tolerance in a validator is a hole where drift accumulates silently. The fallback was added for convenience and converted a whole class of wrong links into accepted ones. Non-wiki files (README, prompts, scaffold) are where agents and users land first, so stale references there cost more than broken links deep in the wiki.
+
+### The fix
+
+- Removed the wiki-root fallback from `crossPageLinksChecker`: links are strictly page-relative, with a regression test proving a subdir page must use `../` for siblings.
+- Added `internal/audit` — Go tests that run under `go test ./...` and `make audit`, checking strict wiki links, scaffold template links, front matter/superseded_by, graph reachability, duplicate basenames, active leaves, `wiki/<path>.md` references in every non-wiki `.md` file, instruction-layer identity between `.wiki-instructions/`/`.pi/` and `scaffold/`, and embedded-scaffold sync.
+- Wired `make audit` into CI and documented it in the lint workflow, wiki-maintainer checklist, and operations/lint.md.
+
+### Key design principle confirmed
+
+**Automate the audit that found the bugs, and remove the tolerance that hid them.** A validator with a forgiving fallback and a checker with a blind spot (only wiki links) both failed — the fix is stricter semantics plus a repo-wide test that runs on every commit.

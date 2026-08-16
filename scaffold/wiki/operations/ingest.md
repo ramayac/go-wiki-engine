@@ -41,7 +41,7 @@ wiki-engine refresh
 If a project has existing documentation outside `wiki/` (e.g., `docs/bigPlan.md`, root `AGENTS.md`):
 - Move durable content into a wiki page with a stable filename.
 - Replace the original with a one-line stub redirecting to `wiki/<page>.md`, or delete it if fully superseded.
-- Log the migration in `wiki/log.md`.
+- Log the migration in `wiki/prologue/log.md`.
 
 ## Log Format
 

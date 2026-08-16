@@ -163,7 +163,6 @@ func (c *crossPageLinksChecker) Name() string { return "cross-page-links" }
 
 func (c *crossPageLinksChecker) Check(e *Engine) ([]Issue, error) {
 	var issues []Issue
-	wikiDir := e.WikiPath()
 	files, err := e.List()
 	if err != nil {
 		return nil, err
@@ -197,19 +196,18 @@ func (c *crossPageLinksChecker) Check(e *Engine) ([]Issue, error) {
 				if !strings.HasSuffix(baseTarget, ".md") {
 					continue
 				}
+				// Links are strictly page-relative: a subdirectory page must use ../ to
+				// reach siblings in other directories. No wiki-root fallback — tolerating
+				// it masked broken links when pages moved into subdirectories.
 				linked := filepath.Clean(filepath.Join(pageDir, baseTarget))
 				if _, err := os.Stat(linked); os.IsNotExist(err) {
-					// Also try relative to wiki dir.
-					linked2 := filepath.Join(wikiDir, baseTarget)
-					if _, err2 := os.Stat(linked2); os.IsNotExist(err2) {
-						issues = append(issues, Issue{
-							Severity: SevError,
-							Check:    c.Name(),
-							File:     rel,
-							Line:     lineNo + 1,
-							Message:  fmt.Sprintf("broken link: %s", target),
-						})
-					}
+					issues = append(issues, Issue{
+						Severity: SevError,
+						Check:    c.Name(),
+						File:     rel,
+						Line:     lineNo + 1,
+						Message:  fmt.Sprintf("broken link: %s", target),
+					})
 				}
 			}
 		}

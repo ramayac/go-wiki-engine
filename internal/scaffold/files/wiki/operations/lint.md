@@ -16,7 +16,7 @@ Keep the wiki coherent, linked, and current.
 - Stale claims are updated when source files changed.
 - Exclusions still match repo reality.
 - New recurring topics have a page instead of being trapped in chat history.
-- Links are standard relative Markdown format, are not malformed (e.g., no wiki-style links `[[Page]]` or unclosed parentheses), and are correctly mapped to files that exist.
+- Links are standard relative Markdown format, are not malformed (e.g., no wiki-style links `[[Page]]` or unclosed parentheses), and are correctly mapped to files that exist. Links are strictly page-relative — a page in a subdirectory must use `../` to reach pages in other directories.
 - Active pages are cross-linked: each page links to its related pages; the only intentional leaf is `log.md`.
 - `leaf-pages` surfaces active pages with no outgoing links at info severity — non-failing by default, visible as a reminder.
 
@@ -27,6 +27,7 @@ wiki-engine lint
 wiki-engine list
 wiki-engine context --active
 wiki-engine search "TODO:"
+make audit
 ```
 
 ## Repair Order
@@ -34,6 +35,7 @@ wiki-engine search "TODO:"
 1. Fix stale or incorrect topic pages.
 2. Fix [index.md](../index.md) links or summaries.
 3. Append a log entry to [log.md](../prologue/log.md) if the lint changed durable content.
+4. If pages moved between directories or wiki files were renamed, run `make audit` and fix strict page-relative links and stale `wiki/<path>.md` prose references.
 
 ## Log Format
 

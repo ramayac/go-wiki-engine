@@ -50,6 +50,7 @@ When writing or modifying any wiki page, always follow this checklist:
    ---
    ```
 7. **Cross-link pages:** Every page you create or update must link to its related pages (and link back where useful). The only intentional leaf is `log.md`. Verify with `wiki-engine context --active` that the page appears in the active graph and no unlinked warnings remain. `wiki-engine lint` surfaces violations via the `leaf-pages` check (info severity).
+8. **Run `make audit`:** after structural changes (page moves, new category directories, scaffold or prompt edits), run `make audit` to catch page-relative links, stale `wiki/<path>.md` references, and instruction-layer drift.
 
 ## Graph Navigation & Search
 
