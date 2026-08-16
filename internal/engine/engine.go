@@ -171,8 +171,10 @@ func (e *Engine) LogTail(n int) ([]string, error) {
 		return nil, err
 	}
 
+	// Entries are prepended (newest first) — the log-chronology checker
+	// enforces descending dates. Keep the most recent n.
 	if len(headings) > n {
-		headings = headings[len(headings)-n:]
+		headings = headings[:n]
 	}
 	return headings, nil
 }

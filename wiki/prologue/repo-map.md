@@ -56,7 +56,7 @@ scaffold/               Human-readable reference copy of embedded templates
 | `list` | List all files under `wiki_dir` |
 | `headings` | List all Markdown headings across wiki files |
 | `search <query>` | Case-insensitive full-text search across wiki files |
-| `log-tail [n]` | Show last N log headings from `log.md` |
+| `log-tail [n]` | Show the most recent N log headings from `log.md` |
 | `changed [diff]` | `git diff --name-only` filtered to non-wiki, non-ignored files |
 | `candidates [diff]` | Same as changed, further filtered by `.wikirc` ignore rules (see [config.md](config.md)) |
 | `lint [--check=<a,b>] [--skip=<a,b>]` | Check required files, front matter, index format, bare URLs, broken links (index + cross-page), log heading format and chronology, open markers, orphans, leaf pages, heading hierarchy, phase consistency, external links to source files, duplicate content, stale content — repair guide: [operations/lint.md](../operations/lint.md) |

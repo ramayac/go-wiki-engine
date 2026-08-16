@@ -7,6 +7,10 @@ superseded_by: ""
 
 Append-only timeline of wiki maintenance activity.
 
+## [2026-08-16] lint | log-tail showed oldest entries instead of most recent
+
+- Fixed a logic bug in `LogTail`: entries are prepended newest-first (the `log-chronology` checker enforces descending dates), but the function sliced the *last* N headings — so `log-tail` and the `context` recent-log section returned the oldest entries. It now keeps the first N (most recent). Added an ordering assertion to `TestLogTail` and clarified the `repo-map.md` subcommand description.
+
 ## [2026-08-15] lint | audit hardening — repo-wide reference integrity
 
 - Removed the wiki-root fallback in the `cross-page-links` checker: links are now strictly page-relative, so a subdirectory page must use `../` to reach siblings. The fallback had masked the `prologue/config.md` → `operations/lint.md` class of broken link.
