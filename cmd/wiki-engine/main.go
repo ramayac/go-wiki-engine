@@ -601,7 +601,7 @@ Commands:
   list                    List all wiki files
   headings                List all Markdown headings with file paths
   search <query>          Case-insensitive search across wiki files
-  log-tail [n]            Show the last N log headings
+  log-tail [n]            Show the most recent N log headings
   changed [diff-range]    List non-wiki files changed in a git diff range
   candidates [diff-range] Filter changed files to ingest-worthy candidates
   stats                   Show aggregate wiki statistics
