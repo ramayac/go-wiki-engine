@@ -438,12 +438,12 @@ func (c *headingHierarchyChecker) Check(e *Engine) ([]Issue, error) {
 			continue
 		}
 		abs := filepath.Join(e.RootDir, rel)
-		func() {
+		err := func() error {
 			f, err := os.Open(abs)
 			if err != nil {
-				return
+				return nil
 			}
-			defer f.Close()
+			defer func() { _ = f.Close() }()
 
 			scanner := bufio.NewScanner(f)
 			lineNo := 0
@@ -503,7 +503,11 @@ func (c *headingHierarchyChecker) Check(e *Engine) ([]Issue, error) {
 					Message:  fmt.Sprintf("multiple h1 headings (%d)", h1Count),
 				})
 			}
+			return scanner.Err()
 		}()
+		if err != nil {
+			return nil, err
+		}
 	}
 	return issues, nil
 }
@@ -523,7 +527,7 @@ func (c *logHeadingsChecker) Check(e *Engine) ([]Issue, error) {
 	if err != nil {
 		return issues, nil
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	scanner := bufio.NewScanner(f)
 	lineNo := 0
@@ -539,6 +543,9 @@ func (c *logHeadingsChecker) Check(e *Engine) ([]Issue, error) {
 				Message:  fmt.Sprintf("invalid log heading format: %s", line),
 			})
 		}
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
 	}
 	return issues, nil
 }
@@ -558,7 +565,7 @@ func (c *logChronologyChecker) Check(e *Engine) ([]Issue, error) {
 	if err != nil {
 		return issues, nil
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var dates []string
 	var dateLines []int
@@ -572,6 +579,9 @@ func (c *logChronologyChecker) Check(e *Engine) ([]Issue, error) {
 			dates = append(dates, m[1])
 			dateLines = append(dateLines, lineNo)
 		}
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
 	}
 
 	for i := 1; i < len(dates); i++ {
@@ -610,6 +620,7 @@ func (c *markersChecker) Check(e *Engine) ([]Issue, error) {
 		if err != nil {
 			continue
 		}
+		defer func() { _ = f.Close() }()
 		scanner := bufio.NewScanner(f)
 		lineNo := 0
 		inCodeBlock := false
@@ -633,7 +644,9 @@ func (c *markersChecker) Check(e *Engine) ([]Issue, error) {
 				})
 			}
 		}
-		f.Close()
+		if err := scanner.Err(); err != nil {
+			return nil, err
+		}
 	}
 	return issues, nil
 }
@@ -651,7 +664,7 @@ func (c *phaseConsistencyChecker) Check(e *Engine) ([]Issue, error) {
 	if err != nil {
 		return issues, nil
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	type phaseRow struct {
 		num    int
@@ -671,12 +684,15 @@ func (c *phaseConsistencyChecker) Check(e *Engine) ([]Issue, error) {
 			continue
 		}
 		num := 0
-		fmt.Sscanf(m[1], "%d", &num)
+		_, _ = fmt.Sscanf(m[1], "%d", &num)
 		phases = append(phases, phaseRow{
 			num:    num,
 			status: strings.TrimSpace(m[3]),
 			line:   lineNo,
 		})
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
 	}
 
 	validStatuses := map[string]bool{
@@ -902,7 +918,7 @@ func (c *staleContentChecker) Check(e *Engine) ([]Issue, error) {
 	hasSourceChanges := len(changed) > 0
 
 	// Walk wiki .md files.
-	filepath.WalkDir(wikiDir, func(path string, d os.DirEntry, err error) error {
+	_ = filepath.WalkDir(wikiDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return nil
 		}

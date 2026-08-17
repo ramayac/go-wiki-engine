@@ -114,14 +114,14 @@ func runSyncPrompts() {
 		return
 	}
 	for _, f := range updated {
-		fmt.Fprintf(os.Stderr, "updated %s\n", f)
+		_, _ = fmt.Fprintf(os.Stderr, "updated %s\n", f)
 	}
-	fmt.Fprintf(os.Stderr, "sync-prompts: %d file(s) updated\n", len(updated))
+	_, _ = fmt.Fprintf(os.Stderr, "sync-prompts: %d file(s) updated\n", len(updated))
 
 	if len(preExistingShims) > 0 {
-		fmt.Fprintf(os.Stdout, "\ntip: %s already exist and were not modified.\n", strings.Join(preExistingShims, " and "))
-		fmt.Fprintln(os.Stdout, "     Custom content in these files is preserved. Review it against wiki/README.md,")
-		fmt.Fprintln(os.Stdout, "     then run wiki-engine sync-prompts again after adopting the standard redirect shims.")
+		_, _ = fmt.Fprintf(os.Stdout, "\ntip: %s already exist and were not modified.\n", strings.Join(preExistingShims, " and "))
+		_, _ = fmt.Fprintln(os.Stdout, "     Custom content in these files is preserved. Review it against wiki/README.md,")
+		_, _ = fmt.Fprintln(os.Stdout, "     then run wiki-engine sync-prompts again after adopting the standard redirect shims.")
 	}
 }
 
@@ -157,6 +157,9 @@ func loadEngine() (*config.Config, *engine.Engine) {
 }
 
 func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string, useJSON bool) {
+	if err := validateCommandArgs(cmd, args[2:]); err != nil {
+		fatal(err)
+	}
 	switch cmd {
 	case "list":
 		activeOnly := false
@@ -347,16 +350,16 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 		active := false
 		sortBy := "chrono"
 		for _, a := range args[2:] {
-			switch {
-			case a == "--minimal":
+			switch a {
+			case "--minimal":
 				minimal = true
-			case a == "--summarize":
+			case "--summarize":
 				summarize = true
-			case a == "--active":
+			case "--active":
 				active = true
-			case a == "--sort=topo":
+			case "--sort=topo":
 				sortBy = "topo"
-			case a == "--sort=chrono":
+			case "--sort=chrono":
 				sortBy = "chrono"
 			}
 		}
@@ -489,6 +492,9 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 				if line != "" {
 					changedFiles = append(changedFiles, line)
 				}
+			}
+			if err := scanner.Err(); err != nil {
+				fatal(err)
 			}
 		}
 		if len(changedFiles) == 0 {
@@ -624,6 +630,71 @@ Add --json before the command for structured JSON output.`)
 func fatal(err error) {
 	fmt.Fprintf(os.Stderr, "error: %v\n", err)
 	os.Exit(1)
+}
+
+// argSpec describes the accepted arguments for a command: exact flags,
+// prefix flags (e.g. --check=), and the maximum number of positional
+// arguments (-1 for unlimited).
+type argSpec struct {
+	flags    map[string]bool
+	prefixes []string
+	maxPos   int
+}
+
+var commandArgSpecs = map[string]argSpec{
+	"list":       {flags: map[string]bool{"--active": true}, maxPos: 0},
+	"headings":   {maxPos: 0},
+	"search":     {maxPos: -1},
+	"log-tail":   {maxPos: 1},
+	"changed":    {maxPos: 1},
+	"candidates": {maxPos: 1},
+	"lint":       {prefixes: []string{"--check=", "--skip="}, maxPos: 0},
+	"refresh":    {maxPos: 1},
+	"stats":      {maxPos: 0},
+	"context": {
+		flags: map[string]bool{
+			"--minimal": true, "--summarize": true, "--active": true,
+			"--sort=topo": true, "--sort=chrono": true,
+		},
+		maxPos: 0,
+	},
+	"summary":  {maxPos: 1},
+	"relevant": {maxPos: 2},
+	"impact":   {maxPos: -1},
+	"diff":     {maxPos: 2},
+	"watch":    {flags: map[string]bool{"--once": true}, maxPos: 0},
+}
+
+// validateCommandArgs rejects unknown flags and excess positional arguments
+// so that typos fail loudly instead of being silently ignored.
+func validateCommandArgs(cmd string, args []string) error {
+	spec, ok := commandArgSpecs[cmd]
+	if !ok {
+		return nil // unknown command — reported by the dispatcher
+	}
+	positional := 0
+	for _, a := range args {
+		if strings.HasPrefix(a, "--") {
+			allowed := spec.flags[a]
+			if !allowed {
+				for _, p := range spec.prefixes {
+					if strings.HasPrefix(a, p) {
+						allowed = true
+						break
+					}
+				}
+			}
+			if !allowed {
+				return fmt.Errorf("unknown flag %q for %s", a, cmd)
+			}
+			continue
+		}
+		positional++
+		if spec.maxPos >= 0 && positional > spec.maxPos {
+			return fmt.Errorf("unexpected argument %q for %s", a, cmd)
+		}
+	}
+	return nil
 }
 
 // runWatchCycle runs one watch cycle and reports whether the lint gate failed.

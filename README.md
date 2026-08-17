@@ -21,6 +21,12 @@ make build
 
 ## Quick Start
 
+### Prerequisites
+
+- **Go 1.24+** — to build from source or install via `go install`.
+- **git** — required by the diff-driven commands: `changed`, `candidates`, `refresh`, `watch`, `diff`, and `impact`.
+- **Prebuilt binaries** — linux amd64/arm64, darwin amd64/arm64, and windows amd64 on [GitHub Releases](https://github.com/ramayac/go-wiki-engine/releases).
+
 ```bash
 cd your-repo
 wiki-engine init
@@ -91,6 +97,7 @@ make build            # Build to bin/wiki-engine
 make test             # Run all unit tests
 make lint             # Run go vet + wiki-engine lint
 make audit            # Repo-wide wiki reference integrity audit
+make golangci-lint    # Static analysis with the repo config (golangci-lint v2)
 make sync-scaffold    # Sync scaffold/ → internal/scaffold/files/ for embedding
 make integration      # End-to-end integration test suite
 make install          # go install globally
@@ -104,6 +111,24 @@ When editing scaffold templates in `scaffold/`, run `make sync-scaffold` before 
 wiki-engine upgrade
 wiki-engine sync-prompts   # Update prompts in each repo after upgrading
 ```
+
+## Versioning & Compatibility
+
+Releases use clean `vX.Y.Z` semantic versions. The compatibility surface covered by semver is:
+
+- CLI command names, flags, and exit-code semantics
+- The `--json` output envelope (`{ok, data, error}`)
+- `.wikirc` configuration keys
+- The wiki file contract in [wiki/prologue/schema.md](wiki/prologue/schema.md)
+
+JSON fields and config keys may be added in minor releases; renames or removals require a major release. See the [release runbook](wiki/operations/release.md).
+
+## Project Links
+
+- [Changelog](CHANGELOG.md)
+- [Contributing](CONTRIBUTING.md)
+- [Security Policy](SECURITY.md)
+- [Release runbook](wiki/operations/release.md)
 
 ## License
 

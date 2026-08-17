@@ -143,13 +143,18 @@ Full key reference: [config.md](config.md).
 ```bash
 make build           # Compile to bin/wiki-engine (version=dev)
 make test            # Run all tests
-make lint            # go vet
+make lint            # go vet + wiki-engine lint
+make golangci-lint   # golangci-lint v2 with the repo config
 make sync-scaffold   # Copy scaffold/ → internal/scaffold/files/
 make audit           # Repo-wide wiki reference integrity audit
 make install         # go install globally
 ```
 
-Releases are cross-compiled by `.github/workflows/release.yml` on `release: published` and uploaded as binary assets. Version is injected via `-ldflags "-X main.version=vX.Y.Z"`.
+Releases are cross-compiled by `.github/workflows/release.yml` on `release: published` and uploaded as binary assets. Version is injected via `-ldflags "-X main.version=vX.Y.Z"`. The full cut-and-verify procedure lives in [operations/release.md](../operations/release.md).
+
+### Versioning & Compatibility
+
+Releases use clean `vX.Y.Z` semantic versions. Semver covers the CLI flags, the `--json` envelope, `.wikirc` keys, and the wiki contract ([schema.md](schema.md)). JSON fields and config keys may be added in minor releases; renames or removals require a major release.
 
 Go module: `github.com/ramayac/go-wiki-engine`. No external dependencies — standard library only.
 
@@ -165,4 +170,5 @@ Go module: `github.com/ramayac/go-wiki-engine`. No external dependencies — sta
 - [config.md](config.md) — full `.wikirc` reference.
 - [operations/lint.md](../operations/lint.md) — checker-by-checker repair guide.
 - [operations/ingest.md](../operations/ingest.md) — how architecture facts get updated.
+- [operations/release.md](../operations/release.md) — how releases are cut and verified.
 - [schema.md](schema.md) — the contract this page must satisfy.

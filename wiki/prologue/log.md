@@ -7,6 +7,13 @@ superseded_by: ""
 
 Append-only timeline of wiki maintenance activity.
 
+## [2026-08-16] ingest | 1.0 release readiness — polish, upgrade tests, tooling, docs
+
+- Phase B polish: added `scanner.Err()` checks across `internal/engine/engine.go`, `internal/engine/engine_lint.go`, and the `impact` stdin loop in `cmd/wiki-engine/main.go`; split `WriteString(x + "\n")` concatenations in `Refresh`; CLI commands now reject unknown flags via `validateCommandArgs` (unit-tested); `.wikirc` loading warns on unknown keys; `changed` errors hint that git and a git repository are required.
+- Closed todo #54: `internal/upgrade/upgrade.go` gained an injectable `run(baseURL, executablePath)` and a stub-able `fallbackInstaller`; `upgrade_test.go` now drives the download path with httptest servers (success, checksum mismatch, no-asset fallback, latest-tag 404 fallback, extraction failure).
+- Tooling: added `.golangci-lint.yml` (v2 config — errcheck, govet, staticcheck, ineffassign, unused, misspell) and a `make golangci-lint` target; CI `test.yml` now runs golangci-lint and `go test -race ./...`.
+- Docs: added `CHANGELOG.md`, `CONTRIBUTING.md`, and `SECURITY.md`; `README.md` gained prerequisites, supported platforms, and a versioning & compatibility policy; added the release runbook `wiki/operations/release.md`; todo #57 updated with the clean-tag plan (v0.7.0, then v1.0.0).
+
 ## [2026-08-16] lint | log-tail showed oldest entries instead of most recent
 
 - Fixed a logic bug in `LogTail`: entries are prepended newest-first (the `log-chronology` checker enforces descending dates), but the function sliced the *last* N headings — so `log-tail` and the `context` recent-log section returned the oldest entries. It now keeps the first N (most recent). Added an ordering assertion to `TestLogTail` and clarified the `repo-map.md` subcommand description.

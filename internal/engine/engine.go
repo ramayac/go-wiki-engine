@@ -76,12 +76,12 @@ func (e *Engine) Headings() ([]HeadingEntry, error) {
 			continue
 		}
 		abs := filepath.Join(e.RootDir, rel)
-		func() {
+		err := func() error {
 			f, err := os.Open(abs)
 			if err != nil {
-				return
+				return nil
 			}
-			defer f.Close()
+			defer func() { _ = f.Close() }()
 			scanner := bufio.NewScanner(f)
 			lineNo := 0
 			for scanner.Scan() {
@@ -95,7 +95,11 @@ func (e *Engine) Headings() ([]HeadingEntry, error) {
 					})
 				}
 			}
+			return scanner.Err()
 		}()
+		if err != nil {
+			return nil, err
+		}
 	}
 	return entries, nil
 }
@@ -120,12 +124,12 @@ func (e *Engine) Search(query string) ([]SearchResult, error) {
 	var results []SearchResult
 	for _, rel := range files {
 		abs := filepath.Join(e.RootDir, rel)
-		func() {
+		err := func() error {
 			f, err := os.Open(abs)
 			if err != nil {
-				return
+				return nil
 			}
-			defer f.Close()
+			defer func() { _ = f.Close() }()
 			scanner := bufio.NewScanner(f)
 			lineNo := 0
 			for scanner.Scan() {
@@ -139,7 +143,11 @@ func (e *Engine) Search(query string) ([]SearchResult, error) {
 					})
 				}
 			}
+			return scanner.Err()
 		}()
+		if err != nil {
+			return nil, err
+		}
 	}
 	return results, nil
 }
@@ -157,7 +165,7 @@ func (e *Engine) LogTail(n int) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var headings []string
 	scanner := bufio.NewScanner(f)
@@ -188,7 +196,7 @@ func (e *Engine) Changed(diffRange string) ([]string, error) {
 	cmd.Dir = e.RootDir
 	out, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("git diff failed: %w", err)
+		return nil, fmt.Errorf("git diff failed (this command requires git and a git repository): %w", err)
 	}
 	var files []string
 	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
@@ -279,12 +287,12 @@ func (e *Engine) Stats() (*StatsResult, error) {
 		}
 		// Count lines.
 		if strings.HasSuffix(rel, ".md") {
-			func() {
+			err := func() error {
 				f, err := os.Open(abs)
 				if err != nil {
-					return
+					return nil
 				}
-				defer f.Close()
+				defer func() { _ = f.Close() }()
 				scanner := bufio.NewScanner(f)
 				for scanner.Scan() {
 					sr.TotalLines++
@@ -292,7 +300,11 @@ func (e *Engine) Stats() (*StatsResult, error) {
 						sr.Headings++
 					}
 				}
+				return scanner.Err()
 			}()
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	if !latest.IsZero() {
@@ -439,7 +451,7 @@ func (e *Engine) currentPhase() string {
 	if err != nil {
 		return "unknown"
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	phaseRowRe := regexp.MustCompile(`^\|\s*(\d+)\s*\|\s*(.+?)\s*\|\s*(\S+)\s*\|`)
 	var last string
@@ -449,6 +461,9 @@ func (e *Engine) currentPhase() string {
 		if m != nil {
 			last = fmt.Sprintf("Phase %s: %s — %s", m[1], strings.TrimSpace(m[2]), strings.TrimSpace(m[3]))
 		}
+	}
+	if err := scanner.Err(); err != nil {
+		return "unknown"
 	}
 	if last == "" {
 		return "unknown"
@@ -479,7 +494,7 @@ func (e *Engine) Summary(page string) (*SummaryResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("page not found: %s", page)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	sr := &SummaryResult{File: page}
 	scanner := bufio.NewScanner(f)
@@ -550,6 +565,9 @@ func (e *Engine) Summary(page string) (*SummaryResult, error) {
 			}
 		}
 	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
 	sr.LineCount = lineNo
 	sr.Preview = strings.TrimSpace(strings.Join(previewLines, "\n"))
 	return sr, nil
@@ -591,12 +609,12 @@ func (e *Engine) Relevant(query string, topN int) ([]RelevanceResult, error) {
 		bodyHits := 0
 		var matchedHeadings []string
 
-		func() {
+		err := func() error {
 			f, err := os.Open(abs)
 			if err != nil {
-				return
+				return nil
 			}
-			defer f.Close()
+			defer func() { _ = f.Close() }()
 
 			scanner := bufio.NewScanner(f)
 			for scanner.Scan() {
@@ -615,7 +633,11 @@ func (e *Engine) Relevant(query string, topN int) ([]RelevanceResult, error) {
 					bodyHits++
 				}
 			}
+			return scanner.Err()
 		}()
+		if err != nil {
+			return nil, err
+		}
 
 		// Score: heading matches are worth 3× body matches.
 		score = float64(headingHits)*3.0 + float64(bodyHits)
@@ -837,27 +859,31 @@ func (e *Engine) Refresh(diffRange string) (string, error) {
 	b.WriteString("== wiki files ==\n")
 	files, _ := e.List()
 	for _, f := range files {
-		b.WriteString(f + "\n")
+		b.WriteString(f)
+		b.WriteString("\n")
 	}
 
 	// Recent log.
 	b.WriteString("\n== recent log ==\n")
 	tail, _ := e.LogTail(0)
 	for _, h := range tail {
-		b.WriteString(h + "\n")
+		b.WriteString(h)
+		b.WriteString("\n")
 	}
 
 	// Changed files.
 	b.WriteString("\n== changed files ==\n")
 	changed, _ := e.Changed(diffRange)
 	for _, f := range changed {
-		b.WriteString(f + "\n")
+		b.WriteString(f)
+		b.WriteString("\n")
 	}
 
 	// Ingest candidates.
 	b.WriteString("\n== ingest candidates ==\n")
 	for _, f := range candidates {
-		b.WriteString(f + "\n")
+		b.WriteString(f)
+		b.WriteString("\n")
 	}
 
 	// Lint.
@@ -867,7 +893,8 @@ func (e *Engine) Refresh(diffRange string) (string, error) {
 		b.WriteString("wiki lint OK\n")
 	} else {
 		for _, m := range lint.Messages {
-			b.WriteString(m + "\n")
+			b.WriteString(m)
+			b.WriteString("\n")
 		}
 	}
 

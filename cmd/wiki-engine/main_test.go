@@ -50,8 +50,35 @@ func TestArgsAfterFilters(t *testing.T) {
 	}
 
 	os.Args = []string{"wiki-engine", "list"}
-	args, useJSON = argsAfterFilters()
+	_, useJSON = argsAfterFilters()
 	if useJSON {
 		t.Error("expected useJSON=false without --json")
+	}
+}
+
+func TestValidateCommandArgs(t *testing.T) {
+	tests := []struct {
+		name    string
+		cmd     string
+		args    []string
+		wantErr bool
+	}{
+		{"known flag", "list", []string{"--active"}, false},
+		{"unknown flag", "list", []string{"--bogus"}, true},
+		{"unexpected positional", "list", []string{"extra"}, true},
+		{"headings no args", "headings", nil, false},
+		{"search multi positional", "search", []string{"some query terms"}, false},
+		{"context known flags", "context", []string{"--active", "--sort=topo"}, false},
+		{"context unknown flag", "context", []string{"--sort=none"}, true},
+		{"lint check prefix", "lint", []string{"--check=front-matter"}, false},
+		{"lint unknown flag", "lint", []string{"--quiet"}, true},
+		{"impact unlimited positional", "impact", []string{"a.go", "b.go", "c.go"}, false},
+		{"unknown command tolerated here", "nope", []string{"--anything"}, false},
+	}
+	for _, tt := range tests {
+		err := validateCommandArgs(tt.cmd, tt.args)
+		if (err != nil) != tt.wantErr {
+			t.Errorf("%s: validateCommandArgs(%q, %v) error = %v, wantErr %t", tt.name, tt.cmd, tt.args, err, tt.wantErr)
+		}
 	}
 }

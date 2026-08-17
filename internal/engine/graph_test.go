@@ -12,7 +12,9 @@ import (
 func TestBuildWikiGraph(t *testing.T) {
 	root := t.TempDir()
 	wikiDir := filepath.Join(root, "wiki")
-	os.MkdirAll(wikiDir, 0o755)
+	if err := os.MkdirAll(wikiDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
 
 	files := map[string]string{
 		// index.md (active, current) -> links to current.md, legacy.md, and planned.md
@@ -71,7 +73,9 @@ created: 2026-05-15
 
 	for rel, content := range files {
 		p := filepath.Join(root, rel)
-		os.MkdirAll(filepath.Dir(p), 0o755)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
 		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
 			t.Fatal(err)
 		}

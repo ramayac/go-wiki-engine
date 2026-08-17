@@ -60,7 +60,9 @@ func TestInit(t *testing.T) {
 
 func TestInitRefuses(t *testing.T) {
 	dest := t.TempDir()
-	os.MkdirAll(filepath.Join(dest, "wiki"), 0o755)
+	if err := os.MkdirAll(filepath.Join(dest, "wiki"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	err := Init(dest, "wiki")
 	if err == nil {
 		t.Error("Init should refuse when wiki/ already exists")

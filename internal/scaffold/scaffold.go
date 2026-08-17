@@ -198,7 +198,7 @@ func cleanOrphanedFiles(destDir string, embedPrefixes []string, cleaned *[]strin
 	// Build the set of all known embedded paths (relative to destDir).
 	known := make(map[string]bool)
 	for _, prefix := range embedPrefixes {
-		fs.WalkDir(files, prefix, func(path string, d fs.DirEntry, err error) error {
+		_ = fs.WalkDir(files, prefix, func(path string, d fs.DirEntry, err error) error {
 			if err != nil || d.IsDir() {
 				return err
 			}
@@ -212,7 +212,7 @@ func cleanOrphanedFiles(destDir string, embedPrefixes []string, cleaned *[]strin
 	for _, prefix := range embedPrefixes {
 		relRoot, _ := filepath.Rel("files", prefix)
 		walkRoot := filepath.Join(destDir, relRoot)
-		filepath.Walk(walkRoot, func(path string, info os.FileInfo, err error) error {
+		_ = filepath.Walk(walkRoot, func(path string, info os.FileInfo, err error) error {
 			if err != nil || info.IsDir() {
 				return err
 			}

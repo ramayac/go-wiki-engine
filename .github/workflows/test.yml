@@ -20,6 +20,12 @@ jobs:
         run: make audit
       - name: lint
         run: make lint
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v2.12.2
+      - name: race
+        run: go test -race ./...
       - name: integration
         run: make integration
       - name: scaffold-sync check

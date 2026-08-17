@@ -3,6 +3,7 @@ package config
 
 import (
 	"bufio"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -52,7 +53,7 @@ func Load(dir string) (*Config, error) {
 		}
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	cfg := DefaultConfig()
 	var inIgnore bool
@@ -115,6 +116,8 @@ func Load(dir string) (*Config, error) {
 			cfg.WatchInterval = ParsePositiveInt(val, 0)
 		case "fail_severity":
 			cfg.FailSeverity = strings.ToLower(strings.TrimSpace(val))
+		default:
+			fmt.Fprintf(os.Stderr, "warning: unknown .wikirc key %q ignored\n", key)
 		}
 	}
 	return cfg, scanner.Err()
