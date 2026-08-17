@@ -73,6 +73,11 @@ func TestValidateCommandArgs(t *testing.T) {
 		{"lint check prefix", "lint", []string{"--check=front-matter"}, false},
 		{"lint unknown flag", "lint", []string{"--quiet"}, true},
 		{"impact unlimited positional", "impact", []string{"a.go", "b.go", "c.go"}, false},
+		{"init one positional", "init", []string{"docs"}, false},
+		{"init unknown flag", "init", []string{"--bogus"}, true},
+		{"version unknown flag", "version", []string{"--bogus"}, true},
+		{"upgrade unexpected positional", "upgrade", []string{"extra"}, true},
+		{"sync-prompts no args", "sync-prompts", nil, false},
 		{"unknown command tolerated here", "nope", []string{"--anything"}, false},
 	}
 	for _, tt := range tests {

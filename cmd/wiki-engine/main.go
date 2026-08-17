@@ -74,12 +74,24 @@ func main() {
 
 	switch cmd {
 	case "init":
+		if err := validateCommandArgs("init", args[2:]); err != nil {
+			fatal(err)
+		}
 		runInit(args)
 	case "sync-prompts":
+		if err := validateCommandArgs("sync-prompts", args[2:]); err != nil {
+			fatal(err)
+		}
 		runSyncPrompts()
 	case "version":
+		if err := validateCommandArgs("version", args[2:]); err != nil {
+			fatal(err)
+		}
 		fmt.Println(getVersion())
 	case "upgrade":
+		if err := validateCommandArgs("upgrade", args[2:]); err != nil {
+			fatal(err)
+		}
 		if err := upgrade.Run(); err != nil {
 			fatal(err)
 		}
@@ -642,15 +654,19 @@ type argSpec struct {
 }
 
 var commandArgSpecs = map[string]argSpec{
-	"list":       {flags: map[string]bool{"--active": true}, maxPos: 0},
-	"headings":   {maxPos: 0},
-	"search":     {maxPos: -1},
-	"log-tail":   {maxPos: 1},
-	"changed":    {maxPos: 1},
-	"candidates": {maxPos: 1},
-	"lint":       {prefixes: []string{"--check=", "--skip="}, maxPos: 0},
-	"refresh":    {maxPos: 1},
-	"stats":      {maxPos: 0},
+	"init":         {maxPos: 1},
+	"sync-prompts": {maxPos: 0},
+	"version":      {maxPos: 0},
+	"upgrade":      {maxPos: 0},
+	"list":         {flags: map[string]bool{"--active": true}, maxPos: 0},
+	"headings":     {maxPos: 0},
+	"search":       {maxPos: -1},
+	"log-tail":     {maxPos: 1},
+	"changed":      {maxPos: 1},
+	"candidates":   {maxPos: 1},
+	"lint":         {prefixes: []string{"--check=", "--skip="}, maxPos: 0},
+	"refresh":      {maxPos: 1},
+	"stats":        {maxPos: 0},
 	"context": {
 		flags: map[string]bool{
 			"--minimal": true, "--summarize": true, "--active": true,
