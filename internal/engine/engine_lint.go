@@ -620,7 +620,6 @@ func (c *markersChecker) Check(e *Engine) ([]Issue, error) {
 		if err != nil {
 			continue
 		}
-		defer func() { _ = f.Close() }()
 		scanner := bufio.NewScanner(f)
 		lineNo := 0
 		inCodeBlock := false
@@ -644,6 +643,7 @@ func (c *markersChecker) Check(e *Engine) ([]Issue, error) {
 				})
 			}
 		}
+		_ = f.Close()
 		if err := scanner.Err(); err != nil {
 			return nil, err
 		}

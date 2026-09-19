@@ -1263,3 +1263,26 @@ func TestLintMissingWikiDir(t *testing.T) {
 		t.Errorf("expected SevError, got %v", iss.Severity)
 	}
 }
+
+func TestHeadingsPropagatesOpenError(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("permission-based test is meaningless as root")
+	}
+	root := setupWiki(t)
+	eng := newTestEngine(root)
+
+	// Make one wiki file unreadable: Headings must fail loudly instead of
+	// silently skipping the file.
+	blocked := filepath.Join(root, "wiki", "schema.md")
+	if err := os.Chmod(blocked, 0); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Chmod(blocked, 0o644) }()
+
+	if _, err := eng.Headings(); err == nil {
+		t.Error("Headings should propagate open errors, got nil")
+	}
+	if _, err := eng.Search("anything"); err == nil {
+		t.Error("Search should propagate open errors, got nil")
+	}
+}

@@ -79,7 +79,7 @@ func (e *Engine) Headings() ([]HeadingEntry, error) {
 		err := func() error {
 			f, err := os.Open(abs)
 			if err != nil {
-				return nil
+				return err
 			}
 			defer func() { _ = f.Close() }()
 			scanner := bufio.NewScanner(f)
@@ -127,7 +127,7 @@ func (e *Engine) Search(query string) ([]SearchResult, error) {
 		err := func() error {
 			f, err := os.Open(abs)
 			if err != nil {
-				return nil
+				return err
 			}
 			defer func() { _ = f.Close() }()
 			scanner := bufio.NewScanner(f)
@@ -885,7 +885,10 @@ func (e *Engine) Refresh(diffRange string) (string, error) {
 
 	// Wiki files.
 	b.WriteString("== wiki files ==\n")
-	files, _ := e.List()
+	files, err := e.List()
+	if err != nil {
+		return "", err
+	}
 	for _, f := range files {
 		b.WriteString(f)
 		b.WriteString("\n")
@@ -893,7 +896,10 @@ func (e *Engine) Refresh(diffRange string) (string, error) {
 
 	// Recent log.
 	b.WriteString("\n== recent log ==\n")
-	tail, _ := e.LogTail(0)
+	tail, err := e.LogTail(0)
+	if err != nil {
+		return "", err
+	}
 	for _, h := range tail {
 		b.WriteString(h)
 		b.WriteString("\n")
@@ -901,7 +907,10 @@ func (e *Engine) Refresh(diffRange string) (string, error) {
 
 	// Changed files.
 	b.WriteString("\n== changed files ==\n")
-	changed, _ := e.Changed(diffRange)
+	changed, err := e.Changed(diffRange)
+	if err != nil {
+		return "", err
+	}
 	for _, f := range changed {
 		b.WriteString(f)
 		b.WriteString("\n")

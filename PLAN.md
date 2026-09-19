@@ -62,13 +62,13 @@ Fix the two release blockers: data loss and false success.
 
 ## Phase E — Error propagation & resource hygiene
 
-- [ ] E1. `markersChecker`: close files per iteration (FD leak)
-- [ ] E2. `extractZip`: close entry readers per iteration (FD accumulation)
-- [ ] E3. `Headings`/`Search`: propagate `os.Open` errors (CHANGELOG claim made true)
-- [ ] E4. `Refresh`: propagate `List`/`LogTail`/`Changed` errors
-- [ ] E5. `upgrade`: verify the replacement by running `version` on the new binary
-- [ ] Tests: `TestHeadingsPropagatesOpenError` (skipped as root)
-- [ ] Docs: CHANGELOG
+- [x] E1. `markersChecker`: close files per iteration (FD leak)
+- [x] E2. `extractZip`: close entry readers per iteration (FD accumulation)
+- [x] E3. `Headings`/`Search`: propagate `os.Open` errors (CHANGELOG claim made true)
+- [x] E4. `Refresh`: propagate `List`/`LogTail`/`Changed` errors
+- [x] E5. `upgrade`: verify the replacement by running `version` on the new binary
+- [x] Tests: `TestHeadingsPropagatesOpenError` (skipped as root)
+- [x] Docs: CHANGELOG
 
 ## Phase F — Unix ergonomics
 
@@ -96,6 +96,6 @@ Fix the two release blockers: data loss and false success.
 | B — JSON contract | ✅ | `fix: honor --json on every command and on fatal error paths` |
 | C — Lint gate integrity | ✅ | `fix: validate lint selectors and fail_severity; single diagnostic for missing wiki dir` |
 | D — Context summarize | ✅ | `fix: plain context --summarize shows previews; reject --active --summarize` |
-| E — Error propagation & resources | ⬜ | — |
+| E — Error propagation & resources | ✅ | `fix: propagate scanner open errors; per-file FD hygiene; verify upgraded binary` |
 | F — Unix ergonomics | ⬜ | — |
 | G — Prompt & doc polish | ⬜ | — |

@@ -32,6 +32,9 @@ surface is defined in [README.md](README.md).
 - Lint on a missing wiki directory reports one clear diagnostic instead of a flood of per-checker errors.
 - Invalid `fail_severity` values warn on load and fall back to `warn`.
 - Plain-text `context --summarize` now prints per-page previews and line counts (previously only JSON carried them); `--active --summarize` is rejected with a clear error instead of being silently ignored, and the maintainer prompt now recommends `context --summarize`.
+- `headings` and `search` now propagate file-open errors instead of silently skipping unreadable files; `refresh` propagates all sub-step errors.
+- `markers` checker and `upgrade` zip extraction close files per iteration (file-descriptor hygiene).
+- `upgrade` verifies the replacement binary by running `wiki-engine version` after the swap.
 
 ## [0.x]
 

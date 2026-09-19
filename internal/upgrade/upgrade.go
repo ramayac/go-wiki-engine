@@ -136,6 +136,14 @@ func run(baseURL, executablePath string) error {
 	}
 
 	fmt.Fprintln(os.Stderr, "upgrade complete")
+
+	// Sanity-check the replacement actually runs and report the new version.
+	if out, err := exec.Command(executablePath, "version").Output(); err == nil {
+		fmt.Fprintf(os.Stderr, "upgraded to %s\n", strings.TrimSpace(string(out)))
+	} else {
+		fmt.Fprintln(os.Stderr, "warning: could not verify the new binary (wiki-engine version failed)")
+	}
+
 	fmt.Fprintln(os.Stderr, "run `wiki-engine sync-prompts` in each repo to update prompts and instructions for all supported AI tools")
 	return nil
 }
@@ -254,8 +262,12 @@ func extractZip(zipData []byte) ([]byte, error) {
 			if err != nil {
 				return nil, err
 			}
-			defer func() { _ = rc.Close() }()
-			return io.ReadAll(rc)
+			data, err := io.ReadAll(rc)
+			_ = rc.Close()
+			if err != nil {
+				return nil, err
+			}
+			return data, nil
 		}
 	}
 	return nil, fmt.Errorf("binary not found in zip archive")
