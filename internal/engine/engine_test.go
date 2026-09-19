@@ -1322,3 +1322,33 @@ func TestCurrentPhasePreferences(t *testing.T) {
 		t.Errorf("currentPhase = %q, want unknown", got)
 	}
 }
+
+func TestSearchSkipsNonMarkdown(t *testing.T) {
+	root := setupWiki(t)
+	eng := newTestEngine(root)
+
+	// A binary asset containing the term must not be scanned as text.
+	if err := os.WriteFile(filepath.Join(root, "wiki", "asset.bin"), []byte("needle\x00binary"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	results, err := eng.Search("needle")
+	if err != nil {
+		t.Fatalf("Search failed: %v", err)
+	}
+	if len(results) != 0 {
+		t.Errorf("Search scanned non-markdown files: %v", results)
+	}
+
+	// The same term in a markdown page is found.
+	if err := os.WriteFile(filepath.Join(root, "wiki", "schema.md"),
+		[]byte("---\nstatus: current\ndescription: Schema\n---\n# Schema\nneedle here\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	results, err = eng.Search("needle")
+	if err != nil {
+		t.Fatalf("Search failed: %v", err)
+	}
+	if len(results) != 1 || results[0].File != "wiki/schema.md" {
+		t.Errorf("Search missed the markdown match: %v", results)
+	}
+}

@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -18,6 +19,14 @@ var files embed.FS
 // on init and sync-prompts only when they do not already exist. This prevents
 // overwriting user-customised entrypoint files.
 var shimFiles = []string{"AGENTS.md", "CLAUDE.md"}
+
+// Regexes used to rewrite the scaffolded .wikirc for a custom wiki directory
+// name (`wiki-engine init docs`). Deliberately tolerant of whitespace so the
+// scaffold template can be reformatted without silently breaking the rewrite.
+var (
+	wikiDirAssignRe   = regexp.MustCompile(`(?m)^wiki_dir\s*=\s*"[^"]*"`)
+	ignoreWikiEntryRe = regexp.MustCompile(`(?m)^\s*"wiki/"`)
+)
 
 // promptWorkflows are the canonical workflow files in .wiki-instructions/ that
 // are symlinked into the tool-specific directories.
@@ -157,8 +166,8 @@ func Init(destDir, wikiDir string) error {
 		// the requested name so `init docs` produces a .wikirc that actually
 		// points at docs/.
 		if rel == ".wikirc" {
-			content := strings.Replace(string(data), `wiki_dir = "wiki"`, `wiki_dir = "`+wikiDir+`"`, 1)
-			content = strings.Replace(content, `"wiki/"`, `"`+wikiDir+`/"`, 1)
+			content := wikiDirAssignRe.ReplaceAllString(string(data), `wiki_dir = "`+wikiDir+`"`)
+			content = ignoreWikiEntryRe.ReplaceAllString(content, `  "`+wikiDir+`/"`)
 			data = []byte(content)
 		}
 
@@ -179,9 +188,10 @@ func Init(destDir, wikiDir string) error {
 // destDir with the current embedded versions. It does not touch wiki/
 // content or .wikirc. Safe to run after a wiki-engine upgrade to pick
 // up new or changed prompts and instructions for all supported AI tools.
-func SyncPrompts(destDir string) ([]string, error) {
-	var updated []string
-
+//
+// Returns the relative paths of files written (updated) and of stale
+// wiki-managed files removed (removed).
+func SyncPrompts(destDir string) (updated, removed []string, err error) {
 	// Sync each instruction layer prefix. The embedded FS dereferences
 	// symlinks, so .github/prompts/ and .claude/commands/ contain regular
 	// file copies of the canonical .wiki-instructions/ files.
@@ -195,18 +205,18 @@ func SyncPrompts(destDir string) ([]string, error) {
 	for _, prefix := range prefixes {
 		err := syncEmbeddedDir(destDir, prefix, &updated)
 		if err != nil {
-			return updated, err
+			return updated, removed, err
 		}
 	}
 
 	// Remove destination files that no longer exist in the embedded
 	// FS. This cleans up prompts that were removed from the scaffold
 	// (e.g. migrate-shims.md, summarize.md).
-	cleanOrphanedFiles(destDir, prefixes, &updated)
+	cleanOrphanedFiles(destDir, prefixes, &removed)
 
 	shims, err := syncShims(destDir)
 	updated = append(updated, shims...)
-	return updated, err
+	return updated, removed, err
 }
 
 // retiredWikiFiles are files this tool once shipped in its sync directories
@@ -267,7 +277,7 @@ func cleanOrphanedFiles(destDir string, embedPrefixes []string, cleaned *[]strin
 				return nil
 			}
 			if err := os.Remove(path); err == nil {
-				*cleaned = append(*cleaned, "removed "+rel)
+				*cleaned = append(*cleaned, rel)
 			}
 			return nil
 		})

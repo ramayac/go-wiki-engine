@@ -31,6 +31,11 @@ var upgradeHTTPClient = &http.Client{
 
 const module = "github.com/ramayac/go-wiki-engine/cmd/wiki-engine@latest"
 
+// maxDownloadSize caps release downloads before checksum verification, so a
+// broken or hostile release endpoint cannot exhaust memory. It is a variable
+// so tests can lower it.
+var maxDownloadSize = int64(100 << 20)
+
 // repoURL is the base URL for GitHub release lookups. It is a variable so
 // tests can point the upgrade flow at a local httptest server.
 var repoURL = "https://github.com/ramayac/go-wiki-engine"
@@ -183,7 +188,14 @@ func downloadBytes(url string) ([]byte, error) {
 		return nil, fmt.Errorf("status: %d", resp.StatusCode)
 	}
 
-	return io.ReadAll(resp.Body)
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxDownloadSize+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > int(maxDownloadSize) {
+		return nil, fmt.Errorf("download exceeds %d bytes", maxDownloadSize)
+	}
+	return data, nil
 }
 
 func matchAssetInChecksums(checksumsContent, goos, goarch string) (string, string, error) {

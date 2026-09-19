@@ -41,16 +41,16 @@ Base: `feat/audit-fixes` (round 1 phases A–G merged). Phases continue the sequ
 
 ## Phase J — P2a: robustness & hygiene
 
-- [ ] J1. `upgrade` downloads are capped (100 MiB) before checksum verification
-- [ ] J2. `search` scans only `.md` files (binary-safe, matches `headings`)
-- [ ] J3. `sync-prompts` returns separate `updated` / `removed` lists (no more
+- [x] J1. `upgrade` downloads are capped (100 MiB) before checksum verification
+- [x] J2. `search` scans only `.md` files (binary-safe, matches `headings`)
+- [x] J3. `sync-prompts` returns separate `updated` / `removed` lists (no more
       "updated removed X" and mixed JSON arrays)
-- [ ] J4. `context` JSON `line_count` gets `omitempty` (no misleading 0s)
-- [ ] J5. `search --` alone shows usage instead of "query is empty"
-- [ ] J6. `init` `.wikirc` rewrite uses regex instead of exact string match
-- [ ] Tests: upgrade size cap, scaffold sync signatures, engine search,
-      integration sync-prompts JSON
-- [ ] Docs: repo-map sync-prompts JSON shape; CHANGELOG
+- [x] J4. `context` JSON `line_count` gets `omitempty` (no misleading 0s)
+- [x] J5. `search --` alone shows usage instead of "query is empty"
+- [x] J6. `init` `.wikirc` rewrite uses regex instead of exact string match
+- [x] Tests: `TestDownloadSizeLimit`, `TestSearchSkipsNonMarkdown`, updated
+      scaffold sync signatures, integration sync-prompts JSON + `search --`
+- [x] Docs: repo-map sync-prompts JSON shape; CHANGELOG
 
 ## Phase K — P2b: consistency & ergonomics
 
@@ -69,5 +69,5 @@ Base: `feat/audit-fixes` (round 1 phases A–G merged). Phases continue the sequ
 |---|---|---|
 | H — P0 silent misbehavior | ✅ | `fix: parse single-line ignore arrays; reject empty wiki_dir; JSON usage envelopes` |
 | I — P1 real gaps | ✅ | `fix: reject escaping wiki dirs; active-phase preferences; YAML # rules; strict numeric parsing` |
-| J — P2a robustness & hygiene | ⬜ | — |
+| J — P2a robustness & hygiene | ✅ | `fix: cap upgrade downloads; search .md only; separate sync removed list` |
 | K — P2b consistency & ergonomics | ⬜ | — |

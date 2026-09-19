@@ -121,6 +121,7 @@ envelope per invocation on stdout:
 - `lint --json` emits the issues array as `data` with `ok:false` when the `fail_severity` gate fails, and still exits 1 (matching plain-text lint).
 - `context --active --json` emits `{nodes, edges, unlinked}` — the machine-readable active graph for agent navigation.
 - `watch --once --json` emits one `WatchResult` (`changed`, `candidates`, `lint_ok`, `lint_issues`) and exits 1 when `lint_ok` is false.
+- `sync-prompts --json` emits `{updated, removed, shims_preserved}` — written files, retired wiki-managed files cleaned up, and pre-existing root shims.
 
 ## Configuration — .wikirc
 

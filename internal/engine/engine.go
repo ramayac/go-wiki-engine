@@ -123,6 +123,11 @@ func (e *Engine) Search(query string) ([]SearchResult, error) {
 	lowerQ := strings.ToLower(query)
 	var results []SearchResult
 	for _, rel := range files {
+		// Search only markdown pages — the wiki contract is .md files, and
+		// scanning binary assets as text is wasteful at best.
+		if !strings.HasSuffix(rel, ".md") {
+			continue
+		}
 		abs := filepath.Join(e.RootDir, rel)
 		err := func() error {
 			f, err := os.Open(abs)
@@ -319,7 +324,7 @@ type ContextEntry struct {
 	Status      string `json:"status"`
 	Description string `json:"description"`
 	Summary     string `json:"summary,omitempty"` // first ~3 paragraphs when --summarize
-	LineCount   int    `json:"line_count"`
+	LineCount   int    `json:"line_count,omitempty"`
 }
 
 // ContextResult holds a condensed wiki snapshot for agent context loading.

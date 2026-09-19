@@ -109,6 +109,11 @@ echo "--- json admin commands ---"
 "$BIN" --json version | grep -q '"ok": true' || { echo "FAIL: --json version should emit an envelope"; exit 1; }
 "$BIN" --json version | grep -qE '"data": "[^"]+"' || { echo "FAIL: --json version should carry the version in data"; exit 1; }
 "$BIN" --json sync-prompts | grep -q '"updated"' || { echo "FAIL: --json sync-prompts should carry updated files"; exit 1; }
+"$BIN" --json sync-prompts | grep -q '"removed"' || { echo "FAIL: --json sync-prompts should carry a removed list"; exit 1; }
+if "$BIN" search -- >/dev/null 2>&1; then
+  echo "FAIL: search -- without terms should exit non-zero"
+  exit 1
+fi
 echo "  ok"
 
 # Test: --json fatal errors carry the envelope

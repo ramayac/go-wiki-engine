@@ -165,14 +165,17 @@ func runSyncPrompts(useJSON bool) {
 		}
 	}
 
-	updated, err := scaffold.SyncPrompts(dir)
+	updated, removed, err := scaffold.SyncPrompts(dir)
 	if err != nil {
 		fatal(err)
 	}
 	for _, f := range updated {
 		_, _ = fmt.Fprintf(os.Stderr, "updated %s\n", f)
 	}
-	_, _ = fmt.Fprintf(os.Stderr, "sync-prompts: %d file(s) updated\n", len(updated))
+	for _, f := range removed {
+		_, _ = fmt.Fprintf(os.Stderr, "removed %s\n", f)
+	}
+	_, _ = fmt.Fprintf(os.Stderr, "sync-prompts: %d updated, %d removed\n", len(updated), len(removed))
 
 	if len(preExistingShims) > 0 {
 		_, _ = fmt.Fprintf(os.Stderr, "\ntip: %s already exist and were not modified.\n", strings.Join(preExistingShims, " and "))
@@ -183,6 +186,7 @@ func runSyncPrompts(useJSON bool) {
 	if useJSON {
 		writeJSON(map[string]interface{}{
 			"updated":          updated,
+			"removed":          removed,
 			"shims_preserved": preExistingShims,
 		})
 	}
@@ -275,6 +279,9 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 			usageError("usage: wiki-engine search <query>")
 		}
 		query := strings.Join(positionalArgs(args[2:]), " ")
+		if strings.TrimSpace(query) == "" {
+			usageError("usage: wiki-engine search <query>")
+		}
 		results, err := eng.Search(query)
 		if err != nil {
 			fatal(err)

@@ -334,3 +334,31 @@ func TestRunExtractFailure(t *testing.T) {
 		t.Error("fallback should not run after checksum-verified extraction failure")
 	}
 }
+
+func TestDownloadSizeLimit(t *testing.T) {
+	old := maxDownloadSize
+	maxDownloadSize = 1024
+	defer func() { maxDownloadSize = old }()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(make([]byte, 2048))
+	}))
+	defer srv.Close()
+
+	if _, err := downloadBytes(srv.URL); err == nil {
+		t.Fatal("downloadBytes should reject downloads above the size cap")
+	}
+
+	// A download within the cap still works.
+	srv2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("hello"))
+	}))
+	defer srv2.Close()
+	data, err := downloadBytes(srv2.URL)
+	if err != nil {
+		t.Fatalf("small download should succeed: %v", err)
+	}
+	if string(data) != "hello" {
+		t.Errorf("downloadBytes returned %q, want hello", data)
+	}
+}

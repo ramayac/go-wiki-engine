@@ -43,6 +43,9 @@ surface is defined in [README.md](README.md).
 - `context` now reports the active phase as the last `in-progress` (or last `completed`) row of phases.md instead of blindly taking the last row.
 - Front matter inline comments follow YAML rules: `#` only starts a comment outside quotes after whitespace, so `description: "C# guide"` survives.
 - Numeric `.wikirc` values are parsed strictly — `log_lines = "1.5"` warns and falls back instead of silently becoming 15.
+- `upgrade` downloads are capped at 100 MiB before checksum verification; `search` only scans markdown pages.
+- `sync-prompts` now reports `updated` and `removed` separately (plain text and JSON) instead of mixing removal markers into the updated list.
+- `context --json` omits `line_count` unless summaries are computed; `search --` with no terms shows usage; the `init` `.wikirc` rewrite is regex-based and tolerant of template whitespace.
 
 ## [0.x]
 
