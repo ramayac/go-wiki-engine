@@ -5,7 +5,7 @@ All notable changes to go-wiki-engine are documented here. Format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html); the compatibility
 surface is defined in [README.md](README.md).
 
-## [Unreleased]
+## [1.0.0] - 2026-09-19
 
 ### Added
 
