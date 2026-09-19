@@ -61,6 +61,9 @@ type LintResult struct {
 	OK       bool
 	Messages []string // kept for backward compatibility with tests + Refresh()
 	Issues   []Issue
+	// Reason explains a failed gate when the issues list cannot (e.g. a
+	// missing wiki directory); empty for ordinary runs.
+	Reason string
 }
 
 // --- Checker implementations ---
@@ -410,6 +413,18 @@ func (c *orphansChecker) Check(e *Engine) ([]Issue, error) {
 		case "index.md", "README.md":
 			continue
 		}
+		// Lifecycle: legacy/deprecated pages live outside the active graph
+		// (the leaf-pages checker treats them the same way), so they are not
+		// expected to be reachable from the index.
+		abs := filepath.Join(wikiDir, filepath.FromSlash(f))
+		data, err := os.ReadFile(abs)
+		if err != nil {
+			continue
+		}
+		fm, _, _ := ParseFrontMatter(string(data))
+		if fm.Status == "legacy" || fm.Status == "deprecated" {
+			continue
+		}
 		issues = append(issues, Issue{
 			Severity: SevWarn,
 			Check:    c.Name(),
@@ -438,12 +453,12 @@ func (c *headingHierarchyChecker) Check(e *Engine) ([]Issue, error) {
 			continue
 		}
 		abs := filepath.Join(e.RootDir, rel)
-		func() {
+		err := func() error {
 			f, err := os.Open(abs)
 			if err != nil {
-				return
+				return nil
 			}
-			defer f.Close()
+			defer func() { _ = f.Close() }()
 
 			scanner := bufio.NewScanner(f)
 			lineNo := 0
@@ -503,7 +518,11 @@ func (c *headingHierarchyChecker) Check(e *Engine) ([]Issue, error) {
 					Message:  fmt.Sprintf("multiple h1 headings (%d)", h1Count),
 				})
 			}
+			return scanner.Err()
 		}()
+		if err != nil {
+			return nil, err
+		}
 	}
 	return issues, nil
 }
@@ -523,7 +542,7 @@ func (c *logHeadingsChecker) Check(e *Engine) ([]Issue, error) {
 	if err != nil {
 		return issues, nil
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	scanner := bufio.NewScanner(f)
 	lineNo := 0
@@ -539,6 +558,9 @@ func (c *logHeadingsChecker) Check(e *Engine) ([]Issue, error) {
 				Message:  fmt.Sprintf("invalid log heading format: %s", line),
 			})
 		}
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
 	}
 	return issues, nil
 }
@@ -558,7 +580,7 @@ func (c *logChronologyChecker) Check(e *Engine) ([]Issue, error) {
 	if err != nil {
 		return issues, nil
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var dates []string
 	var dateLines []int
@@ -572,6 +594,9 @@ func (c *logChronologyChecker) Check(e *Engine) ([]Issue, error) {
 			dates = append(dates, m[1])
 			dateLines = append(dateLines, lineNo)
 		}
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
 	}
 
 	for i := 1; i < len(dates); i++ {
@@ -633,7 +658,10 @@ func (c *markersChecker) Check(e *Engine) ([]Issue, error) {
 				})
 			}
 		}
-		f.Close()
+		_ = f.Close()
+		if err := scanner.Err(); err != nil {
+			return nil, err
+		}
 	}
 	return issues, nil
 }
@@ -651,7 +679,7 @@ func (c *phaseConsistencyChecker) Check(e *Engine) ([]Issue, error) {
 	if err != nil {
 		return issues, nil
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	type phaseRow struct {
 		num    int
@@ -671,12 +699,15 @@ func (c *phaseConsistencyChecker) Check(e *Engine) ([]Issue, error) {
 			continue
 		}
 		num := 0
-		fmt.Sscanf(m[1], "%d", &num)
+		_, _ = fmt.Sscanf(m[1], "%d", &num)
 		phases = append(phases, phaseRow{
 			num:    num,
 			status: strings.TrimSpace(m[3]),
 			line:   lineNo,
 		})
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
 	}
 
 	validStatuses := map[string]bool{
@@ -859,28 +890,41 @@ func jaccardSimilarity(a, b map[string]bool) float64 {
 	return float64(intersection) / float64(union)
 }
 
-// pageLastModified returns the date the page was last modified, preferring the
-// last commit date from git history. This avoids the false "everything is
-// stale" signal that filesystem mtimes produce after a fresh clone (all files
-// share the checkout time). Falls back to mtime outside git repos or when git
-// fails.
-func (e *Engine) pageLastModified(rel string, info os.FileInfo) time.Time {
-	gitPath := filepath.ToSlash(filepath.Join(e.Cfg.WikiDir, rel))
-	cmd := exec.Command("git", "log", "-1", "--format=%cd", "--date=short", "--", gitPath)
+// pageCommitDates returns the last-commit date of every file under the wiki
+// directory in a single git invocation, keyed by repo-relative slash path.
+// Files that were never committed are absent from the map (callers fall back
+// to filesystem mtime, which is also the fallback when git is unavailable).
+func (e *Engine) pageCommitDates() (map[string]time.Time, error) {
+	cmd := exec.Command("git", "log", "--date=short", "--name-only", "--format=%cd", "--", e.Cfg.WikiDir+"/")
 	cmd.Dir = e.RootDir
 	out, err := cmd.Output()
 	if err != nil {
-		return info.ModTime()
+		return nil, err
 	}
-	s := strings.TrimSpace(string(out))
-	if s == "" {
-		return info.ModTime()
+
+	dates := make(map[string]time.Time)
+	dateRe := regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
+	var current time.Time
+	scanner := bufio.NewScanner(strings.NewReader(string(out)))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+		if dateRe.MatchString(line) {
+			if t, err := time.Parse("2006-01-02", line); err == nil {
+				current = t
+			}
+			continue
+		}
+		// File line: first occurrence wins, which is the most recent commit
+		// because git log walks newest-first.
+		key := filepath.ToSlash(line)
+		if _, exists := dates[key]; !exists && !current.IsZero() {
+			dates[key] = current
+		}
 	}
-	t, err := time.Parse("2006-01-02", s)
-	if err != nil {
-		return info.ModTime()
-	}
-	return t
+	return dates, scanner.Err()
 }
 
 // staleContentChecker detects wiki pages that haven't been updated recently
@@ -901,8 +945,12 @@ func (c *staleContentChecker) Check(e *Engine) ([]Issue, error) {
 	changed, _ := e.Changed(e.Cfg.DefaultDiff)
 	hasSourceChanges := len(changed) > 0
 
+	// One git invocation for every page's last commit date. Falls back to
+	// per-file mtime when git is unavailable or a page has no commits yet.
+	commitDates, _ := e.pageCommitDates()
+
 	// Walk wiki .md files.
-	filepath.WalkDir(wikiDir, func(path string, d os.DirEntry, err error) error {
+	_ = filepath.WalkDir(wikiDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return nil
 		}
@@ -922,7 +970,15 @@ func (c *staleContentChecker) Check(e *Engine) ([]Issue, error) {
 			return nil
 		}
 
-		if e.pageLastModified(rel, info).Before(staleThreshold) {
+		lastMod := info.ModTime()
+		if commitDates != nil {
+			key := filepath.ToSlash(filepath.Join(e.Cfg.WikiDir, wikiRel))
+			if t, ok := commitDates[key]; ok && !t.IsZero() {
+				lastMod = t
+			}
+		}
+
+		if lastMod.Before(staleThreshold) {
 			severity := SevInfo
 			msg := fmt.Sprintf("not updated in %d+ days", e.Cfg.StaleDays)
 			if hasSourceChanges {
@@ -1306,6 +1362,16 @@ func allCheckers() []Checker {
 	}
 }
 
+// KnownCheckerNames returns the names of all registered checkers, used to
+// validate --check/--skip selectors so typos fail loudly.
+func KnownCheckerNames() []string {
+	names := make([]string, 0, len(allCheckers()))
+	for _, c := range allCheckers() {
+		names = append(names, c.Name())
+	}
+	return names
+}
+
 // Lint runs all registered checkers and aggregates the results.
 func (e *Engine) Lint() LintResult {
 	return e.LintWithOptions(nil, nil)
@@ -1313,6 +1379,23 @@ func (e *Engine) Lint() LintResult {
 
 // LintWithOptions runs specified checkers, skipping any listed in skip.
 func (e *Engine) LintWithOptions(check []string, skip []string) LintResult {
+	// A missing wiki directory is one clear diagnostic, not a flood of
+	// per-checker lstat failures.
+	if _, err := os.Stat(e.WikiPath()); err != nil {
+		msg := fmt.Sprintf("wiki directory not found: %s (run wiki-engine init)", e.Cfg.WikiDir)
+		return LintResult{
+			OK:       false,
+			Messages: []string{fmt.Sprintf("%s: [lint] %s", e.Cfg.WikiDir, msg)},
+			Issues: []Issue{{
+				Severity: SevError,
+				Check:    "lint",
+				File:     e.Cfg.WikiDir,
+				Message:  msg,
+			}},
+			Reason: msg,
+		}
+	}
+
 	checkAll := true
 	checkMap := make(map[string]bool)
 	for _, c := range check {

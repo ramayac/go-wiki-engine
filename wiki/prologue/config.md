@@ -33,6 +33,10 @@ log_lines = 10
 | Default | `10` |
 |--------:|------|
 
+All numeric values are parsed strictly: invalid values (e.g. `log_lines = "1.5"`)
+warn on load and fall back to the default instead of being silently
+misinterpreted.
+
 ## Detection Thresholds
 
 ### `duplicate_threshold`
@@ -68,10 +72,14 @@ fail_severity = "warn"
 |--------:|-----------|
 | Values | `error`, `warn`, `info` |
 
+Invalid values warn on load and fall back to `warn`. Checker selectors
+(`lint --check=...` / `lint --skip=...`) are validated too — unknown checker
+names fail loudly instead of silently running nothing.
+
 ## Context Loading
 
 ### `context_summarize`
-When `true`, `wiki-engine context` defaults to `--summarize` mode, including per-page previews (first heading, first paragraph, line count) in catalog entries. Useful for wikis with large pages where reading everything would waste tokens. The behavior can be toggled per invocation with the explicit flags.
+When `true`, `wiki-engine context` defaults to `--summarize` mode, including per-page previews (first heading, first paragraph, line count) in catalog entries — both in plain-text and JSON output. Useful for wikis with large pages where reading everything would waste tokens. The behavior can be toggled per invocation with the explicit flags. Summaries are not available in `--active` graph mode; the explicit combination is rejected.
 
 ```
 context_summarize = false
@@ -118,6 +126,12 @@ ignore = [
   "*.log",
   "*.tmp",
 ]
+```
+
+Single-line arrays work too:
+
+```
+ignore = ["wiki/", "bin/", "*.log"]
 ```
 
 | Default | `["wiki/", "bin/", "*.log", "*.tmp"]` |

@@ -29,8 +29,40 @@ var upgradeHTTPClient = &http.Client{
 	},
 }
 
-const repoURL = "https://github.com/ramayac/go-wiki-engine"
 const module = "github.com/ramayac/go-wiki-engine/cmd/wiki-engine@latest"
+
+// modulePrefix is the installable module path without a version suffix.
+const modulePrefix = "github.com/ramayac/go-wiki-engine/cmd/wiki-engine"
+
+// maxDownloadSize caps release downloads before checksum verification, so a
+// broken or hostile release endpoint cannot exhaust memory. It is a variable
+// so tests can lower it.
+var maxDownloadSize = int64(100 << 20)
+
+// repoURL is the base URL for GitHub release lookups. It is a variable so
+// tests can point the upgrade flow at a local httptest server.
+var repoURL = "https://github.com/ramayac/go-wiki-engine"
+
+// fallbackInstaller runs the `go install` fallback. It is a variable so
+// tests can stub it without invoking the real Go toolchain.
+var fallbackInstaller = func(modulePath string) error {
+	gobin, err := exec.LookPath("go")
+	if err != nil {
+		return fmt.Errorf("go not found in PATH; install Go or download a release binary from GitHub")
+	}
+
+	cmd := exec.Command(gobin, "install", modulePath)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Env = os.Environ()
+
+	fmt.Fprintf(os.Stderr, "running: go install %s\n", modulePath)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("upgrade fallback failed: %w", err)
+	}
+	fmt.Fprintln(os.Stderr, "upgrade fallback complete")
+	return nil
+}
 
 // Run executes the self-upgrade. It attempts to download the latest precompiled
 // binary from GitHub, validates its SHA-256 checksum, and replaces the running binary.
@@ -41,39 +73,46 @@ func Run() error {
 	if err != nil {
 		return fmt.Errorf("failed to locate running executable: %w", err)
 	}
+	return run(repoURL, executablePath)
+}
 
-	fmt.Fprintf(os.Stderr, "checking for latest release at %s...\n", repoURL)
-	tag, err := getLatestTag()
+// run performs the upgrade against the given release base URL, replacing the
+// binary at executablePath. The base URL and target path are injectable so
+// tests can drive the full download + checksum + replace flow through an
+// httptest server.
+func run(baseURL, executablePath string) error {
+	fmt.Fprintf(os.Stderr, "checking for latest release at %s...\n", baseURL)
+	tag, err := getLatestTag(baseURL)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warning: failed to get latest release tag: %v\n", err)
-		return fallbackGoInstall()
+		return fallbackGoInstall("")
 	}
 	fmt.Fprintf(os.Stderr, "latest release version is %s\n", tag)
 
 	// Fetch checksums.txt
-	checksumsURL := fmt.Sprintf("%s/releases/download/%s/checksums.txt", repoURL, tag)
+	checksumsURL := fmt.Sprintf("%s/releases/download/%s/checksums.txt", baseURL, tag)
 	fmt.Fprintf(os.Stderr, "fetching checksums from %s...\n", checksumsURL)
 	checksumsData, err := downloadBytes(checksumsURL)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warning: failed to download checksums: %v\n", err)
-		return fallbackGoInstall()
+		return fallbackGoInstall(tag)
 	}
 
 	// Parse checksums to match our OS and Arch
 	assetName, expectedHash, err := matchAssetInChecksums(string(checksumsData), runtime.GOOS, runtime.GOARCH)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warning: %v\n", err)
-		return fallbackGoInstall()
+		return fallbackGoInstall(tag)
 	}
 	fmt.Fprintf(os.Stderr, "matched release asset: %s (expected hash: %s)\n", assetName, expectedHash)
 
 	// Download asset
-	assetURL := fmt.Sprintf("%s/releases/download/%s/%s", repoURL, tag, assetName)
+	assetURL := fmt.Sprintf("%s/releases/download/%s/%s", baseURL, tag, assetName)
 	fmt.Fprintf(os.Stderr, "downloading asset from %s...\n", assetURL)
 	assetData, err := downloadBytes(assetURL)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warning: failed to download asset: %v\n", err)
-		return fallbackGoInstall()
+		return fallbackGoInstall(tag)
 	}
 
 	// Verify SHA-256 checksum
@@ -105,16 +144,24 @@ func Run() error {
 	}
 
 	fmt.Fprintln(os.Stderr, "upgrade complete")
+
+	// Sanity-check the replacement actually runs and report the new version.
+	if out, err := exec.Command(executablePath, "version").Output(); err == nil {
+		fmt.Fprintf(os.Stderr, "upgraded to %s\n", strings.TrimSpace(string(out)))
+	} else {
+		fmt.Fprintln(os.Stderr, "warning: could not verify the new binary (wiki-engine version failed)")
+	}
+
 	fmt.Fprintln(os.Stderr, "run `wiki-engine sync-prompts` in each repo to update prompts and instructions for all supported AI tools")
 	return nil
 }
 
-func getLatestTag() (string, error) {
-	resp, err := upgradeHTTPClient.Get(repoURL + "/releases/latest")
+func getLatestTag(baseURL string) (string, error) {
+	resp, err := upgradeHTTPClient.Get(baseURL + "/releases/latest")
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusFound && resp.StatusCode != http.StatusMovedPermanently {
 		return "", fmt.Errorf("unexpected status fetching latest redirect: %d", resp.StatusCode)
@@ -138,13 +185,20 @@ func downloadBytes(url string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("status: %d", resp.StatusCode)
 	}
 
-	return io.ReadAll(resp.Body)
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxDownloadSize+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > int(maxDownloadSize) {
+		return nil, fmt.Errorf("download exceeds %d bytes", maxDownloadSize)
+	}
+	return data, nil
 }
 
 func matchAssetInChecksums(checksumsContent, goos, goarch string) (string, string, error) {
@@ -190,7 +244,7 @@ func extractTarGz(gzipData []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer gr.Close()
+	defer func() { _ = gr.Close() }()
 
 	tr := tar.NewReader(gr)
 	for {
@@ -223,8 +277,12 @@ func extractZip(zipData []byte) ([]byte, error) {
 			if err != nil {
 				return nil, err
 			}
-			defer rc.Close()
-			return io.ReadAll(rc)
+			data, err := io.ReadAll(rc)
+			_ = rc.Close()
+			if err != nil {
+				return nil, err
+			}
+			return data, nil
 		}
 	}
 	return nil, fmt.Errorf("binary not found in zip archive")
@@ -237,13 +295,21 @@ func replaceExecutable(executablePath string, newBytes []byte) error {
 		return err
 	}
 	tmpPath := tmpFile.Name()
-	defer os.Remove(tmpPath)
+	defer func() { _ = os.Remove(tmpPath) }()
 
 	if _, err := tmpFile.Write(newBytes); err != nil {
-		tmpFile.Close()
+		_ = tmpFile.Close()
 		return err
 	}
-	tmpFile.Close()
+	// Flush to disk before the rename so a power loss cannot leave a
+	// zero-length replacement binary.
+	if err := tmpFile.Sync(); err != nil {
+		_ = tmpFile.Close()
+		return err
+	}
+	if err := tmpFile.Close(); err != nil {
+		return err
+	}
 
 	if err := os.Chmod(tmpPath, 0755); err != nil {
 		return err
@@ -255,7 +321,7 @@ func replaceExecutable(executablePath string, newBytes []byte) error {
 		if err := os.Rename(executablePath, oldPath); err != nil {
 			return fmt.Errorf("failed to move running executable on Windows: %w", err)
 		}
-		defer os.Remove(oldPath)
+		defer func() { _ = os.Remove(oldPath) }()
 	}
 
 	if err := os.Rename(tmpPath, executablePath); err != nil {
@@ -265,22 +331,14 @@ func replaceExecutable(executablePath string, newBytes []byte) error {
 	return nil
 }
 
-func fallbackGoInstall() error {
+func fallbackGoInstall(tag string) error {
 	fmt.Fprintln(os.Stderr, "falling back to `go install`...")
-	gobin, err := exec.LookPath("go")
-	if err != nil {
-		return fmt.Errorf("go not found in PATH; install Go or download a release binary from GitHub")
+	// Pin the install to the discovered release tag when it is known: a
+	// failed binary download must not silently install something newer
+	// than the checksum-verified release.
+	target := module
+	if tag != "" {
+		target = modulePrefix + "@" + tag
 	}
-
-	cmd := exec.Command(gobin, "install", module)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Env = os.Environ()
-
-	fmt.Fprintf(os.Stderr, "running: go install %s\n", module)
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("upgrade fallback failed: %w", err)
-	}
-	fmt.Fprintln(os.Stderr, "upgrade fallback complete")
-	return nil
+	return fallbackInstaller(target)
 }

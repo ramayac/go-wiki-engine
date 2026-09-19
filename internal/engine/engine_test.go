@@ -17,7 +17,9 @@ func setupWiki(t *testing.T) string {
 	root := t.TempDir()
 	wikiDir := filepath.Join(root, "wiki")
 	opsDir := filepath.Join(wikiDir, "operations")
-	os.MkdirAll(opsDir, 0o755)
+	if err := os.MkdirAll(opsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
 
 	files := map[string]string{
 		"wiki/README.md":            "---\nstatus: current\ndescription: README\n---\n# Wiki\n",
@@ -32,7 +34,9 @@ func setupWiki(t *testing.T) string {
 	}
 	for rel, content := range files {
 		p := filepath.Join(root, rel)
-		os.MkdirAll(filepath.Dir(p), 0o755)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
 		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -151,7 +155,9 @@ func TestLintOK(t *testing.T) {
 
 func TestLintMissingFile(t *testing.T) {
 	root := setupWiki(t)
-	os.Remove(filepath.Join(root, "wiki", "schema.md"))
+	if err := os.Remove(filepath.Join(root, "wiki", "schema.md")); err != nil {
+		t.Fatal(err)
+	}
 	eng := newTestEngine(root)
 	result := eng.Lint()
 	if result.OK {
@@ -172,7 +178,9 @@ func TestLintBrokenLink(t *testing.T) {
 	root := setupWiki(t)
 	// Add a broken link to index.
 	indexPath := filepath.Join(root, "wiki", "index.md")
-	os.WriteFile(indexPath, []byte("# Index\n\n- [missing.md](missing.md)\n- [schema.md](schema.md)\n"), 0o644)
+	if err := os.WriteFile(indexPath, []byte("# Index\n\n- [missing.md](missing.md)\n- [schema.md](schema.md)\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	eng := newTestEngine(root)
 	result := eng.Lint()
 	if result.OK {
@@ -192,7 +200,9 @@ func TestLintBrokenLink(t *testing.T) {
 func TestLintInvalidLogHeading(t *testing.T) {
 	root := setupWiki(t)
 	logPath := filepath.Join(root, "wiki", "log.md")
-	os.WriteFile(logPath, []byte("# Log\n\n## [2026-04-16] bad heading without pipe\n"), 0o644)
+	if err := os.WriteFile(logPath, []byte("# Log\n\n## [2026-04-16] bad heading without pipe\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	eng := newTestEngine(root)
 	result := eng.Lint()
 	if result.OK {
@@ -203,7 +213,9 @@ func TestLintInvalidLogHeading(t *testing.T) {
 func TestLintMarker(t *testing.T) {
 	root := setupWiki(t)
 	repoMap := filepath.Join(root, "wiki", "repo-map.md")
-	os.WriteFile(repoMap, []byte("---\nstatus: current\ndescription: Repo Map\n---\n# Repo Map\n\nTODO: fill this in\n"), 0o644)
+	if err := os.WriteFile(repoMap, []byte("---\nstatus: current\ndescription: Repo Map\n---\n# Repo Map\n\nTODO: fill this in\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	eng := newTestEngine(root)
 	result := eng.Lint()
 	if result.OK {
@@ -214,7 +226,9 @@ func TestLintMarker(t *testing.T) {
 func TestLintMarkerInCodeBlock(t *testing.T) {
 	root := setupWiki(t)
 	repoMap := filepath.Join(root, "wiki", "repo-map.md")
-	os.WriteFile(repoMap, []byte("---\nstatus: current\ndescription: Repo Map\n---\n# Repo Map\n\n```bash\nwiki-engine search \"TODO:\"\n```\n"), 0o644)
+	if err := os.WriteFile(repoMap, []byte("---\nstatus: current\ndescription: Repo Map\n---\n# Repo Map\n\n```bash\nwiki-engine search \"TODO:\"\n```\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	eng := newTestEngine(root)
 	result := eng.Lint()
 	if !result.OK {
@@ -368,7 +382,9 @@ func TestLintOrphans(t *testing.T) {
 	root := setupWiki(t)
 	// Add an extra page not in index.md.
 	extraPath := filepath.Join(root, "wiki", "extra.md")
-	os.WriteFile(extraPath, []byte("# Extra\n"), 0o644)
+	if err := os.WriteFile(extraPath, []byte("# Extra\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	eng := newTestEngine(root)
 	result := eng.Lint()
 	found := false
@@ -386,7 +402,9 @@ func TestLintCrossPageLink(t *testing.T) {
 	root := setupWiki(t)
 	// Add a broken link in a non-index page.
 	phasesPath := filepath.Join(root, "wiki", "phases.md")
-	os.WriteFile(phasesPath, []byte("# Phases\n\nSee [nowhere.md](nowhere.md)\n"), 0o644)
+	if err := os.WriteFile(phasesPath, []byte("# Phases\n\nSee [nowhere.md](nowhere.md)\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	eng := newTestEngine(root)
 	result := eng.Lint()
 	found := false
@@ -404,7 +422,9 @@ func TestLintHeadingHierarchy(t *testing.T) {
 	root := setupWiki(t)
 	// Create a page with a skipped heading level.
 	testPath := filepath.Join(root, "wiki", "repo-map.md")
-	os.WriteFile(testPath, []byte("# Title\n\n### Skipped h2\n"), 0o644)
+	if err := os.WriteFile(testPath, []byte("# Title\n\n### Skipped h2\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	eng := newTestEngine(root)
 	result := eng.Lint()
 	found := false
@@ -422,7 +442,9 @@ func TestLintLogChronology(t *testing.T) {
 	root := setupWiki(t)
 	// Write log with wrong order.
 	logPath := filepath.Join(root, "wiki", "log.md")
-	os.WriteFile(logPath, []byte("# Log\n\n## [2026-04-15] ingest | first\n\n## [2026-04-16] ingest | second\n"), 0o644)
+	if err := os.WriteFile(logPath, []byte("# Log\n\n## [2026-04-15] ingest | first\n\n## [2026-04-16] ingest | second\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	eng := newTestEngine(root)
 	result := eng.Lint()
 	found := false
@@ -440,7 +462,9 @@ func TestLintPhaseConsistency(t *testing.T) {
 	root := setupWiki(t)
 	// Write phases.md with invalid status.
 	phasesPath := filepath.Join(root, "wiki", "phases.md")
-	os.WriteFile(phasesPath, []byte("# Phases\n\n| 1 | Test | bad-status |\n"), 0o644)
+	if err := os.WriteFile(phasesPath, []byte("# Phases\n\n| 1 | Test | bad-status |\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	eng := newTestEngine(root)
 	result := eng.Lint()
 	found := false
@@ -457,7 +481,9 @@ func TestLintPhaseConsistency(t *testing.T) {
 func TestLintMarkdownFormatWikiLinks(t *testing.T) {
 	root := setupWiki(t)
 	repoMap := filepath.Join(root, "wiki", "repo-map.md")
-	os.WriteFile(repoMap, []byte("# Repo Map\n\nThis is a [[wiki-style-link]]\n"), 0o644)
+	if err := os.WriteFile(repoMap, []byte("# Repo Map\n\nThis is a [[wiki-style-link]]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	eng := newTestEngine(root)
 	result := eng.Lint()
 	found := false
@@ -475,7 +501,9 @@ func TestLintMarkdownFormatWikiLinks(t *testing.T) {
 func TestLintMarkdownFormatSpacedLinks(t *testing.T) {
 	root := setupWiki(t)
 	repoMap := filepath.Join(root, "wiki", "repo-map.md")
-	os.WriteFile(repoMap, []byte("# Repo Map\n\nThis is a [spaced link] (repo-map.md)\n"), 0o644)
+	if err := os.WriteFile(repoMap, []byte("# Repo Map\n\nThis is a [spaced link] (repo-map.md)\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	eng := newTestEngine(root)
 	result := eng.Lint()
 	found := false
@@ -493,7 +521,9 @@ func TestLintMarkdownFormatSpacedLinks(t *testing.T) {
 func TestLintMarkdownFormatEmptyLink(t *testing.T) {
 	root := setupWiki(t)
 	repoMap := filepath.Join(root, "wiki", "repo-map.md")
-	os.WriteFile(repoMap, []byte("# Repo Map\n\nEmpty target: [link]()\nEmpty text: [](repo-map.md)\n"), 0o644)
+	if err := os.WriteFile(repoMap, []byte("# Repo Map\n\nEmpty target: [link]()\nEmpty text: [](repo-map.md)\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	eng := newTestEngine(root)
 	result := eng.Lint()
 	foundTarget := false
@@ -519,7 +549,9 @@ func TestLintMarkdownFormatEmptyLink(t *testing.T) {
 func TestLintMarkdownFormatUnclosedLink(t *testing.T) {
 	root := setupWiki(t)
 	repoMap := filepath.Join(root, "wiki", "repo-map.md")
-	os.WriteFile(repoMap, []byte("# Repo Map\n\nUnclosed link: [link](repo-map.md\n"), 0o644)
+	if err := os.WriteFile(repoMap, []byte("# Repo Map\n\nUnclosed link: [link](repo-map.md\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	eng := newTestEngine(root)
 	result := eng.Lint()
 	found := false
@@ -537,7 +569,9 @@ func TestLintMarkdownFormatUnclosedLink(t *testing.T) {
 func TestLintMarkdownFormatReferenceLinks(t *testing.T) {
 	root := setupWiki(t)
 	repoMap := filepath.Join(root, "wiki", "repo-map.md")
-	os.WriteFile(repoMap, []byte("# Repo Map\n\nRef link: [schema][1]\n\n[1]: schema.md\nNormal: [schema](schema.md)\nInline code: `[x][y]`\n"), 0o644)
+	if err := os.WriteFile(repoMap, []byte("# Repo Map\n\nRef link: [schema][1]\n\n[1]: schema.md\nNormal: [schema](schema.md)\nInline code: `[x][y]`\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	eng := newTestEngine(root)
 	result := eng.Lint()
 	refCount := 0
@@ -585,10 +619,16 @@ func TestLeafPagesChecker(t *testing.T) {
 func TestLintAnchorInLinks(t *testing.T) {
 	root := setupWiki(t)
 	repoMap := filepath.Join(root, "wiki", "repo-map.md")
-	os.WriteFile(repoMap, []byte("# Repo Map\n\nSee [schema](schema.md#user-table) or [main](cmd/main.go#L10)\n"), 0o644)
+	if err := os.WriteFile(repoMap, []byte("# Repo Map\n\nSee [schema](schema.md#user-table) or [main](cmd/main.go#L10)\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	// Create cmd/main.go in root to satisfy external link check
-	os.MkdirAll(filepath.Join(root, "cmd"), 0o755)
-	os.WriteFile(filepath.Join(root, "cmd", "main.go"), []byte("package main\n"), 0o644)
+	if err := os.MkdirAll(filepath.Join(root, "cmd"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "cmd", "main.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	eng := newTestEngine(root)
 	result := eng.Lint()
@@ -617,8 +657,10 @@ func TestImpact(t *testing.T) {
 	eng := newTestEngine(root)
 
 	// Add a wiki page that mentions a source file.
-	os.WriteFile(filepath.Join(root, "wiki", "architecture.md"),
-		[]byte("# Architecture\n\nThe main entry point is cmd/main.go.\n"), 0o644)
+	if err := os.WriteFile(filepath.Join(root, "wiki", "architecture.md"),
+		[]byte("# Architecture\n\nThe main entry point is cmd/main.go.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	results, err := eng.Impact([]string{"cmd/main.go", "pkg/unknown.go"})
 	if err != nil {
@@ -720,7 +762,9 @@ func TestFrontMatterChecker(t *testing.T) {
 	}
 
 	// 1. Missing front matter block
-	os.WriteFile(filepath.Join(root, "wiki", "schema.md"), []byte("# Schema\nNo front matter"), 0o644)
+	if err := os.WriteFile(filepath.Join(root, "wiki", "schema.md"), []byte("# Schema\nNo front matter"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	issues, _ = fmc.Check(eng)
 	foundMissing := false
 	for _, iss := range issues {
@@ -736,10 +780,14 @@ func TestFrontMatterChecker(t *testing.T) {
 	}
 
 	// Restore schema.md
-	os.WriteFile(filepath.Join(root, "wiki", "schema.md"), []byte("---\nstatus: current\ndescription: Schema\n---\n# Schema\n"), 0o644)
+	if err := os.WriteFile(filepath.Join(root, "wiki", "schema.md"), []byte("---\nstatus: current\ndescription: Schema\n---\n# Schema\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	// 2. Invalid status value
-	os.WriteFile(filepath.Join(root, "wiki", "schema.md"), []byte("---\nstatus: invalid_status\ndescription: Schema\n---\n# Schema\n"), 0o644)
+	if err := os.WriteFile(filepath.Join(root, "wiki", "schema.md"), []byte("---\nstatus: invalid_status\ndescription: Schema\n---\n# Schema\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	issues, _ = fmc.Check(eng)
 	foundInvalidStatus := false
 	for _, iss := range issues {
@@ -755,10 +803,14 @@ func TestFrontMatterChecker(t *testing.T) {
 	}
 
 	// Restore schema.md
-	os.WriteFile(filepath.Join(root, "wiki", "schema.md"), []byte("---\nstatus: current\ndescription: Schema\n---\n# Schema\n"), 0o644)
+	if err := os.WriteFile(filepath.Join(root, "wiki", "schema.md"), []byte("---\nstatus: current\ndescription: Schema\n---\n# Schema\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	// 3. Deprecated status requiring superseded_by
-	os.WriteFile(filepath.Join(root, "wiki", "schema.md"), []byte("---\nstatus: deprecated\ndescription: Schema\n---\n# Schema\n"), 0o644)
+	if err := os.WriteFile(filepath.Join(root, "wiki", "schema.md"), []byte("---\nstatus: deprecated\ndescription: Schema\n---\n# Schema\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	issues, _ = fmc.Check(eng)
 	foundMissingSuperseded := false
 	for _, iss := range issues {
@@ -774,7 +826,9 @@ func TestFrontMatterChecker(t *testing.T) {
 	}
 
 	// 4. Superseded_by target does not exist
-	os.WriteFile(filepath.Join(root, "wiki", "schema.md"), []byte("---\nstatus: deprecated\ndescription: Schema\nsuperseded_by: non-existent.md\n---\n# Schema\n"), 0o644)
+	if err := os.WriteFile(filepath.Join(root, "wiki", "schema.md"), []byte("---\nstatus: deprecated\ndescription: Schema\nsuperseded_by: non-existent.md\n---\n# Schema\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	issues, _ = fmc.Check(eng)
 	foundNonExistentTarget := false
 	for _, iss := range issues {
@@ -787,8 +841,12 @@ func TestFrontMatterChecker(t *testing.T) {
 	}
 
 	// 5. Superseded_by target is not active (e.g. is deprecated itself)
-	os.WriteFile(filepath.Join(root, "wiki", "phases.md"), []byte("---\nstatus: deprecated\ndescription: Phases\nsuperseded_by: schema.md\n---\n# Phases\n"), 0o644)
-	os.WriteFile(filepath.Join(root, "wiki", "schema.md"), []byte("---\nstatus: deprecated\ndescription: Schema\nsuperseded_by: phases.md\n---\n# Schema\n"), 0o644)
+	if err := os.WriteFile(filepath.Join(root, "wiki", "phases.md"), []byte("---\nstatus: deprecated\ndescription: Phases\nsuperseded_by: schema.md\n---\n# Phases\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "wiki", "schema.md"), []byte("---\nstatus: deprecated\ndescription: Schema\nsuperseded_by: phases.md\n---\n# Schema\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	issues, _ = fmc.Check(eng)
 	foundNotActiveTarget := false
 	for _, iss := range issues {
@@ -806,7 +864,9 @@ func TestContextLifecycleFiltering(t *testing.T) {
 	eng := newTestEngine(root)
 
 	// Make one of the wiki files legacy (non-active).
-	os.WriteFile(filepath.Join(root, "wiki", "phases.md"), []byte("---\nstatus: legacy\ndescription: Phases\n---\n# Phases\n"), 0o644)
+	if err := os.WriteFile(filepath.Join(root, "wiki", "phases.md"), []byte("---\nstatus: legacy\ndescription: Phases\n---\n# Phases\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	// Plain context includes legacy pages: the catalog shows everything.
 	cr, err := eng.Context(false, false)
@@ -851,7 +911,9 @@ func TestIndexFormatChecker(t *testing.T) {
 
 	// 1. Missing description
 	indexPath := filepath.Join(root, "wiki", "index.md")
-	os.WriteFile(indexPath, []byte("---\nstatus: current\ndescription: Index\n---\n# Index\n- [schema.md](schema.md)\n"), 0o644)
+	if err := os.WriteFile(indexPath, []byte("---\nstatus: current\ndescription: Index\n---\n# Index\n- [schema.md](schema.md)\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	issues, _ = ifc.Check(eng)
 	foundMissingDesc := false
 	for _, iss := range issues {
@@ -864,7 +926,9 @@ func TestIndexFormatChecker(t *testing.T) {
 	}
 
 	// 2. Non-relative target (starts with /)
-	os.WriteFile(indexPath, []byte("---\nstatus: current\ndescription: Index\n---\n# Index\n- [/schema.md](/schema.md) | Schema description\n"), 0o644)
+	if err := os.WriteFile(indexPath, []byte("---\nstatus: current\ndescription: Index\n---\n# Index\n- [/schema.md](/schema.md) | Schema description\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	issues, _ = ifc.Check(eng)
 	foundNonRelative := false
 	for _, iss := range issues {
@@ -877,7 +941,9 @@ func TestIndexFormatChecker(t *testing.T) {
 	}
 
 	// 3. Non-relative target (has protocol)
-	os.WriteFile(indexPath, []byte("---\nstatus: current\ndescription: Index\n---\n# Index\n- [schema.md](https://google.com/schema.md) | Schema description\n"), 0o644)
+	if err := os.WriteFile(indexPath, []byte("---\nstatus: current\ndescription: Index\n---\n# Index\n- [schema.md](https://google.com/schema.md) | Schema description\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	issues, _ = ifc.Check(eng)
 	foundProtocol := false
 	for _, iss := range issues {
@@ -906,7 +972,9 @@ func TestBareUrlChecker(t *testing.T) {
 
 	// 1. Bare URL outside link
 	readmePath := filepath.Join(root, "wiki", "README.md")
-	os.WriteFile(readmePath, []byte("---\nstatus: current\ndescription: README\n---\n# README\nVisit https://google.com for more info.\n"), 0o644)
+	if err := os.WriteFile(readmePath, []byte("---\nstatus: current\ndescription: README\n---\n# README\nVisit https://google.com for more info.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	issues, _ = buc.Check(eng)
 	foundBareUrl := false
 	for _, iss := range issues {
@@ -922,7 +990,9 @@ func TestBareUrlChecker(t *testing.T) {
 	}
 
 	// 2. HTML anchor tag
-	os.WriteFile(readmePath, []byte("---\nstatus: current\ndescription: README\n---\n# README\nVisit <a href=\"https://google.com\">Google</a>.\n"), 0o644)
+	if err := os.WriteFile(readmePath, []byte("---\nstatus: current\ndescription: README\n---\n# README\nVisit <a href=\"https://google.com\">Google</a>.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	issues, _ = buc.Check(eng)
 	foundHtmlLink := false
 	for _, iss := range issues {
@@ -938,14 +1008,18 @@ func TestBareUrlChecker(t *testing.T) {
 	}
 
 	// 3. URL in code block (should be ignored)
-	os.WriteFile(readmePath, []byte("---\nstatus: current\ndescription: README\n---\n# README\n```\nhttps://google.com\n```\n"), 0o644)
+	if err := os.WriteFile(readmePath, []byte("---\nstatus: current\ndescription: README\n---\n# README\n```\nhttps://google.com\n```\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	issues, _ = buc.Check(eng)
 	if len(issues) != 0 {
 		t.Errorf("expected no issues for URL inside code block, got: %v", issues)
 	}
 
 	// 4. URL in inline backticks (should be ignored)
-	os.WriteFile(readmePath, []byte("---\nstatus: current\ndescription: README\n---\n# README\n`https://google.com` is a URL.\n"), 0o644)
+	if err := os.WriteFile(readmePath, []byte("---\nstatus: current\ndescription: README\n---\n# README\n`https://google.com` is a URL.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	issues, _ = buc.Check(eng)
 	if len(issues) != 0 {
 		t.Errorf("expected no issues for URL inside inline code, got: %v", issues)
@@ -957,8 +1031,12 @@ func TestLintWithOptions(t *testing.T) {
 	eng := newTestEngine(root)
 
 	// Introduce a markers issue and an index-format issue
-	os.WriteFile(filepath.Join(root, "wiki", "repo-map.md"), []byte("---\nstatus: current\ndescription: Repo Map\n---\n# Repo Map\nTODO: fix\n"), 0o644)
-	os.WriteFile(filepath.Join(root, "wiki", "index.md"), []byte("---\nstatus: current\ndescription: Index\n---\n# Index\n- [schema.md](schema.md)\n"), 0o644)
+	if err := os.WriteFile(filepath.Join(root, "wiki", "repo-map.md"), []byte("---\nstatus: current\ndescription: Repo Map\n---\n# Repo Map\nTODO: fix\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "wiki", "index.md"), []byte("---\nstatus: current\ndescription: Index\n---\n# Index\n- [schema.md](schema.md)\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	// 1. Run all (default) -> both issues should be found
 	resAll := eng.LintWithOptions(nil, nil)
@@ -1099,5 +1177,208 @@ func TestActiveUnlinkedPages(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("expected unlinked.md in active unlinked pages, got %v", unlinked)
+	}
+}
+
+func TestDiffInvalidRef(t *testing.T) {
+	root := setupWiki(t)
+	eng := newTestEngine(root)
+
+	gitCmd := func(args ...string) {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = root
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v failed: %v\n%s", args, err, out)
+		}
+	}
+	gitCmd("init", "-q", "-b", "main")
+	gitCmd("config", "user.email", "test@test")
+	gitCmd("config", "user.name", "Test")
+	gitCmd("add", ".")
+	gitCmd("commit", "-q", "-m", "init")
+
+	if _, err := eng.Diff("does-not-exist", "HEAD"); err == nil {
+		t.Error("Diff with an invalid from-ref should fail, got nil error")
+	}
+	if _, err := eng.Diff("HEAD", "does-not-exist"); err == nil {
+		t.Error("Diff with an invalid to-ref should fail, got nil error")
+	}
+
+	// Valid refs still work.
+	dr, err := eng.Diff("HEAD", "HEAD")
+	if err != nil {
+		t.Fatalf("Diff(HEAD, HEAD) failed: %v", err)
+	}
+	if len(dr.Added)+len(dr.Removed)+len(dr.Changed) != 0 {
+		t.Errorf("Diff(HEAD, HEAD) should be empty, got added=%v removed=%v changed=%v", dr.Added, dr.Removed, dr.Changed)
+	}
+}
+
+func TestDiffRefsBeforeWikiExisted(t *testing.T) {
+	root := t.TempDir()
+	eng := newTestEngine(root)
+
+	gitCmd := func(args ...string) {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = root
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v failed: %v\n%s", args, err, out)
+		}
+	}
+	gitCmd("init", "-q", "-b", "main")
+	gitCmd("config", "user.email", "test@test")
+	gitCmd("config", "user.name", "Test")
+	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitCmd("add", ".")
+	gitCmd("commit", "-q", "-m", "before wiki")
+
+	// A ref that predates the wiki directory must not error — it has no
+	// wiki files, not an invalid diff.
+	dr, err := eng.Diff("HEAD", "HEAD")
+	if err != nil {
+		t.Fatalf("Diff between refs without a wiki should not error: %v", err)
+	}
+	if len(dr.Added)+len(dr.Removed)+len(dr.Changed) != 0 {
+		t.Errorf("expected empty diff before the wiki existed, got added=%v removed=%v changed=%v", dr.Added, dr.Removed, dr.Changed)
+	}
+}
+
+func TestLintMissingWikiDir(t *testing.T) {
+	eng := newTestEngine(t.TempDir()) // no wiki/ created
+
+	result := eng.Lint()
+	if result.OK {
+		t.Fatal("Lint on a missing wiki dir should fail")
+	}
+	if len(result.Issues) != 1 {
+		t.Fatalf("expected exactly 1 issue for a missing wiki dir, got %d:\n%v", len(result.Issues), result.Messages)
+	}
+	iss := result.Issues[0]
+	if !strings.Contains(iss.Message, "wiki directory not found") {
+		t.Errorf("unexpected message: %s", iss.Message)
+	}
+	if iss.Severity != SevError {
+		t.Errorf("expected SevError, got %v", iss.Severity)
+	}
+}
+
+func TestHeadingsPropagatesOpenError(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("permission-based test is meaningless as root")
+	}
+	root := setupWiki(t)
+	eng := newTestEngine(root)
+
+	// Make one wiki file unreadable: Headings must fail loudly instead of
+	// silently skipping the file.
+	blocked := filepath.Join(root, "wiki", "schema.md")
+	if err := os.Chmod(blocked, 0); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Chmod(blocked, 0o644) }()
+
+	if _, err := eng.Headings(); err == nil {
+		t.Error("Headings should propagate open errors, got nil")
+	}
+	if _, err := eng.Search("anything"); err == nil {
+		t.Error("Search should propagate open errors, got nil")
+	}
+}
+
+func TestCurrentPhasePreferences(t *testing.T) {
+	root := setupWiki(t)
+	eng := newTestEngine(root)
+
+	writePhases := func(content string) {
+		p := filepath.Join(root, "wiki", "phases.md")
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// in-progress beats a later not-started row.
+	writePhases("---\nstatus: current\n---\n| Phase | Name | Status |\n|---|---|---|\n| 0 | Boot | completed |\n| 1 | Map | in-progress |\n| 2 | Ingest | not-started |\n")
+	if got := eng.currentPhase(); got != "Phase 1: Map — in-progress" {
+		t.Errorf("currentPhase = %q, want the in-progress row", got)
+	}
+
+	// Without in-progress, the last completed row wins over not-started.
+	writePhases("---\nstatus: current\n---\n| Phase | Name | Status |\n|---|---|---|\n| 0 | Boot | completed |\n| 1 | Map | completed |\n| 2 | Ingest | not-started |\n")
+	if got := eng.currentPhase(); got != "Phase 1: Map — completed" {
+		t.Errorf("currentPhase = %q, want the last completed row", got)
+	}
+
+	// No completed/in-progress rows: fall back to the last row.
+	writePhases("---\nstatus: current\n---\n| Phase | Name | Status |\n|---|---|---|\n| 0 | Boot | not-started |\n| 1 | Map | not-started |\n")
+	if got := eng.currentPhase(); got != "Phase 1: Map — not-started" {
+		t.Errorf("currentPhase = %q, want the last row", got)
+	}
+
+	// No rows at all: unknown.
+	writePhases("---\nstatus: current\n---\n# Phases\n")
+	if got := eng.currentPhase(); got != "unknown" {
+		t.Errorf("currentPhase = %q, want unknown", got)
+	}
+}
+
+func TestSearchSkipsNonMarkdown(t *testing.T) {
+	root := setupWiki(t)
+	eng := newTestEngine(root)
+
+	// A binary asset containing the term must not be scanned as text.
+	if err := os.WriteFile(filepath.Join(root, "wiki", "asset.bin"), []byte("needle\x00binary"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	results, err := eng.Search("needle")
+	if err != nil {
+		t.Fatalf("Search failed: %v", err)
+	}
+	if len(results) != 0 {
+		t.Errorf("Search scanned non-markdown files: %v", results)
+	}
+
+	// The same term in a markdown page is found.
+	if err := os.WriteFile(filepath.Join(root, "wiki", "schema.md"),
+		[]byte("---\nstatus: current\ndescription: Schema\n---\n# Schema\nneedle here\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	results, err = eng.Search("needle")
+	if err != nil {
+		t.Fatalf("Search failed: %v", err)
+	}
+	if len(results) != 1 || results[0].File != "wiki/schema.md" {
+		t.Errorf("Search missed the markdown match: %v", results)
+	}
+}
+
+func TestLintOrphansSkipsNonActive(t *testing.T) {
+	root := setupWiki(t)
+	eng := newTestEngine(root)
+
+	// A legacy page that is intentionally out of the graph is not an orphan.
+	legacy := filepath.Join(root, "wiki", "old-design.md")
+	if err := os.WriteFile(legacy, []byte("---\nstatus: legacy\ndescription: Old design\n---\n# Old Design\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// An active page not linked from the index still is.
+	active := filepath.Join(root, "wiki", "extra.md")
+	if err := os.WriteFile(active, []byte("---\nstatus: current\ndescription: Extra\n---\n# Extra\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result := eng.Lint()
+	orphaned := map[string]bool{}
+	for _, iss := range result.Issues {
+		if iss.Check == "orphans" {
+			orphaned[iss.File] = true
+		}
+	}
+	if orphaned[filepath.Join("wiki", "old-design.md")] {
+		t.Error("legacy page should not be flagged as orphan")
+	}
+	if !orphaned[filepath.Join("wiki", "extra.md")] {
+		t.Error("active unlinked page should be flagged as orphan")
 	}
 }

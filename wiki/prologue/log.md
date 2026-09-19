@@ -7,6 +7,25 @@ superseded_by: ""
 
 Append-only timeline of wiki maintenance activity.
 
+## [2026-09-19] fix | pre-1.0 audit fixes — data safety, JSON contract, lint gate, unix ergonomics
+
+Waterfall fix round for the code & prompt audit (branch `feat/audit-fixes`, plan in `PLAN.md`).
+
+- **Critical:** `sync-prompts` no longer deletes user-owned files in the sync directories (only wiki-managed `wiki-*` files, the `.pi/skills/wiki/` tree, and the retired migrate-shims/summarize list are cleaned up). `diff` now fails loudly on invalid git refs instead of printing everything as "added" with exit 0.
+- **JSON contract:** `--json` is honored by every command including `version`/`init`/`sync-prompts`/`upgrade`; fatal errors emit the `{ok:false, error}` envelope in JSON mode; the envelope docs now match the `omitempty` reality.
+- **Lint gate:** unknown `--check=`/`--skip=` names fail loudly; `--skip=all` is rejected; a missing wiki dir produces one diagnostic instead of a checker-failure flood; invalid `fail_severity` warns and falls back to `warn`.
+- **Context:** plain-text `context --summarize` now prints per-page previews and line counts; `--active --summarize` is rejected instead of silently ignored; `wiki-maintainer.md` now recommends `context --summarize`.
+- **Hygiene:** `headings`/`search`/`refresh` propagate errors; per-file FD hygiene in `markers` and zip extraction; `upgrade` verifies the replacement binary by running `version`.
+- **Unix ergonomics:** `--` flag terminator for `search`/`impact` (also protects literal `--json`); `-h`/`--help` works after any command.
+- **Prompts:** `onboard.md` shim now lists all seven slash commands; `upgrade.md` wording matches the new verification behavior; repo-map `changed` row no longer claims ignore filtering.
+
+## [2026-08-16] ingest | 1.0 release readiness — polish, upgrade tests, tooling, docs
+
+- Phase B polish: added `scanner.Err()` checks across `internal/engine/engine.go`, `internal/engine/engine_lint.go`, and the `impact` stdin loop in `cmd/wiki-engine/main.go`; split `WriteString(x + "\n")` concatenations in `Refresh`; CLI commands now reject unknown flags via `validateCommandArgs` (unit-tested); `.wikirc` loading warns on unknown keys; `changed` errors hint that git and a git repository are required.
+- Closed todo #54: `internal/upgrade/upgrade.go` gained an injectable `run(baseURL, executablePath)` and a stub-able `fallbackInstaller`; `upgrade_test.go` now drives the download path with httptest servers (success, checksum mismatch, no-asset fallback, latest-tag 404 fallback, extraction failure).
+- Tooling: added `.golangci-lint.yml` (v2 config — errcheck, govet, staticcheck, ineffassign, unused, misspell) and a `make golangci-lint` target; CI `test.yml` now runs golangci-lint and `go test -race ./...`.
+- Docs: added `CHANGELOG.md`, `CONTRIBUTING.md`, and `SECURITY.md`; `README.md` gained prerequisites, supported platforms, and a versioning & compatibility policy; added the release runbook `wiki/operations/release.md`; todo #57 updated with the clean-tag plan (v0.7.0, then v1.0.0).
+
 ## [2026-08-16] lint | log-tail showed oldest entries instead of most recent
 
 - Fixed a logic bug in `LogTail`: entries are prepended newest-first (the `log-chronology` checker enforces descending dates), but the function sliced the *last* N headings — so `log-tail` and the `context` recent-log section returned the oldest entries. It now keeps the first N (most recent). Added an ordering assertion to `TestLogTail` and clarified the `repo-map.md` subcommand description.

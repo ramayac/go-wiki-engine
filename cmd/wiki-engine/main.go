@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime/debug"
@@ -20,6 +21,11 @@ import (
 // installed via `go install` without ldflags (e.g. after `wiki-engine upgrade`).
 var version = "dev"
 
+// useJSONMode records whether --json was requested for this invocation. It is
+// set at the top of main() so fatal() can honor the JSON envelope contract on
+// error paths.
+var useJSONMode bool
+
 func getVersion() string {
 	if version != "dev" {
 		return version
@@ -30,12 +36,18 @@ func getVersion() string {
 	return version
 }
 
-// argsAfterFilters returns os.Args with --json removed and whether --json was present.
+// argsAfterFilters returns os.Args with --json removed and whether --json was
+// present. A standalone "--" terminates flag handling: after it, even
+// "--json" is a plain argument (e.g. `wiki-engine search -- --json`).
 func argsAfterFilters() ([]string, bool) {
 	var filtered []string
 	useJSON := false
+	afterTerminator := false
 	for _, a := range os.Args {
-		if a == "--json" {
+		if !afterTerminator && a == "--" {
+			afterTerminator = true
+		}
+		if !afterTerminator && a == "--json" {
 			useJSON = true
 			continue
 		}
@@ -46,13 +58,18 @@ func argsAfterFilters() ([]string, bool) {
 
 // writeJSON writes the standard success envelope.
 func writeJSON(data interface{}) {
-	writeJSONResult(data, true, "")
+	writeJSONResultTo(os.Stdout, data, true, "")
 }
 
 // writeJSONResult writes the standard envelope with an explicit OK status.
 // errMsg is emitted only when ok is false.
 func writeJSONResult(data interface{}, ok bool, errMsg string) {
-	enc := json.NewEncoder(os.Stdout)
+	writeJSONResultTo(os.Stdout, data, ok, errMsg)
+}
+
+// writeJSONResultTo writes the standard envelope to w.
+func writeJSONResultTo(w io.Writer, data interface{}, ok bool, errMsg string) {
+	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
 	out := engine.JSONOutput{OK: ok, Data: data, Error: errMsg}
 	if err := enc.Encode(out); err != nil {
@@ -64,27 +81,65 @@ func writeJSONResult(data interface{}, ok bool, errMsg string) {
 func main() {
 	// Filter --json before command dispatch.
 	args, useJSON := argsAfterFilters()
+	useJSONMode = useJSON
 
 	if len(args) < 2 {
-		usage()
+		if useJSONMode {
+			writeJSONResult(nil, false, "no command given (see: wiki-engine help)")
+		} else {
+			usage(os.Stderr)
+		}
 		os.Exit(1)
 	}
 
 	cmd := args[1]
 
+	// -h/--help after a command is a help request, not an argument.
+	// The "--" terminator stops the scan so `search -- -h` searches for "-h".
+	afterTerminator := false
+	for _, a := range args[2:] {
+		if a == "--" {
+			afterTerminator = true
+			continue
+		}
+		if !afterTerminator && (a == "-h" || a == "--help") {
+			usage(os.Stdout)
+			return
+		}
+	}
+
 	switch cmd {
 	case "init":
-		runInit(args)
+		if err := validateCommandArgs("init", args[2:]); err != nil {
+			fatal(err)
+		}
+		runInit(args, useJSON)
 	case "sync-prompts":
-		runSyncPrompts()
+		if err := validateCommandArgs("sync-prompts", args[2:]); err != nil {
+			fatal(err)
+		}
+		runSyncPrompts(useJSON)
 	case "version":
-		fmt.Println(getVersion())
+		if err := validateCommandArgs("version", args[2:]); err != nil {
+			fatal(err)
+		}
+		if useJSON {
+			writeJSON(getVersion())
+		} else {
+			fmt.Println(getVersion())
+		}
 	case "upgrade":
+		if err := validateCommandArgs("upgrade", args[2:]); err != nil {
+			fatal(err)
+		}
 		if err := upgrade.Run(); err != nil {
 			fatal(err)
 		}
+		if useJSON {
+			writeJSON(map[string]bool{"upgraded": true})
+		}
 	case "help", "-h", "--help":
-		usage()
+		usage(os.Stdout)
 	default:
 		// All other commands need a loaded config and engine.
 		cfg, eng := loadEngine()
@@ -92,8 +147,13 @@ func main() {
 	}
 }
 
-func runSyncPrompts() {
+func runSyncPrompts(useJSON bool) {
 	dir, err := os.Getwd()
+	if err != nil {
+		fatal(err)
+	}
+
+	cfg, err := config.Load(dir)
 	if err != nil {
 		fatal(err)
 	}
@@ -105,27 +165,34 @@ func runSyncPrompts() {
 		}
 	}
 
-	updated, err := scaffold.SyncPrompts(dir)
+	updated, removed, err := scaffold.SyncPrompts(dir)
 	if err != nil {
 		fatal(err)
 	}
-	if len(updated) == 0 {
-		fmt.Fprintln(os.Stderr, "sync-prompts: no instruction files found in scaffold (unexpected)")
-		return
-	}
 	for _, f := range updated {
-		fmt.Fprintf(os.Stderr, "updated %s\n", f)
+		_, _ = fmt.Fprintf(os.Stderr, "updated %s\n", f)
 	}
-	fmt.Fprintf(os.Stderr, "sync-prompts: %d file(s) updated\n", len(updated))
+	for _, f := range removed {
+		_, _ = fmt.Fprintf(os.Stderr, "removed %s\n", f)
+	}
+	_, _ = fmt.Fprintf(os.Stderr, "sync-prompts: %d updated, %d removed\n", len(updated), len(removed))
 
 	if len(preExistingShims) > 0 {
-		fmt.Fprintf(os.Stdout, "\ntip: %s already exist and were not modified.\n", strings.Join(preExistingShims, " and "))
-		fmt.Fprintln(os.Stdout, "     Custom content in these files is preserved. Review it against wiki/README.md,")
-		fmt.Fprintln(os.Stdout, "     then run wiki-engine sync-prompts again after adopting the standard redirect shims.")
+		_, _ = fmt.Fprintf(os.Stderr, "\ntip: %s already exist and were not modified.\n", strings.Join(preExistingShims, " and "))
+		_, _ = fmt.Fprintf(os.Stderr, "     Custom content in these files is preserved. Review it against %s/README.md,\n", cfg.WikiDir)
+		_, _ = fmt.Fprintln(os.Stderr, "     then run wiki-engine sync-prompts again after adopting the standard redirect shims.")
+	}
+
+	if useJSON {
+		writeJSON(map[string]interface{}{
+			"updated":          updated,
+			"removed":          removed,
+			"shims_preserved": preExistingShims,
+		})
 	}
 }
 
-func runInit(args []string) {
+func runInit(args []string, useJSON bool) {
 	dir, err := os.Getwd()
 	if err != nil {
 		fatal(err)
@@ -136,6 +203,10 @@ func runInit(args []string) {
 	}
 	if err := scaffold.Init(dir, wikiDir); err != nil {
 		fatal(err)
+	}
+	if useJSON {
+		writeJSON(map[string]string{"wiki_dir": wikiDir})
+		return
 	}
 	fmt.Fprintf(os.Stderr, "initialized %s/ with wiki scaffold, .wikirc, prompts, instructions, AGENTS.md/CLAUDE.md shims, .claude/commands/, and .pi/skills/\n", wikiDir)
 	fmt.Fprintln(os.Stderr, "next steps:")
@@ -157,6 +228,9 @@ func loadEngine() (*config.Config, *engine.Engine) {
 }
 
 func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string, useJSON bool) {
+	if err := validateCommandArgs(cmd, args[2:]); err != nil {
+		fatal(err)
+	}
 	switch cmd {
 	case "list":
 		activeOnly := false
@@ -202,10 +276,12 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 
 	case "search":
 		if len(args) < 3 {
-			fmt.Fprintln(os.Stderr, "usage: wiki-engine search <query>")
-			os.Exit(1)
+			usageError("usage: wiki-engine search <query>")
 		}
-		query := strings.Join(args[2:], " ")
+		query := strings.Join(positionalArgs(args[2:]), " ")
+		if strings.TrimSpace(query) == "" {
+			usageError("usage: wiki-engine search <query>")
+		}
 		results, err := eng.Search(query)
 		if err != nil {
 			fatal(err)
@@ -285,11 +361,17 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 				}
 			}
 		}
+		if err := validateLintSelectors(check, skip); err != nil {
+			fatal(err)
+		}
 		result := eng.LintWithOptions(check, skip)
 		if useJSON {
 			errMsg := ""
 			if !result.OK {
 				errMsg = "lint issues found"
+				if result.Reason != "" {
+					errMsg = result.Reason
+				}
 			}
 			writeJSONResult(result.Issues, result.OK, errMsg)
 			if !result.OK {
@@ -344,24 +426,38 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 	case "context":
 		minimal := false
 		summarize := cfg.ContextSummarize
+		explicitSummarize := false
 		active := false
 		sortBy := "chrono"
+		explicitSort := false
 		for _, a := range args[2:] {
-			switch {
-			case a == "--minimal":
+			switch a {
+			case "--minimal":
 				minimal = true
-			case a == "--summarize":
+			case "--summarize":
 				summarize = true
-			case a == "--active":
+				explicitSummarize = true
+			case "--active":
 				active = true
-			case a == "--sort=topo":
+			case "--sort=topo":
 				sortBy = "topo"
-			case a == "--sort=chrono":
+				explicitSort = true
+			case "--sort=chrono":
 				sortBy = "chrono"
+				explicitSort = true
 			}
 		}
 
+		// Reject explicit flag combinations that would silently do nothing:
+		// summaries and the minimal snapshot belong to the catalog view, the
+		// sort belongs to the graph view.
 		if active {
+			if explicitSummarize {
+				fatal(fmt.Errorf("--summarize cannot be combined with --active; run wiki-engine context --summarize for page previews"))
+			}
+			if minimal {
+				fatal(fmt.Errorf("--minimal cannot be combined with --active"))
+			}
 			nodes, edges, err := eng.BuildWikiGraph()
 			if err != nil {
 				fatal(err)
@@ -371,6 +467,7 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 			unlinked, uerr := eng.ActiveUnlinkedPages()
 			if uerr != nil {
 				unlinked = nil
+				fmt.Fprintf(os.Stderr, "warning: active unlinked pages unavailable: %v\n", uerr)
 			}
 
 			if useJSON {
@@ -395,6 +492,10 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 			return
 		}
 
+		if explicitSort {
+			fatal(fmt.Errorf("--sort=topo|chrono requires --active (it orders the active wiki graph)"))
+		}
+
 		cr, err := eng.Context(minimal, summarize)
 		if err != nil {
 			fatal(err)
@@ -416,6 +517,10 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 		fmt.Println("== catalog ==")
 		for _, c := range cr.Catalog {
 			fmt.Printf("%s [%s] | %s\n", c.File, c.Status, c.Description)
+			if cr.Summarized && c.Summary != "" {
+				fmt.Printf("    %s\n", strings.ReplaceAll(c.Summary, "\n", "\n    "))
+				fmt.Printf("    (lines: %d)\n", c.LineCount)
+			}
 		}
 		if len(cr.RecentLog) > 0 {
 			fmt.Println()
@@ -432,8 +537,7 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 
 	case "summary":
 		if len(args) < 3 {
-			fmt.Fprintln(os.Stderr, "usage: wiki-engine summary <page>")
-			os.Exit(1)
+			usageError("usage: wiki-engine summary <page>")
 		}
 		page := args[2]
 		sr, err := eng.Summary(page)
@@ -450,8 +554,7 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 
 	case "relevant":
 		if len(args) < 3 {
-			fmt.Fprintln(os.Stderr, "usage: wiki-engine relevant <query> [topN]")
-			os.Exit(1)
+			usageError("usage: wiki-engine relevant <query> [topN]")
 		}
 		query := args[2]
 		topN := 5
@@ -474,13 +577,12 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 		// Read changed files from args or stdin.
 		var changedFiles []string
 		if len(args) > 2 {
-			changedFiles = args[2:]
+			changedFiles = positionalArgs(args[2:])
 		} else {
 			// If stdin is an interactive terminal, there is nothing to read —
 			// show usage instead of blocking.
 			if fi, err := os.Stdin.Stat(); err == nil && fi.Mode()&os.ModeCharDevice != 0 {
-				fmt.Fprintln(os.Stderr, "usage: wiki-engine impact <file...>  (or pipe from wiki-engine changed)")
-				os.Exit(1)
+				usageError("usage: wiki-engine impact <file...>  (or pipe from wiki-engine changed)")
 			}
 			// Read from stdin (pipe from wiki-engine changed).
 			scanner := bufio.NewScanner(os.Stdin)
@@ -490,10 +592,12 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 					changedFiles = append(changedFiles, line)
 				}
 			}
+			if err := scanner.Err(); err != nil {
+				fatal(err)
+			}
 		}
 		if len(changedFiles) == 0 {
-			fmt.Fprintln(os.Stderr, "usage: wiki-engine impact <file...>  (or pipe from wiki-engine changed)")
-			os.Exit(1)
+			usageError("usage: wiki-engine impact <file...>  (or pipe from wiki-engine changed)")
 		}
 		results, err := eng.Impact(changedFiles)
 		if err != nil {
@@ -513,8 +617,7 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 
 	case "diff":
 		if len(args) < 4 {
-			fmt.Fprintln(os.Stderr, "usage: wiki-engine diff <from-ref> <to-ref>")
-			os.Exit(1)
+			usageError("usage: wiki-engine diff <from-ref> <to-ref>")
 		}
 		from, to := args[2], args[3]
 		dr, err := eng.Diff(from, to)
@@ -566,9 +669,7 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 
 		interval := cfg.WatchInterval
 		if interval <= 0 {
-			fmt.Fprintln(os.Stderr, "watch_interval is 0 in .wikirc — continuous watch is disabled.")
-			fmt.Fprintln(os.Stderr, "Set watch_interval to a positive number of seconds to enable, or run: wiki-engine watch --once")
-			os.Exit(1)
+			usageError("watch_interval is 0 in .wikirc — continuous watch is disabled. Set watch_interval to a positive number of seconds to enable, or run: wiki-engine watch --once")
 		}
 
 		// Continuous polling.
@@ -584,14 +685,18 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 		}
 
 	default:
-		fmt.Fprintf(os.Stderr, "unknown command: %s\n", cmd)
-		usage()
+		if useJSON {
+			writeJSONResult(nil, false, fmt.Sprintf("unknown command: %s", cmd))
+		} else {
+			fmt.Fprintf(os.Stderr, "unknown command: %s\n", cmd)
+			usage(os.Stderr)
+		}
 		os.Exit(1)
 	}
 }
 
-func usage() {
-	fmt.Fprintln(os.Stderr, `wiki-engine — repo-local wiki management tool
+func usage(out io.Writer) {
+	_, _ = fmt.Fprintln(out, `wiki-engine — repo-local wiki management tool
 
 Usage: wiki-engine [--json] <command> [arguments]
 
@@ -618,12 +723,157 @@ Commands:
   version                 Print the version
   help                    Show this help
 
-Add --json before the command for structured JSON output.`)
+Add --json (accepted anywhere) for structured JSON output. On error, --json
+commands emit {"ok": false, "error": "..."} and exit 1.
+Use -- to end flag parsing, e.g. wiki-engine search -- --check.
+-h/--help works after any command.`)
 }
 
 func fatal(err error) {
-	fmt.Fprintf(os.Stderr, "error: %v\n", err)
+	if useJSONMode {
+		writeJSONResult(nil, false, err.Error())
+	} else {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+	}
 	os.Exit(1)
+}
+
+// usageError reports a usage problem: the usage line on stderr in plain mode,
+// the standard error envelope in --json mode. Always exits 1.
+func usageError(usageLine string) {
+	if useJSONMode {
+		writeJSONResult(nil, false, usageLine)
+	} else {
+		fmt.Fprintln(os.Stderr, usageLine)
+	}
+	os.Exit(1)
+}
+
+// argSpec describes the accepted arguments for a command: exact flags,
+// prefix flags (e.g. --check=), and the maximum number of positional
+// arguments (-1 for unlimited).
+type argSpec struct {
+	flags    map[string]bool
+	prefixes []string
+	maxPos   int
+}
+
+var commandArgSpecs = map[string]argSpec{
+	"init":         {maxPos: 1},
+	"sync-prompts": {maxPos: 0},
+	"version":      {maxPos: 0},
+	"upgrade":      {maxPos: 0},
+	"list":         {flags: map[string]bool{"--active": true}, maxPos: 0},
+	"headings":     {maxPos: 0},
+	"search":       {maxPos: -1},
+	"log-tail":     {maxPos: 1},
+	"changed":      {maxPos: 1},
+	"candidates":   {maxPos: 1},
+	"lint":         {prefixes: []string{"--check=", "--skip="}, maxPos: 0},
+	"refresh":      {maxPos: 1},
+	"stats":        {maxPos: 0},
+	"context": {
+		flags: map[string]bool{
+			"--minimal": true, "--summarize": true, "--active": true,
+			"--sort=topo": true, "--sort=chrono": true,
+		},
+		maxPos: 0,
+	},
+	"summary":  {maxPos: 1},
+	"relevant": {maxPos: 2},
+	"impact":   {maxPos: -1},
+	"diff":     {maxPos: 2},
+	"watch":    {flags: map[string]bool{"--once": true}, maxPos: 0},
+}
+
+// positionalArgs returns args with the flag terminator "--" removed, so
+// free-form commands (search, impact) can receive arguments that start
+// with dashes: `wiki-engine search -- --check`.
+func positionalArgs(args []string) []string {
+	var out []string
+	for _, a := range args {
+		if a != "--" {
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
+// validateCommandArgs rejects unknown flags and excess positional arguments
+// so that typos fail loudly instead of being silently ignored. A standalone
+// "--" terminates flag parsing: everything after it is positional.
+func validateCommandArgs(cmd string, args []string) error {
+	spec, ok := commandArgSpecs[cmd]
+	if !ok {
+		return nil // unknown command — reported by the dispatcher
+	}
+	positional := 0
+	afterTerminator := false
+	for _, a := range args {
+		if afterTerminator {
+			positional++
+			if spec.maxPos >= 0 && positional > spec.maxPos {
+				return fmt.Errorf("unexpected argument %q for %s", a, cmd)
+			}
+			continue
+		}
+		if a == "--" {
+			afterTerminator = true
+			continue
+		}
+		if strings.HasPrefix(a, "--") {
+			allowed := spec.flags[a]
+			if !allowed {
+				for _, p := range spec.prefixes {
+					if strings.HasPrefix(a, p) {
+						allowed = true
+						break
+					}
+				}
+			}
+			if !allowed {
+				return fmt.Errorf("unknown flag %q for %s", a, cmd)
+			}
+			continue
+		}
+		positional++
+		if spec.maxPos >= 0 && positional > spec.maxPos {
+			return fmt.Errorf("unexpected argument %q for %s", a, cmd)
+		}
+	}
+	return nil
+}
+
+// validateLintSelectors rejects unknown checker names in --check/--skip so
+// that typos fail loudly instead of silently running no checkers at all.
+func validateLintSelectors(check, skip []string) error {
+	known := engine.KnownCheckerNames()
+	knownSet := make(map[string]bool, len(known))
+	for _, n := range known {
+		knownSet[n] = true
+	}
+	available := strings.Join(known, ", ")
+
+	for _, n := range check {
+		if n == "" || n == "all" {
+			continue
+		}
+		if !knownSet[n] {
+			return fmt.Errorf("unknown checker %q for lint --check (available: %s)", n, available)
+		}
+	}
+	for _, n := range skip {
+		if n == "" {
+			continue
+		}
+		if n == "all" {
+			return fmt.Errorf("--skip=all would disable every checker; run --check=<names> instead")
+		}
+		if !knownSet[n] {
+			return fmt.Errorf("unknown checker %q for lint --skip (available: %s)", n, available)
+		}
+	}
+	return nil
 }
 
 // runWatchCycle runs one watch cycle and reports whether the lint gate failed.
@@ -632,7 +882,11 @@ func fatal(err error) {
 func runWatchCycle(eng *engine.Engine, useJSON bool) bool {
 	wr, err := eng.WatchOnce()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "watch error: %v\n", err)
+		if useJSON {
+			writeJSONResult(nil, false, err.Error())
+		} else {
+			fmt.Fprintf(os.Stderr, "watch error: %v\n", err)
+		}
 		return true
 	}
 	if useJSON {

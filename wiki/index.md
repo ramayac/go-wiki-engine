@@ -25,6 +25,7 @@ superseded_by: ""
 - [operations/ingest.md](operations/ingest.md) | How to absorb a repo change into the wiki.
 - [operations/query.md](operations/query.md) | How to answer questions from the wiki first.
 - [operations/lint.md](operations/lint.md) | How to health-check and repair wiki drift.
+- [operations/release.md](operations/release.md) | Release runbook: versioning policy and cut-and-verify steps.
 
 ## Prompt Workflows
 

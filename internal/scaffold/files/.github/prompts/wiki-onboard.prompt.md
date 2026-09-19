@@ -50,8 +50,9 @@ If any file contains custom instructions (not just a redirect shim), migrate the
   Start here: **[wiki/index.md](wiki/index.md)**
 
   The wiki covers architecture, conventions, active phases, and the project change log.
-  To update or query the wiki, use the `/wiki-ingest`, `/wiki-query`, or `/wiki-refresh`
-  Copilot slash commands (installed in `.github/prompts/`).
+  To update or query the wiki, use the `/wiki-ingest`, `/wiki-query`, `/wiki-refresh`,
+  `/wiki-onboard`, `/wiki-lint`, `/wiki-upgrade`, or `/wiki-watch` Copilot slash
+  commands (installed in `.github/prompts/`).
   ```
 - Replace other migrated external files with a one-line stub pointing to their new wiki location, or delete them if they are fully superseded.
 - Note the migration details in `wiki/prologue/log.md`.

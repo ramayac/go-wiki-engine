@@ -52,16 +52,16 @@ scaffold/               Human-readable reference copy of embedded templates
 | Command | What it does |
 |---|---|
 | `init [wiki-dir]` | Scaffold wiki, .wikirc, prompts for all tools, instructions, and AGENTS.md/CLAUDE.md shims into the current repo |
-| `sync-prompts` | Overwrite `.wiki-instructions/`, `.github/`, and `.claude/commands/` with current embedded versions (safe to run after upgrade) |
+| `sync-prompts` | Overwrite `.wiki-instructions/`, `.github/`, `.claude/commands/`, and `.pi/skills/` with current embedded versions; removes only retired wiki-managed files, never user files (safe to run after upgrade) |
 | `list` | List all files under `wiki_dir` |
 | `headings` | List all Markdown headings across wiki files |
 | `search <query>` | Case-insensitive full-text search across wiki files |
 | `log-tail [n]` | Show the most recent N log headings from `log.md` |
-| `changed [diff]` | `git diff --name-only` filtered to non-wiki, non-ignored files |
+| `changed [diff]` | `git diff --name-only` filtered to non-wiki files |
 | `candidates [diff]` | Same as changed, further filtered by `.wikirc` ignore rules (see [config.md](config.md)) |
 | `lint [--check=<a,b>] [--skip=<a,b>]` | Check required files, front matter, index format, bare URLs, broken links (index + cross-page), log heading format and chronology, open markers, orphans, leaf pages, heading hierarchy, phase consistency, external links to source files, duplicate content, stale content — repair guide: [operations/lint.md](../operations/lint.md) |
 | `stats` | Aggregate statistics: file count, heading count, total lines, last-updated date |
-| `context [--minimal] [--active] [--sort=topo\|chrono] [--summarize]` | Condensed wiki snapshot, or the active-page graph from `index.md` with `--active` (`--sort=topo` by depth, default chronological) |
+| `context [--minimal] [--active] [--sort=topo\|chrono] [--summarize]` | Condensed wiki snapshot, or the active-page graph from `index.md` with `--active` (`--sort=topo` by depth, default chronological). `--sort` requires `--active`; `--minimal`/`--summarize` are catalog-view flags and reject combination with `--active` |
 | `summary <page>` | First heading + first paragraph preview of a page |
 | `relevant <query> [n]` | Rank wiki pages by relevance to a query |
 | `impact <file...>` | Show which wiki pages mention changed source files (or pipe from `changed`) |
@@ -105,16 +105,23 @@ The workflow is:
 
 ## JSON Output Contract
 
-All commands accept `--json` and emit one JSON envelope per invocation on stdout:
+All commands accept `--json` (anywhere in the argument list) and emit one JSON
+envelope per invocation on stdout:
 
 ```json
-{ "ok": true, "data": { }, "error": "" }
+{ "ok": true, "data": { } }
 ```
 
-- `ok` reflects command success; `error` carries the failure reason for fatal errors.
+- `ok` reflects command success; on failure `error` carries the reason and `data` is omitted.
+- `data` and `error` are omitted when empty; when a command has no result (e.g. a
+  search with no matches) the envelope contains only `ok`.
+- Fatal errors also honor the contract when `--json` is present: the command
+  emits `{ "ok": false, "error": "..." }` and exits 1 (plain-text errors are
+  reserved for non-JSON invocations).
 - `lint --json` emits the issues array as `data` with `ok:false` when the `fail_severity` gate fails, and still exits 1 (matching plain-text lint).
 - `context --active --json` emits `{nodes, edges, unlinked}` — the machine-readable active graph for agent navigation.
 - `watch --once --json` emits one `WatchResult` (`changed`, `candidates`, `lint_ok`, `lint_issues`) and exits 1 when `lint_ok` is false.
+- `sync-prompts --json` emits `{updated, removed, shims_preserved}` — written files, retired wiki-managed files cleaned up, and pre-existing root shims.
 
 ## Configuration — .wikirc
 
@@ -143,13 +150,18 @@ Full key reference: [config.md](config.md).
 ```bash
 make build           # Compile to bin/wiki-engine (version=dev)
 make test            # Run all tests
-make lint            # go vet
+make lint            # go vet + wiki-engine lint
+make golangci-lint   # golangci-lint v2 with the repo config
 make sync-scaffold   # Copy scaffold/ → internal/scaffold/files/
 make audit           # Repo-wide wiki reference integrity audit
 make install         # go install globally
 ```
 
-Releases are cross-compiled by `.github/workflows/release.yml` on `release: published` and uploaded as binary assets. Version is injected via `-ldflags "-X main.version=vX.Y.Z"`.
+Releases are cross-compiled by `.github/workflows/release.yml` on `release: published` and uploaded as binary assets. Version is injected via `-ldflags "-X main.version=vX.Y.Z"`. The full cut-and-verify procedure lives in [operations/release.md](../operations/release.md).
+
+### Versioning & Compatibility
+
+Releases use clean `vX.Y.Z` semantic versions. Semver covers the CLI flags, the `--json` envelope, `.wikirc` keys, and the wiki contract ([schema.md](schema.md)). JSON fields and config keys may be added in minor releases; renames or removals require a major release.
 
 Go module: `github.com/ramayac/go-wiki-engine`. No external dependencies — standard library only.
 
@@ -165,4 +177,5 @@ Go module: `github.com/ramayac/go-wiki-engine`. No external dependencies — sta
 - [config.md](config.md) — full `.wikirc` reference.
 - [operations/lint.md](../operations/lint.md) — checker-by-checker repair guide.
 - [operations/ingest.md](../operations/ingest.md) — how architecture facts get updated.
+- [operations/release.md](../operations/release.md) — how releases are cut and verified.
 - [schema.md](schema.md) — the contract this page must satisfy.

@@ -60,7 +60,9 @@ func TestInit(t *testing.T) {
 
 func TestInitRefuses(t *testing.T) {
 	dest := t.TempDir()
-	os.MkdirAll(filepath.Join(dest, "wiki"), 0o755)
+	if err := os.MkdirAll(filepath.Join(dest, "wiki"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	err := Init(dest, "wiki")
 	if err == nil {
 		t.Error("Init should refuse when wiki/ already exists")
@@ -118,7 +120,7 @@ func TestSyncPrompts(t *testing.T) {
 	dest := t.TempDir()
 
 	// SyncPrompts should work even on a repo that has never had init run.
-	updated, err := SyncPrompts(dest)
+	updated, _, err := SyncPrompts(dest)
 	if err != nil {
 		t.Fatalf("SyncPrompts failed: %v", err)
 	}
@@ -208,7 +210,7 @@ func TestSyncPromptsOverwrites(t *testing.T) {
 	}
 
 	// SyncPrompts should overwrite it.
-	if _, err := SyncPrompts(dest); err != nil {
+	if _, _, err := SyncPrompts(dest); err != nil {
 		t.Fatalf("SyncPrompts failed: %v", err)
 	}
 
@@ -295,7 +297,7 @@ func TestInitPreservesExistingShims(t *testing.T) {
 func TestSyncPromptsCreatesShims(t *testing.T) {
 	dest := t.TempDir()
 
-	updated, err := SyncPrompts(dest)
+	updated, _, err := SyncPrompts(dest)
 	if err != nil {
 		t.Fatalf("SyncPrompts failed: %v", err)
 	}
@@ -328,7 +330,7 @@ func TestSyncPromptsPreservesExistingShims(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := SyncPrompts(dest); err != nil {
+	if _, _, err := SyncPrompts(dest); err != nil {
 		t.Fatalf("SyncPrompts failed: %v", err)
 	}
 
@@ -345,7 +347,7 @@ func TestSyncPromptsRemovesOrphans(t *testing.T) {
 	dest := t.TempDir()
 
 	// First sync to populate the destination.
-	if _, err := SyncPrompts(dest); err != nil {
+	if _, _, err := SyncPrompts(dest); err != nil {
 		t.Fatalf("first SyncPrompts failed: %v", err)
 	}
 
@@ -356,7 +358,7 @@ func TestSyncPromptsRemovesOrphans(t *testing.T) {
 	}
 
 	// Second sync should remove the orphan.
-	updated, err := SyncPrompts(dest)
+	updated, removed, err := SyncPrompts(dest)
 	if err != nil {
 		t.Fatalf("second SyncPrompts failed: %v", err)
 	}
@@ -365,15 +367,85 @@ func TestSyncPromptsRemovesOrphans(t *testing.T) {
 		t.Error("SyncPrompts did not remove orphaned file migrate-shims.md")
 	}
 
-	// Verify the removal was reported.
+	// The removal must be reported in the removed list, not mixed into
+	// the updated list.
+	if len(updated) == 0 {
+		t.Error("SyncPrompts reported no updated files on a second sync")
+	}
 	found := false
-	for _, u := range updated {
-		if u == "removed .wiki-instructions/migrate-shims.md" {
+	for _, r := range removed {
+		if r == ".wiki-instructions/migrate-shims.md" {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Error("SyncPrompts did not report orphan removal in updated list")
+		t.Errorf("SyncPrompts did not report orphan removal in removed list: %v", removed)
+	}
+	for _, u := range updated {
+		if strings.HasPrefix(u, "removed ") {
+			t.Errorf("removal marker leaked into updated list: %q", u)
+		}
+	}
+}
+
+func TestSyncPromptsPreservesUserFiles(t *testing.T) {
+	dest := t.TempDir()
+
+	// First sync to populate the destination.
+	if _, _, err := SyncPrompts(dest); err != nil {
+		t.Fatalf("first SyncPrompts failed: %v", err)
+	}
+
+	// User-owned files that sync-prompts must never touch.
+	userFiles := []string{
+		".claude/commands/review.md",
+		".github/prompts/team-release.prompt.md",
+		".wiki-instructions/deploy.md",
+		".pi/skills/other/SKILL.md",
+	}
+	for _, f := range userFiles {
+		p := filepath.Join(dest, filepath.FromSlash(f))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte("user content"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// A wiki-managed file that no longer ships in the scaffold must still
+	// be removed (the cleanup path that motivated this whole mechanism).
+	staleManaged := filepath.Join(dest, ".github", "prompts", "wiki-old.prompt.md")
+	if err := os.WriteFile(staleManaged, []byte("stale"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Second sync: user files survive, wiki-managed orphan is removed.
+	if _, _, err := SyncPrompts(dest); err != nil {
+		t.Fatalf("second SyncPrompts failed: %v", err)
+	}
+
+	for _, f := range userFiles {
+		p := filepath.Join(dest, filepath.FromSlash(f))
+		if _, err := os.Stat(p); os.IsNotExist(err) {
+			t.Errorf("SyncPrompts deleted user-owned file %s", f)
+		}
+	}
+	if _, err := os.Stat(staleManaged); !os.IsNotExist(err) {
+		t.Error("SyncPrompts did not remove stale wiki-managed file wiki-old.prompt.md")
+	}
+}
+
+func TestInitRejectsTraversalWikiDir(t *testing.T) {
+	dest := t.TempDir()
+	for _, bad := range []string{"../escape", "../../escape", ".", "..", "/absolute/path"} {
+		if err := Init(dest, bad); err == nil {
+			t.Errorf("Init with wiki dir %q should fail, got nil error", bad)
+		}
+	}
+	// A clean nested directory is still fine.
+	if err := Init(t.TempDir(), "docs/wiki"); err != nil {
+		t.Errorf("Init with nested wiki dir should succeed: %v", err)
 	}
 }

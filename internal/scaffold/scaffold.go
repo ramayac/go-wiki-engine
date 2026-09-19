@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -18,6 +19,14 @@ var files embed.FS
 // on init and sync-prompts only when they do not already exist. This prevents
 // overwriting user-customised entrypoint files.
 var shimFiles = []string{"AGENTS.md", "CLAUDE.md"}
+
+// Regexes used to rewrite the scaffolded .wikirc for a custom wiki directory
+// name (`wiki-engine init docs`). Deliberately tolerant of whitespace so the
+// scaffold template can be reformatted without silently breaking the rewrite.
+var (
+	wikiDirAssignRe   = regexp.MustCompile(`(?m)^wiki_dir\s*=\s*"[^"]*"`)
+	ignoreWikiEntryRe = regexp.MustCompile(`(?m)^\s*"wiki/"`)
+)
 
 // promptWorkflows are the canonical workflow files in .wiki-instructions/ that
 // are symlinked into the tool-specific directories.
@@ -83,9 +92,27 @@ func syncShims(destDir string) ([]string, error) {
 	return created, nil
 }
 
+// validateWikiDir rejects wiki directory names that would escape the target
+// repository (absolute paths, ".." components) or otherwise make no sense.
+func validateWikiDir(name string) error {
+	if name == "" || name == "." || name == ".." {
+		return fmt.Errorf("invalid wiki directory name %q", name)
+	}
+	if filepath.IsAbs(name) {
+		return fmt.Errorf("wiki directory must be relative to the repository: %q", name)
+	}
+	if cleaned := filepath.Clean(name); cleaned == ".." || strings.HasPrefix(cleaned, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("wiki directory must stay inside the repository: %q", name)
+	}
+	return nil
+}
+
 // Init copies the scaffold into destDir. It refuses to overwrite an existing
 // wiki directory.
 func Init(destDir, wikiDir string) error {
+	if err := validateWikiDir(wikiDir); err != nil {
+		return err
+	}
 	wikiPath := filepath.Join(destDir, wikiDir)
 	if _, err := os.Stat(wikiPath); err == nil {
 		return fmt.Errorf("%s already exists; refusing to overwrite", wikiDir)
@@ -139,8 +166,8 @@ func Init(destDir, wikiDir string) error {
 		// the requested name so `init docs` produces a .wikirc that actually
 		// points at docs/.
 		if rel == ".wikirc" {
-			content := strings.Replace(string(data), `wiki_dir = "wiki"`, `wiki_dir = "`+wikiDir+`"`, 1)
-			content = strings.Replace(content, `"wiki/"`, `"`+wikiDir+`/"`, 1)
+			content := wikiDirAssignRe.ReplaceAllString(string(data), `wiki_dir = "`+wikiDir+`"`)
+			content = ignoreWikiEntryRe.ReplaceAllString(content, `  "`+wikiDir+`/"`)
 			data = []byte(content)
 		}
 
@@ -161,9 +188,10 @@ func Init(destDir, wikiDir string) error {
 // destDir with the current embedded versions. It does not touch wiki/
 // content or .wikirc. Safe to run after a wiki-engine upgrade to pick
 // up new or changed prompts and instructions for all supported AI tools.
-func SyncPrompts(destDir string) ([]string, error) {
-	var updated []string
-
+//
+// Returns the relative paths of files written (updated) and of stale
+// wiki-managed files removed (removed).
+func SyncPrompts(destDir string) (updated, removed []string, err error) {
 	// Sync each instruction layer prefix. The embedded FS dereferences
 	// symlinks, so .github/prompts/ and .claude/commands/ contain regular
 	// file copies of the canonical .wiki-instructions/ files.
@@ -177,28 +205,54 @@ func SyncPrompts(destDir string) ([]string, error) {
 	for _, prefix := range prefixes {
 		err := syncEmbeddedDir(destDir, prefix, &updated)
 		if err != nil {
-			return updated, err
+			return updated, removed, err
 		}
 	}
 
 	// Remove destination files that no longer exist in the embedded
 	// FS. This cleans up prompts that were removed from the scaffold
 	// (e.g. migrate-shims.md, summarize.md).
-	cleanOrphanedFiles(destDir, prefixes, &updated)
+	cleanOrphanedFiles(destDir, prefixes, &removed)
 
 	shims, err := syncShims(destDir)
 	updated = append(updated, shims...)
-	return updated, err
+	return updated, removed, err
 }
 
-// cleanOrphanedFiles removes files in the destination sync directories
-// that no longer exist in the embedded FS. Only files within the known
-// sync prefixes are considered — wiki/ and .wikirc are never touched.
+// retiredWikiFiles are files this tool once shipped in its sync directories
+// and later removed. sync-prompts still cleans them up, but they cannot be
+// matched by the wiki-* naming rule because their old names had no prefix.
+var retiredWikiFiles = map[string]bool{
+	"migrate-shims.md": true,
+	"summarize.md":     true,
+}
+
+// isWikiManaged reports whether a destination file inside one of the sync
+// prefixes is owned by wiki-engine and therefore safe to remove when it no
+// longer exists in the embedded FS. User-added files (custom slash commands,
+// extra prompts, unrelated skills) are never managed.
+func isWikiManaged(relRoot, rel string) bool {
+	// The pi.dev integration owns only the wiki/ skill directory.
+	if relRoot == ".pi/skills" {
+		return strings.HasPrefix(rel, "wiki/")
+	}
+	base := filepath.Base(rel)
+	if strings.HasPrefix(base, "wiki-") {
+		return true
+	}
+	return retiredWikiFiles[base]
+}
+
+// cleanOrphanedFiles removes wiki-managed files in the destination sync
+// directories that no longer exist in the embedded FS. Only files within the
+// known sync prefixes are considered — wiki/ and .wikirc are never touched,
+// and files not managed by wiki-engine (e.g. a user's own slash command) are
+// always preserved.
 func cleanOrphanedFiles(destDir string, embedPrefixes []string, cleaned *[]string) {
 	// Build the set of all known embedded paths (relative to destDir).
 	known := make(map[string]bool)
 	for _, prefix := range embedPrefixes {
-		fs.WalkDir(files, prefix, func(path string, d fs.DirEntry, err error) error {
+		_ = fs.WalkDir(files, prefix, func(path string, d fs.DirEntry, err error) error {
 			if err != nil || d.IsDir() {
 				return err
 			}
@@ -208,19 +262,22 @@ func cleanOrphanedFiles(destDir string, embedPrefixes []string, cleaned *[]strin
 		})
 	}
 
-	// Walk each destination prefix and remove files not in known.
+	// Walk each destination prefix and remove only wiki-managed files not in known.
 	for _, prefix := range embedPrefixes {
 		relRoot, _ := filepath.Rel("files", prefix)
 		walkRoot := filepath.Join(destDir, relRoot)
-		filepath.Walk(walkRoot, func(path string, info os.FileInfo, err error) error {
+		_ = filepath.Walk(walkRoot, func(path string, info os.FileInfo, err error) error {
 			if err != nil || info.IsDir() {
 				return err
 			}
 			rel, _ := filepath.Rel(destDir, path)
-			if !known[rel] {
-				if err := os.Remove(path); err == nil {
-					*cleaned = append(*cleaned, "removed "+rel)
-				}
+			relToRoot, _ := filepath.Rel(relRoot, rel)
+			relToRoot = filepath.ToSlash(relToRoot)
+			if known[rel] || !isWikiManaged(relRoot, relToRoot) {
+				return nil
+			}
+			if err := os.Remove(path); err == nil {
+				*cleaned = append(*cleaned, rel)
 			}
 			return nil
 		})

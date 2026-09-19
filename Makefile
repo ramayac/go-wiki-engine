@@ -8,7 +8,7 @@ LDFLAGS   := -s -w -X main.version=$(VERSION)-$(BUILD_DATE)
 
 .DEFAULT_GOAL := help
 
-.PHONY: help build install test lint vet clean sync-scaffold wiki-lint integration audit
+.PHONY: help build install test lint vet clean sync-scaffold wiki-lint integration audit golangci-lint
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-18s %s\n", $$1, $$2}'
@@ -32,6 +32,9 @@ vet: ## Run go vet on all packages
 
 wiki-lint: build ## Run wiki-engine lint on the repository wiki
 	./bin/wiki-engine lint
+
+golangci-lint: ## Run golangci-lint with the repo config (v2.12.2, via go run)
+	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2 run
 
 clean: ## Remove build artifacts
 	rm -rf $(BIN_DIR)

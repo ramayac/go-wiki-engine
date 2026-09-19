@@ -3,8 +3,10 @@ package config
 
 import (
 	"bufio"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -52,7 +54,7 @@ func Load(dir string) (*Config, error) {
 		}
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	cfg := DefaultConfig()
 	var inIgnore bool
@@ -73,8 +75,10 @@ func Load(dir string) (*Config, error) {
 				inIgnore = false
 				continue
 			}
-			// Strip quotes and trailing comma.
+			// Strip quotes, trailing comma, and a ] that ends the entry
+			// list on the same line (e.g. `"wiki/"]`).
 			val := strings.TrimRight(line, ",")
+			val = strings.TrimSuffix(val, "]")
 			val = strings.Trim(val, `"`)
 			val = strings.TrimSpace(val)
 			if val != "" {
@@ -85,6 +89,18 @@ func Load(dir string) (*Config, error) {
 
 		// Start of ignore array.
 		if strings.HasPrefix(line, "ignore") && strings.Contains(line, "[") {
+			// Single-line form: ignore = ["wiki/", "bin/"]
+			open := strings.Index(line, "[")
+			closeIdx := strings.Index(line, "]")
+			if closeIdx > open {
+				for _, entry := range strings.Split(line[open+1:closeIdx], ",") {
+					entry = strings.Trim(strings.TrimSpace(entry), `"`)
+					if entry != "" {
+						cfg.Ignore = append(cfg.Ignore, entry)
+					}
+				}
+				continue
+			}
 			inIgnore = true
 			continue
 		}
@@ -100,6 +116,10 @@ func Load(dir string) (*Config, error) {
 
 		switch key {
 		case "wiki_dir":
+			if val == "" || val == "." {
+				fmt.Fprintf(os.Stderr, "warning: invalid wiki_dir %q; using %q\n", val, cfg.WikiDir)
+				continue
+			}
 			cfg.WikiDir = val
 		case "default_diff":
 			cfg.DefaultDiff = val
@@ -114,7 +134,15 @@ func Load(dir string) (*Config, error) {
 		case "watch_interval":
 			cfg.WatchInterval = ParsePositiveInt(val, 0)
 		case "fail_severity":
-			cfg.FailSeverity = strings.ToLower(strings.TrimSpace(val))
+			v := strings.ToLower(strings.TrimSpace(val))
+			switch v {
+			case "error", "warn", "info":
+				cfg.FailSeverity = v
+			default:
+				fmt.Fprintf(os.Stderr, "warning: invalid fail_severity %q (expected error, warn, or info); using %q\n", val, cfg.FailSeverity)
+			}
+		default:
+			fmt.Fprintf(os.Stderr, "warning: unknown .wikirc key %q ignored\n", key)
 		}
 	}
 	return cfg, scanner.Err()
@@ -144,52 +172,25 @@ func parseInt(s string, fallback int) int {
 	if s == "" {
 		return fallback
 	}
-	if s == "0" {
-		return 0
-	}
-	n := 0
-	hasDigit := false
-	for _, c := range s {
-		if c >= '0' && c <= '9' {
-			n = n*10 + int(c-'0')
-			hasDigit = true
-		}
-	}
-	if !hasDigit {
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: invalid integer value %q; using %d\n", s, fallback)
 		return fallback
 	}
 	return n
 }
 
 func parseFloat(s string, fallback float64) float64 {
-	// Simple parser: extract digits and one decimal point.
-	var result float64
-	decimal := false
-	divisor := 1.0
-	hasDigit := false
-	for _, c := range s {
-		if c == '.' && !decimal {
-			decimal = true
-			continue
-		}
-		if c >= '0' && c <= '9' {
-			hasDigit = true
-			d := float64(c - '0')
-			if decimal {
-				divisor *= 10
-				result += d / divisor
-			} else {
-				result = result*10 + d
-			}
-		}
-	}
-	if !hasDigit {
+	s = strings.TrimSpace(s)
+	if s == "" {
 		return fallback
 	}
-	if result < 0 || result > 1 {
+	f, err := strconv.ParseFloat(s, 64)
+	if err != nil || f < 0 || f > 1 {
+		fmt.Fprintf(os.Stderr, "warning: invalid value %q; using %v\n", s, fallback)
 		return fallback
 	}
-	return result
+	return f
 }
 
 func parseBool(s string, fallback bool) bool {

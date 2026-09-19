@@ -38,7 +38,9 @@ func setupNestedWiki(t *testing.T) string {
 	}
 	for rel, content := range files {
 		p := filepath.Join(root, rel)
-		os.MkdirAll(filepath.Dir(p), 0o755)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
 		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -77,7 +79,9 @@ func TestNestedLayoutLintOK(t *testing.T) {
 func TestNestedLayoutLogCheckers(t *testing.T) {
 	root := setupNestedWiki(t)
 	logPath := filepath.Join(root, "wiki", "prologue", "log.md")
-	os.WriteFile(logPath, []byte("# Log\n\n## [2026-04-16] bad heading without pipe\n"), 0o644)
+	if err := os.WriteFile(logPath, []byte("# Log\n\n## [2026-04-16] bad heading without pipe\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	eng := newTestEngine(root)
 	result := eng.Lint()
 	foundHeading := false
@@ -94,7 +98,9 @@ func TestNestedLayoutLogCheckers(t *testing.T) {
 	}
 
 	// Chronology violation in the nested log.
-	os.WriteFile(logPath, []byte("# Log\n\n## [2026-04-15] a | first\n\n## [2026-04-16] b | second\n"), 0o644)
+	if err := os.WriteFile(logPath, []byte("# Log\n\n## [2026-04-15] a | first\n\n## [2026-04-16] b | second\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	result = eng.Lint()
 	foundChron := false
 	for _, iss := range result.Issues {
@@ -110,7 +116,9 @@ func TestNestedLayoutLogCheckers(t *testing.T) {
 func TestNestedLayoutPhaseConsistency(t *testing.T) {
 	root := setupNestedWiki(t)
 	phasesPath := filepath.Join(root, "wiki", "prologue", "phases.md")
-	os.WriteFile(phasesPath, []byte("# Phases\n\n| 1 | Test | bad-status |\n"), 0o644)
+	if err := os.WriteFile(phasesPath, []byte("# Phases\n\n| 1 | Test | bad-status |\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	eng := newTestEngine(root)
 	result := eng.Lint()
 	found := false
@@ -181,7 +189,9 @@ func TestLintSubdirLinkMustBePageRelative(t *testing.T) {
 	root := setupNestedWiki(t)
 	repoMap := filepath.Join(root, "wiki", "prologue", "repo-map.md")
 	// links operations/lint.md WITHOUT ../ — resolves to prologue/operations/lint.md.
-	os.WriteFile(repoMap, []byte("---\nstatus: current\ndescription: Repo Map\n---\n# Repo Map\n\nSee [Lint](operations/lint.md).\n"), 0o644)
+	if err := os.WriteFile(repoMap, []byte("---\nstatus: current\ndescription: Repo Map\n---\n# Repo Map\n\nSee [Lint](operations/lint.md).\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	eng := newTestEngine(root)
 	result := eng.LintWithOptions([]string{"cross-page-links"}, nil)
 	found := false
@@ -195,7 +205,9 @@ func TestLintSubdirLinkMustBePageRelative(t *testing.T) {
 	}
 
 	// The corrected ../ link must pass.
-	os.WriteFile(repoMap, []byte("---\nstatus: current\ndescription: Repo Map\n---\n# Repo Map\n\nSee [Lint](../operations/lint.md).\n"), 0o644)
+	if err := os.WriteFile(repoMap, []byte("---\nstatus: current\ndescription: Repo Map\n---\n# Repo Map\n\nSee [Lint](../operations/lint.md).\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	result = eng.LintWithOptions([]string{"cross-page-links"}, nil)
 	for _, iss := range result.Issues {
 		if iss.Check == "cross-page-links" {

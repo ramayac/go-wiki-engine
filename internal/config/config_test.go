@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -223,6 +224,114 @@ func TestParseFloat(t *testing.T) {
 		got := parseFloat(tt.input, tt.fallback)
 		if got != tt.want {
 			t.Errorf("parseFloat(%q, %f) = %f, want %f", tt.input, tt.fallback, got, tt.want)
+		}
+	}
+}
+
+func TestLoadInvalidFailSeverity(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, ".wikirc"), []byte("fail_severity = \"banana\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(dir)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	if cfg.FailSeverity != "warn" {
+		t.Errorf("invalid fail_severity should fall back to %q, got %q", "warn", cfg.FailSeverity)
+	}
+
+	// Valid values pass through (case-insensitive).
+	for _, v := range []string{"error", "WARN", "Info"} {
+		if err := os.WriteFile(filepath.Join(dir, ".wikirc"), []byte("fail_severity = "+v+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		cfg, err := Load(dir)
+		if err != nil {
+			t.Fatalf("Load(%s) failed: %v", v, err)
+		}
+		if cfg.FailSeverity != strings.ToLower(v) {
+			t.Errorf("fail_severity %q should load as %q, got %q", v, strings.ToLower(v), cfg.FailSeverity)
+		}
+	}
+}
+
+func TestLoadSingleLineIgnoreArray(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, ".wikirc"),
+		[]byte("wiki_dir = \"wiki\"\nignore = [\"wiki/\", \"bin/\", \"*.log\"]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(dir)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	want := []string{"wiki/", "bin/", "*.log"}
+	if len(cfg.Ignore) != len(want) {
+		t.Fatalf("single-line ignore array parsed as %v, want %v", cfg.Ignore, want)
+	}
+	for i := range want {
+		if cfg.Ignore[i] != want[i] {
+			t.Errorf("ignore[%d] = %q, want %q", i, cfg.Ignore[i], want[i])
+		}
+	}
+}
+
+func TestLoadIgnoreBracketOnEntryLine(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, ".wikirc"),
+		[]byte("ignore = [\n  \"wiki/\",\n  \"bin/\"]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(dir)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	want := []string{"wiki/", "bin/"}
+	if len(cfg.Ignore) != len(want) {
+		t.Fatalf("ignore array with ] on entry line parsed as %v, want %v", cfg.Ignore, want)
+	}
+	for i := range want {
+		if cfg.Ignore[i] != want[i] {
+			t.Errorf("ignore[%d] = %q, want %q", i, cfg.Ignore[i], want[i])
+		}
+	}
+}
+
+func TestLoadEmptyWikiDir(t *testing.T) {
+	dir := t.TempDir()
+	for _, val := range []string{`""`, `"."`} {
+		if err := os.WriteFile(filepath.Join(dir, ".wikirc"),
+			[]byte("wiki_dir = "+val+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		cfg, err := Load(dir)
+		if err != nil {
+			t.Fatalf("Load failed: %v", err)
+		}
+		if cfg.WikiDir != "wiki" {
+			t.Errorf("wiki_dir %s should fall back to %q, got %q", val, "wiki", cfg.WikiDir)
+		}
+	}
+}
+
+func TestStrictNumericParsing(t *testing.T) {
+	// Garbage must fall back — not become a digit-salad value.
+	for _, in := range []string{"1.5", "12x", "abc"} {
+		if got := parseInt(in, 10); got != 10 {
+			t.Errorf("parseInt(%q) = %d, want fallback 10", in, got)
+		}
+	}
+	if got := parseInt(" 7 ", 10); got != 7 {
+		t.Errorf("parseInt(\" 7 \") = %d, want 7", got)
+	}
+	// Negativity enforcement lives in ParsePositiveInt, not parseInt.
+	if got := ParsePositiveInt("-3", 10); got != 10 {
+		t.Errorf("ParsePositiveInt(\"-3\", 10) = %d, want fallback 10", got)
+	}
+	for _, in := range []string{"0.7x", "1.5", "abc"} {
+		if got := parseFloat(in, 0.5); got != 0.5 {
+			t.Errorf("parseFloat(%q) = %v, want fallback 0.5", in, got)
 		}
 	}
 }

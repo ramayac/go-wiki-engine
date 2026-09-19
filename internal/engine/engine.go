@@ -76,12 +76,12 @@ func (e *Engine) Headings() ([]HeadingEntry, error) {
 			continue
 		}
 		abs := filepath.Join(e.RootDir, rel)
-		func() {
+		err := func() error {
 			f, err := os.Open(abs)
 			if err != nil {
-				return
+				return err
 			}
-			defer f.Close()
+			defer func() { _ = f.Close() }()
 			scanner := bufio.NewScanner(f)
 			lineNo := 0
 			for scanner.Scan() {
@@ -95,7 +95,11 @@ func (e *Engine) Headings() ([]HeadingEntry, error) {
 					})
 				}
 			}
+			return scanner.Err()
 		}()
+		if err != nil {
+			return nil, err
+		}
 	}
 	return entries, nil
 }
@@ -119,13 +123,18 @@ func (e *Engine) Search(query string) ([]SearchResult, error) {
 	lowerQ := strings.ToLower(query)
 	var results []SearchResult
 	for _, rel := range files {
+		// Search only markdown pages — the wiki contract is .md files, and
+		// scanning binary assets as text is wasteful at best.
+		if !strings.HasSuffix(rel, ".md") {
+			continue
+		}
 		abs := filepath.Join(e.RootDir, rel)
-		func() {
+		err := func() error {
 			f, err := os.Open(abs)
 			if err != nil {
-				return
+				return err
 			}
-			defer f.Close()
+			defer func() { _ = f.Close() }()
 			scanner := bufio.NewScanner(f)
 			lineNo := 0
 			for scanner.Scan() {
@@ -139,7 +148,11 @@ func (e *Engine) Search(query string) ([]SearchResult, error) {
 					})
 				}
 			}
+			return scanner.Err()
 		}()
+		if err != nil {
+			return nil, err
+		}
 	}
 	return results, nil
 }
@@ -157,7 +170,7 @@ func (e *Engine) LogTail(n int) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var headings []string
 	scanner := bufio.NewScanner(f)
@@ -188,7 +201,7 @@ func (e *Engine) Changed(diffRange string) ([]string, error) {
 	cmd.Dir = e.RootDir
 	out, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("git diff failed: %w", err)
+		return nil, fmt.Errorf("git diff failed (this command requires git and a git repository): %w", err)
 	}
 	var files []string
 	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
@@ -279,12 +292,12 @@ func (e *Engine) Stats() (*StatsResult, error) {
 		}
 		// Count lines.
 		if strings.HasSuffix(rel, ".md") {
-			func() {
+			err := func() error {
 				f, err := os.Open(abs)
 				if err != nil {
-					return
+					return nil
 				}
-				defer f.Close()
+				defer func() { _ = f.Close() }()
 				scanner := bufio.NewScanner(f)
 				for scanner.Scan() {
 					sr.TotalLines++
@@ -292,7 +305,11 @@ func (e *Engine) Stats() (*StatsResult, error) {
 						sr.Headings++
 					}
 				}
+				return scanner.Err()
 			}()
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	if !latest.IsZero() {
@@ -307,7 +324,7 @@ type ContextEntry struct {
 	Status      string `json:"status"`
 	Description string `json:"description"`
 	Summary     string `json:"summary,omitempty"` // first ~3 paragraphs when --summarize
-	LineCount   int    `json:"line_count"`
+	LineCount   int    `json:"line_count,omitempty"`
 }
 
 // ContextResult holds a condensed wiki snapshot for agent context loading.
@@ -431,7 +448,10 @@ func parseIndexCatalog(content string) []ContextEntry {
 	return entries
 }
 
-// currentPhase reads the active phase status from phases.md.
+// currentPhase reads the active phase status from phases.md. Preference
+// order: the last in-progress row, then the last completed row, then the
+// last row — a trailing not-started row must not masquerade as the active
+// phase while an earlier phase is still in flight.
 func (e *Engine) currentPhase() string {
 	phasesRel := e.resolveWikiFile("phases.md")
 	phasesPath := filepath.Join(e.WikiPath(), filepath.FromSlash(phasesRel))
@@ -439,21 +459,38 @@ func (e *Engine) currentPhase() string {
 	if err != nil {
 		return "unknown"
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	phaseRowRe := regexp.MustCompile(`^\|\s*(\d+)\s*\|\s*(.+?)\s*\|\s*(\S+)\s*\|`)
-	var last string
+	var last, lastInProgress, lastCompleted string
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		m := phaseRowRe.FindStringSubmatch(scanner.Text())
-		if m != nil {
-			last = fmt.Sprintf("Phase %s: %s — %s", m[1], strings.TrimSpace(m[2]), strings.TrimSpace(m[3]))
+		if m == nil {
+			continue
+		}
+		entry := fmt.Sprintf("Phase %s: %s — %s", m[1], strings.TrimSpace(m[2]), strings.TrimSpace(m[3]))
+		last = entry
+		switch strings.TrimSpace(m[3]) {
+		case "in-progress":
+			lastInProgress = entry
+		case "completed":
+			lastCompleted = entry
 		}
 	}
-	if last == "" {
+	if err := scanner.Err(); err != nil {
 		return "unknown"
 	}
-	return last
+	switch {
+	case lastInProgress != "":
+		return lastInProgress
+	case lastCompleted != "":
+		return lastCompleted
+	case last != "":
+		return last
+	default:
+		return "unknown"
+	}
 }
 
 // SummaryResult holds a concise page preview.
@@ -479,7 +516,7 @@ func (e *Engine) Summary(page string) (*SummaryResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("page not found: %s", page)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	sr := &SummaryResult{File: page}
 	scanner := bufio.NewScanner(f)
@@ -550,6 +587,9 @@ func (e *Engine) Summary(page string) (*SummaryResult, error) {
 			}
 		}
 	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
 	sr.LineCount = lineNo
 	sr.Preview = strings.TrimSpace(strings.Join(previewLines, "\n"))
 	return sr, nil
@@ -591,12 +631,12 @@ func (e *Engine) Relevant(query string, topN int) ([]RelevanceResult, error) {
 		bodyHits := 0
 		var matchedHeadings []string
 
-		func() {
+		err := func() error {
 			f, err := os.Open(abs)
 			if err != nil {
-				return
+				return nil
 			}
-			defer f.Close()
+			defer func() { _ = f.Close() }()
 
 			scanner := bufio.NewScanner(f)
 			for scanner.Scan() {
@@ -615,7 +655,11 @@ func (e *Engine) Relevant(query string, topN int) ([]RelevanceResult, error) {
 					bodyHits++
 				}
 			}
+			return scanner.Err()
 		}()
+		if err != nil {
+			return nil, err
+		}
 
 		// Score: heading matches are worth 3× body matches.
 		score = float64(headingHits)*3.0 + float64(bodyHits)
@@ -722,9 +766,17 @@ type DiffResult struct {
 func (e *Engine) Diff(from, to string) (*DiffResult, error) {
 	dr := &DiffResult{From: from, To: to}
 
-	// List wiki files at <from>.
-	fromFiles, _ := e.filesAtRef(from)
-	toFiles, _ := e.filesAtRef(to)
+	// List wiki files at <from> and <to>. Invalid refs must fail loudly —
+	// silently treating them as empty produced garbage output (everything
+	// "added") with exit code 0.
+	fromFiles, err := e.filesAtRef(from)
+	if err != nil {
+		return nil, fmt.Errorf("listing wiki files at %q: %w", from, err)
+	}
+	toFiles, err := e.filesAtRef(to)
+	if err != nil {
+		return nil, fmt.Errorf("listing wiki files at %q: %w", to, err)
+	}
 
 	fromSet := make(map[string]bool)
 	toSet := make(map[string]bool)
@@ -733,6 +785,12 @@ func (e *Engine) Diff(from, to string) (*DiffResult, error) {
 	}
 	for _, f := range toFiles {
 		toSet[f] = true
+	}
+
+	// Neither ref has a wiki directory (e.g. history points before the wiki
+	// was scaffolded) — nothing to compare, nothing changed.
+	if len(fromFiles) == 0 && len(toFiles) == 0 {
+		return dr, nil
 	}
 
 	// Added in <to> but not in <from>.
@@ -749,19 +807,33 @@ func (e *Engine) Diff(from, to string) (*DiffResult, error) {
 	}
 	// Changed (present in both, but modified).
 	changedOut, err := e.changedWikiFiles(from + ".." + to)
-	if err == nil {
-		dr.Changed = changedOut
+	if err != nil {
+		return nil, fmt.Errorf("computing changed wiki files between %q and %q: %w", from, to, err)
 	}
+	dr.Changed = changedOut
 
 	return dr, nil
 }
 
-// filesAtRef lists wiki files at a given git ref.
+// filesAtRef lists wiki files at a given git ref. The ref must exist — an
+// invalid ref is an error, not an empty list. If the ref exists but has no
+// wiki directory (e.g. a history point before the wiki was scaffolded),
+// the list is empty.
 func (e *Engine) filesAtRef(ref string) ([]string, error) {
+	check := exec.Command("git", "rev-parse", "--verify", "--quiet", ref+"^{commit}")
+	check.Dir = e.RootDir
+	out, err := check.Output()
+	if err != nil || strings.TrimSpace(string(out)) == "" {
+		return nil, fmt.Errorf("invalid git ref %q", ref)
+	}
+
 	cmd := exec.Command("git", "ls-tree", "-r", "--name-only", ref, e.Cfg.WikiDir+"/")
 	cmd.Dir = e.RootDir
-	out, err := cmd.Output()
+	out, err = cmd.Output()
 	if err != nil {
+		if ee, ok := err.(*exec.ExitError); ok && strings.Contains(string(ee.Stderr), "did not match") {
+			return nil, nil // wiki did not exist at this ref
+		}
 		return nil, err
 	}
 	var files []string
@@ -835,29 +907,42 @@ func (e *Engine) Refresh(diffRange string) (string, error) {
 
 	// Wiki files.
 	b.WriteString("== wiki files ==\n")
-	files, _ := e.List()
+	files, err := e.List()
+	if err != nil {
+		return "", err
+	}
 	for _, f := range files {
-		b.WriteString(f + "\n")
+		b.WriteString(f)
+		b.WriteString("\n")
 	}
 
 	// Recent log.
 	b.WriteString("\n== recent log ==\n")
-	tail, _ := e.LogTail(0)
+	tail, err := e.LogTail(0)
+	if err != nil {
+		return "", err
+	}
 	for _, h := range tail {
-		b.WriteString(h + "\n")
+		b.WriteString(h)
+		b.WriteString("\n")
 	}
 
 	// Changed files.
 	b.WriteString("\n== changed files ==\n")
-	changed, _ := e.Changed(diffRange)
+	changed, err := e.Changed(diffRange)
+	if err != nil {
+		return "", err
+	}
 	for _, f := range changed {
-		b.WriteString(f + "\n")
+		b.WriteString(f)
+		b.WriteString("\n")
 	}
 
 	// Ingest candidates.
 	b.WriteString("\n== ingest candidates ==\n")
 	for _, f := range candidates {
-		b.WriteString(f + "\n")
+		b.WriteString(f)
+		b.WriteString("\n")
 	}
 
 	// Lint.
@@ -867,7 +952,8 @@ func (e *Engine) Refresh(diffRange string) (string, error) {
 		b.WriteString("wiki lint OK\n")
 	} else {
 		for _, m := range lint.Messages {
-			b.WriteString(m + "\n")
+			b.WriteString(m)
+			b.WriteString("\n")
 		}
 	}
 

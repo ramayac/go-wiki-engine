@@ -54,6 +54,12 @@ test -d wiki || { echo "FAIL: --json init did not create wiki/"; exit 1; }
 cd "$TMPDIR"
 echo "  ok"
 
+# Test: help goes to stdout when explicitly requested
+echo "--- help ---"
+"$BIN" help 2>/dev/null | grep -q "wiki-engine — repo-local wiki management tool" || { echo "FAIL: help should print to stdout"; exit 1; }
+"$BIN" list -h 2>/dev/null | grep -q "Usage:" || { echo "FAIL: list -h should print usage to stdout"; exit 1; }
+echo "  ok"
+
 # Test: list
 echo "--- list ---"
 count=$("$BIN" list | wc -l)
@@ -104,6 +110,40 @@ echo "--- json ---"
 "$BIN" --json lint | grep -q '\[\]' || { echo "FAIL: json lint failed"; exit 1; }
 echo "  ok"
 
+# Test: --json on admin commands
+echo "--- json admin commands ---"
+"$BIN" --json version | grep -q '"ok": true' || { echo "FAIL: --json version should emit an envelope"; exit 1; }
+"$BIN" --json version | grep -qE '"data": "[^"]+"' || { echo "FAIL: --json version should carry the version in data"; exit 1; }
+"$BIN" --json sync-prompts | grep -q '"updated"' || { echo "FAIL: --json sync-prompts should carry updated files"; exit 1; }
+"$BIN" --json sync-prompts | grep -q '"removed"' || { echo "FAIL: --json sync-prompts should carry a removed list"; exit 1; }
+if "$BIN" search -- >/dev/null 2>&1; then
+  echo "FAIL: search -- without terms should exit non-zero"
+  exit 1
+fi
+echo "  ok"
+
+# Test: --json fatal errors carry the envelope
+echo "--- json error envelope ---"
+out=$("$BIN" --json summary does-not-exist.md 2>/dev/null || true)
+echo "$out" | grep -q '"ok": false' || { echo "FAIL: fatal error should emit ok:false envelope"; exit 1; }
+echo "$out" | grep -q '"error"' || { echo "FAIL: fatal error should carry an error field"; exit 1; }
+out=$("$BIN" --json definitely-not-a-command 2>/dev/null || true)
+echo "$out" | grep -q '"ok": false' || { echo "FAIL: unknown command should emit ok:false envelope"; exit 1; }
+echo "  ok"
+
+# Test: --json usage errors carry the envelope too
+echo "--- json usage errors ---"
+out=$("$BIN" --json search 2>/dev/null || true)
+echo "$out" | grep -q '"ok": false' || { echo "FAIL: --json search without query should emit ok:false"; exit 1; }
+echo "$out" | grep -q "usage" || { echo "FAIL: usage error envelope should carry the usage line"; exit 1; }
+out=$("$BIN" --json summary 2>/dev/null || true)
+echo "$out" | grep -q '"ok": false' || { echo "FAIL: --json summary without page should emit ok:false"; exit 1; }
+if "$BIN" --json search >/dev/null 2>&1; then
+  echo "FAIL: --json search without query should exit non-zero"
+  exit 1
+fi
+echo "  ok"
+
 # Test: diff
 echo "--- diff ---"
 echo "# test change" >> wiki/README.md
@@ -150,6 +190,15 @@ echo -e "---\nstatus: legacy\ndescription: Legacy lint procedure\n---\n# Legacy 
 "$BIN" context --active | grep -q "  -> prologue/schema.md" || { echo "FAIL: active edge in graph missing"; exit 1; }
 # Sort topo check
 "$BIN" context --active --sort=topo | grep -q "== active wiki graph ==" || { echo "FAIL: topo sort failed"; exit 1; }
+# Meaningless flag combos must be rejected, not silently ignored
+if "$BIN" context --sort=topo >/dev/null 2>&1; then
+  echo "FAIL: --sort without --active should be rejected"
+  exit 1
+fi
+if "$BIN" context --minimal --active >/dev/null 2>&1; then
+  echo "FAIL: --minimal --active should be rejected"
+  exit 1
+fi
 # JSON graph format check
 "$BIN" --json context --active | grep -q '"nodes"' || { echo "FAIL: json graph output missing nodes"; exit 1; }
 "$BIN" --json context --active | grep -q '"edges"' || { echo "FAIL: json graph output missing edges"; exit 1; }
@@ -171,6 +220,21 @@ echo 'duplicate_threshold = 0.1' >> .wikirc
 "$BIN" lint && { echo "FAIL: expected duplicate lint failure"; exit 1; } || true
 echo "  ok"
 
+# Test: unknown checker names fail loudly
+
+echo "--- lint unknown checker ---"
+if "$BIN" lint --check=definitely-not-a-checker >/dev/null 2>&1; then
+  echo "FAIL: unknown checker should fail"
+  exit 1
+fi
+out=$("$BIN" lint --check=definitely-not-a-checker 2>&1 || true)
+echo "$out" | grep -q "unknown checker" || { echo "FAIL: expected unknown checker message"; exit 1; }
+if "$BIN" lint --skip=all >/dev/null 2>&1; then
+  echo "FAIL: --skip=all should be rejected"
+  exit 1
+fi
+echo "  ok"
+
 # Test: failing lint reports ok:false in JSON envelope
 echo "--- lint json envelope ---"
 if "$BIN" --json lint >/dev/null 2>&1; then
@@ -179,6 +243,18 @@ if "$BIN" --json lint >/dev/null 2>&1; then
 fi
 out=$("$BIN" --json lint 2>/dev/null || true)
 echo "$out" | grep -q '"ok": false' || { echo "FAIL: failing lint should report ok:false"; exit 1; }
+echo "  ok"
+
+# Test: lint on a missing wiki dir carries the diagnostic in the error field
+echo "--- json lint missing wiki dir ---"
+mkdir -p "$TMPDIR/nowikit"
+cd "$TMPDIR/nowikit"
+git init -q -b main
+git config user.email "test@test"
+git config user.name "Test"
+out=$("$BIN" --json lint 2>/dev/null || true)
+echo "$out" | grep -q '"error": "wiki directory not found' || { echo "FAIL: missing wiki dir should carry the diagnostic in the error field"; exit 1; }
+cd "$TMPDIR"
 echo "  ok"
 
 # Test: duplicate_threshold = 0 disables duplicate detection
@@ -193,12 +269,25 @@ echo 'context_summarize = true' >> .wikirc
 "$BIN" --json context | grep -q '"summarized": true' || { echo "FAIL: context_summarize should default context to summarize mode"; exit 1; }
 echo "  ok"
 
+# Test: plain-text context --summarize includes per-page previews
+echo "--- context summarize plain ---"
+"$BIN" context --summarize | grep -q "(lines:" || { echo "FAIL: plain context --summarize should include previews and line counts"; exit 1; }
+if "$BIN" context --active --summarize >/dev/null 2>&1; then
+  echo "FAIL: --active --summarize should be rejected"
+  exit 1
+fi
+out=$("$BIN" context --active --summarize 2>&1 || true)
+echo "$out" | grep -q "cannot be combined" || { echo "FAIL: rejection should explain the combination"; exit 1; }
+echo "  ok"
+
 # Test: continuous watch is disabled when watch_interval = 0
 echo "--- watch disabled ---"
 if "$BIN" watch >/dev/null 2>&1; then
   echo "FAIL: watch with watch_interval=0 should exit non-zero"
   exit 1
 fi
+out=$("$BIN" --json watch 2>/dev/null || true)
+echo "$out" | grep -q '"ok": false' || { echo "FAIL: --json watch guidance should emit ok:false"; exit 1; }
 echo "  ok"
 
 # Test: legacy flat wiki layout still lints (backward compatibility)
