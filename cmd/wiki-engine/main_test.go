@@ -57,6 +57,26 @@ func TestArgsAfterFilters(t *testing.T) {
 	if useJSON {
 		t.Error("expected useJSON=false without --json")
 	}
+
+	// A "--" terminator protects a literal --json argument.
+	os.Args = []string{"wiki-engine", "search", "--", "--json"}
+	args, useJSON = argsAfterFilters()
+	if useJSON {
+		t.Error("expected useJSON=false when --json appears after --")
+	}
+	if len(args) != 4 || args[3] != "--json" {
+		t.Errorf("expected --json preserved after --, got %v", args)
+	}
+
+	// Before the terminator, --json is still the mode switch.
+	os.Args = []string{"wiki-engine", "--json", "search", "--", "x"}
+	args, useJSON = argsAfterFilters()
+	if !useJSON {
+		t.Error("expected useJSON=true when --json appears before --")
+	}
+	if len(args) != 4 {
+		t.Errorf("expected args=[wiki-engine search -- x], got %v", args)
+	}
 }
 
 func TestWriteJSONResultTo(t *testing.T) {
@@ -112,6 +132,10 @@ func TestValidateCommandArgs(t *testing.T) {
 		{"lint check prefix", "lint", []string{"--check=front-matter"}, false},
 		{"lint unknown flag", "lint", []string{"--quiet"}, true},
 		{"impact unlimited positional", "impact", []string{"a.go", "b.go", "c.go"}, false},
+		{"terminator makes flags positional", "search", []string{"--", "--check"}, false},
+		{"terminator preserves flag rejection before it", "search", []string{"--bogus", "--", "x"}, true},
+		{"terminator counts positionals", "list", []string{"--", "extra"}, true},
+		{"terminator alone", "search", []string{"--"}, false},
 		{"init one positional", "init", []string{"docs"}, false},
 		{"init unknown flag", "init", []string{"--bogus"}, true},
 		{"version unknown flag", "version", []string{"--bogus"}, true},
@@ -146,6 +170,32 @@ func TestValidateLintSelectors(t *testing.T) {
 		err := validateLintSelectors(tt.check, tt.skip)
 		if (err != nil) != tt.wantErr {
 			t.Errorf("%s: validateLintSelectors(%v, %v) error = %v, wantErr %t", tt.name, tt.check, tt.skip, err, tt.wantErr)
+		}
+	}
+}
+
+func TestPositionalArgs(t *testing.T) {
+	tests := []struct {
+		in   []string
+		want []string
+	}{
+		{[]string{"--", "--check"}, []string{"--check"}},
+		{[]string{"--check"}, []string{"--check"}},
+		{[]string{"a.go", "--", "b.go"}, []string{"a.go", "b.go"}},
+		{[]string{"--", "--", "--"}, []string{}},
+		{[]string{}, []string{}},
+	}
+	for _, tt := range tests {
+		got := positionalArgs(tt.in)
+		if len(got) != len(tt.want) {
+			t.Errorf("positionalArgs(%v) = %v, want %v", tt.in, got, tt.want)
+			continue
+		}
+		for i := range got {
+			if got[i] != tt.want[i] {
+				t.Errorf("positionalArgs(%v) = %v, want %v", tt.in, got, tt.want)
+				break
+			}
 		}
 	}
 }

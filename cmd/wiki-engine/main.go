@@ -36,12 +36,18 @@ func getVersion() string {
 	return version
 }
 
-// argsAfterFilters returns os.Args with --json removed and whether --json was present.
+// argsAfterFilters returns os.Args with --json removed and whether --json was
+// present. A standalone "--" terminates flag handling: after it, even
+// "--json" is a plain argument (e.g. `wiki-engine search -- --json`).
 func argsAfterFilters() ([]string, bool) {
 	var filtered []string
 	useJSON := false
+	afterTerminator := false
 	for _, a := range os.Args {
-		if a == "--json" {
+		if !afterTerminator && a == "--" {
+			afterTerminator = true
+		}
+		if !afterTerminator && a == "--json" {
 			useJSON = true
 			continue
 		}
@@ -87,6 +93,20 @@ func main() {
 	}
 
 	cmd := args[1]
+
+	// -h/--help after a command is a help request, not an argument.
+	// The "--" terminator stops the scan so `search -- -h` searches for "-h".
+	afterTerminator := false
+	for _, a := range args[2:] {
+		if a == "--" {
+			afterTerminator = true
+			continue
+		}
+		if !afterTerminator && (a == "-h" || a == "--help") {
+			usage()
+			return
+		}
+	}
 
 	switch cmd {
 	case "init":
@@ -255,7 +275,7 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 			fmt.Fprintln(os.Stderr, "usage: wiki-engine search <query>")
 			os.Exit(1)
 		}
-		query := strings.Join(args[2:], " ")
+		query := strings.Join(positionalArgs(args[2:]), " ")
 		results, err := eng.Search(query)
 		if err != nil {
 			fatal(err)
@@ -539,7 +559,7 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 		// Read changed files from args or stdin.
 		var changedFiles []string
 		if len(args) > 2 {
-			changedFiles = args[2:]
+			changedFiles = positionalArgs(args[2:])
 		} else {
 			// If stdin is an interactive terminal, there is nothing to read —
 			// show usage instead of blocking.
@@ -691,7 +711,9 @@ Commands:
   help                    Show this help
 
 Add --json (accepted anywhere) for structured JSON output. On error, --json
-commands emit {"ok": false, "error": "..."} and exit 1.`)
+commands emit {"ok": false, "error": "..."} and exit 1.
+Use -- to end flag parsing, e.g. wiki-engine search -- --check.
+-h/--help works after any command.`)
 }
 
 func fatal(err error) {
@@ -740,15 +762,41 @@ var commandArgSpecs = map[string]argSpec{
 	"watch":    {flags: map[string]bool{"--once": true}, maxPos: 0},
 }
 
+// positionalArgs returns args with the flag terminator "--" removed, so
+// free-form commands (search, impact) can receive arguments that start
+// with dashes: `wiki-engine search -- --check`.
+func positionalArgs(args []string) []string {
+	var out []string
+	for _, a := range args {
+		if a != "--" {
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
 // validateCommandArgs rejects unknown flags and excess positional arguments
-// so that typos fail loudly instead of being silently ignored.
+// so that typos fail loudly instead of being silently ignored. A standalone
+// "--" terminates flag parsing: everything after it is positional.
 func validateCommandArgs(cmd string, args []string) error {
 	spec, ok := commandArgSpecs[cmd]
 	if !ok {
 		return nil // unknown command — reported by the dispatcher
 	}
 	positional := 0
+	afterTerminator := false
 	for _, a := range args {
+		if afterTerminator {
+			positional++
+			if spec.maxPos >= 0 && positional > spec.maxPos {
+				return fmt.Errorf("unexpected argument %q for %s", a, cmd)
+			}
+			continue
+		}
+		if a == "--" {
+			afterTerminator = true
+			continue
+		}
 		if strings.HasPrefix(a, "--") {
 			allowed := spec.flags[a]
 			if !allowed {

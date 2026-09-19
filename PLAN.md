@@ -72,12 +72,15 @@ Fix the two release blockers: data loss and false success.
 
 ## Phase F — Unix ergonomics
 
-- [ ] F1. `--` flag terminator for free-form commands (`search`, `impact`);
-      post-`--` args are positional, terminator stripped from queries
-- [ ] F2. `-h` / `--help` after any command shows usage and exits 0
-- [ ] F3. Usage text: `--json` accepted anywhere + `--` documented
-- [ ] Tests: `TestValidateCommandArgs` additions, `TestPositionalArgs`
-- [ ] Docs: usage, CHANGELOG
+- [x] F1. `--` flag terminator for free-form commands (`search`, `impact`);
+      post-`--` args are positional, terminator stripped from queries;
+      `--` also protects literal `--json` arguments
+- [x] F2. `-h` / `--help` after any command shows usage and exits 0
+      (terminator-aware: `search -- -h` searches for `-h`)
+- [x] F3. Usage text: `--json` accepted anywhere + `--` documented
+- [x] Tests: `TestValidateCommandArgs` additions, `TestPositionalArgs`,
+      `TestArgsAfterFilters` terminator cases
+- [x] Docs: usage, CHANGELOG
 
 ## Phase G — Prompt & doc polish
 
@@ -97,5 +100,5 @@ Fix the two release blockers: data loss and false success.
 | C — Lint gate integrity | ✅ | `fix: validate lint selectors and fail_severity; single diagnostic for missing wiki dir` |
 | D — Context summarize | ✅ | `fix: plain context --summarize shows previews; reject --active --summarize` |
 | E — Error propagation & resources | ✅ | `fix: propagate scanner open errors; per-file FD hygiene; verify upgraded binary` |
-| F — Unix ergonomics | ⬜ | — |
+| F — Unix ergonomics | ✅ | `fix: -- flag terminator and -h after commands` |
 | G — Prompt & doc polish | ⬜ | — |
