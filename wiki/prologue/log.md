@@ -7,6 +7,14 @@ superseded_by: ""
 
 Append-only timeline of wiki maintenance activity.
 
+## [2026-09-19] ingest | v1.0.0 and v1.0.1 released — PR #10 merged, upgrade redirect hotfix
+
+- **v1.0.0 released**: first semantic-versioned release. PR #10 merged all three audit-fix rounds into master; CI green (test, audit, lint, golangci-lint, race, integration). Release workflow built and uploaded assets for linux/darwin amd64+arm64 and windows amd64 plus `checksums.txt`.
+- **CI fix en route**: `golangci-lint-action` bumped v6 → v7 (v6 rejects golangci-lint v2).
+- **v1.0.1 hotfix**: `upgrade` now follows redirects when downloading release assets and `checksums.txt` — GitHub serves them via 302 redirects to signed storage URLs, so the checksum-verified download path had been silently falling back to `go install` on every real upgrade. Found during post-release verification (old binary hit `status: 302`); fixed with a dedicated redirect-following download client, covered by `TestRunFollowsAssetRedirects`, and verified end-to-end against the real GitHub release (download → checksum match → in-place replace → `upgraded to v1.0.1`).
+- Closed todo #57: releases now use clean `vX.Y.Z` tags (`v1.0.0`, `v1.0.1`).
+- Cleaned up: removed the completed audit plan; `sync-prompts` re-run in this repo (no drift).
+
 ## [2026-09-19] fix | pre-1.0 audit fixes — data safety, JSON contract, lint gate, unix ergonomics
 
 Waterfall fix round for the code & prompt audit (branch `feat/audit-fixes`, plan in `PLAN.md`).
