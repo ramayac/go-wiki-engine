@@ -126,3 +126,26 @@ func TestValidateCommandArgs(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateLintSelectors(t *testing.T) {
+	tests := []struct {
+		name    string
+		check   []string
+		skip    []string
+		wantErr bool
+	}{
+		{"valid checker", []string{"front-matter"}, nil, false},
+		{"all in check", []string{"all"}, nil, false},
+		{"unknown check", []string{"bogus"}, nil, true},
+		{"unknown skip", nil, []string{"bogus"}, true},
+		{"skip all rejected", nil, []string{"all"}, true},
+		{"empty strings tolerated", []string{""}, []string{""}, false},
+		{"mixed valid", []string{"orphans", "leaf-pages"}, []string{"markers"}, false},
+	}
+	for _, tt := range tests {
+		err := validateLintSelectors(tt.check, tt.skip)
+		if (err != nil) != tt.wantErr {
+			t.Errorf("%s: validateLintSelectors(%v, %v) error = %v, wantErr %t", tt.name, tt.check, tt.skip, err, tt.wantErr)
+		}
+	}
+}

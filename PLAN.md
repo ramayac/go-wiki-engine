@@ -40,13 +40,14 @@ Fix the two release blockers: data loss and false success.
 
 ## Phase C — Lint gate integrity
 
-- [ ] C1. `lint --check=/-skip=` reject unknown checker names; `--skip=all` rejected
+- [x] C1. `lint --check=/-skip=` reject unknown checker names; `--skip=all` rejected
       (`validateLintSelectors` + `engine.KnownCheckerNames()`)
-- [ ] C2. Lint on a missing wiki dir → one clear diagnostic instead of 18 noisy lines
+- [x] C2. Lint on a missing wiki dir → one clear diagnostic instead of 18 noisy lines
       (early check in `LintWithOptions`)
-- [ ] C3. Invalid `fail_severity` value warns on load and falls back to `warn`
-- [ ] Tests: `TestValidateLintSelectors`, `TestLintMissingWikiDir`, `TestLoadInvalidFailSeverity`
-- [ ] Docs: config.md `fail_severity` note; CHANGELOG
+- [x] C3. Invalid `fail_severity` value warns on load and falls back to `warn`
+- [x] Tests: `TestValidateLintSelectors`, `TestLintMissingWikiDir`, `TestLoadInvalidFailSeverity`,
+      integration (unknown checker, `--skip=all`)
+- [x] Docs: config.md `fail_severity` note; CHANGELOG
 
 ## Phase D — Context summarize coherence
 
@@ -93,7 +94,7 @@ Fix the two release blockers: data loss and false success.
 |---|---|---|
 | A — Critical correctness | ✅ | `fix: sync-prompts must not delete user files; diff fails loudly on invalid refs` |
 | B — JSON contract | ✅ | `fix: honor --json on every command and on fatal error paths` |
-| C — Lint gate integrity | ⬜ | — |
+| C — Lint gate integrity | ✅ | `fix: validate lint selectors and fail_severity; single diagnostic for missing wiki dir` |
 | D — Context summarize | ⬜ | — |
 | E — Error propagation & resources | ⬜ | — |
 | F — Unix ergonomics | ⬜ | — |

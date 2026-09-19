@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -223,6 +224,34 @@ func TestParseFloat(t *testing.T) {
 		got := parseFloat(tt.input, tt.fallback)
 		if got != tt.want {
 			t.Errorf("parseFloat(%q, %f) = %f, want %f", tt.input, tt.fallback, got, tt.want)
+		}
+	}
+}
+
+func TestLoadInvalidFailSeverity(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, ".wikirc"), []byte("fail_severity = \"banana\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(dir)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	if cfg.FailSeverity != "warn" {
+		t.Errorf("invalid fail_severity should fall back to %q, got %q", "warn", cfg.FailSeverity)
+	}
+
+	// Valid values pass through (case-insensitive).
+	for _, v := range []string{"error", "WARN", "Info"} {
+		if err := os.WriteFile(filepath.Join(dir, ".wikirc"), []byte("fail_severity = "+v+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		cfg, err := Load(dir)
+		if err != nil {
+			t.Fatalf("Load(%s) failed: %v", v, err)
+		}
+		if cfg.FailSeverity != strings.ToLower(v) {
+			t.Errorf("fail_severity %q should load as %q, got %q", v, strings.ToLower(v), cfg.FailSeverity)
 		}
 	}
 }

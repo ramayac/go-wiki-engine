@@ -187,6 +187,21 @@ echo 'duplicate_threshold = 0.1' >> .wikirc
 "$BIN" lint && { echo "FAIL: expected duplicate lint failure"; exit 1; } || true
 echo "  ok"
 
+# Test: unknown checker names fail loudly
+
+echo "--- lint unknown checker ---"
+if "$BIN" lint --check=definitely-not-a-checker >/dev/null 2>&1; then
+  echo "FAIL: unknown checker should fail"
+  exit 1
+fi
+out=$("$BIN" lint --check=definitely-not-a-checker 2>&1 || true)
+echo "$out" | grep -q "unknown checker" || { echo "FAIL: expected unknown checker message"; exit 1; }
+if "$BIN" lint --skip=all >/dev/null 2>&1; then
+  echo "FAIL: --skip=all should be rejected"
+  exit 1
+fi
+echo "  ok"
+
 # Test: failing lint reports ok:false in JSON envelope
 echo "--- lint json envelope ---"
 if "$BIN" --json lint >/dev/null 2>&1; then

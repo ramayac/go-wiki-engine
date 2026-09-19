@@ -115,7 +115,13 @@ func Load(dir string) (*Config, error) {
 		case "watch_interval":
 			cfg.WatchInterval = ParsePositiveInt(val, 0)
 		case "fail_severity":
-			cfg.FailSeverity = strings.ToLower(strings.TrimSpace(val))
+			v := strings.ToLower(strings.TrimSpace(val))
+			switch v {
+			case "error", "warn", "info":
+				cfg.FailSeverity = v
+			default:
+				fmt.Fprintf(os.Stderr, "warning: invalid fail_severity %q (expected error, warn, or info); using %q\n", val, cfg.FailSeverity)
+			}
 		default:
 			fmt.Fprintf(os.Stderr, "warning: unknown .wikirc key %q ignored\n", key)
 		}

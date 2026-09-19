@@ -68,6 +68,10 @@ fail_severity = "warn"
 |--------:|-----------|
 | Values | `error`, `warn`, `info` |
 
+Invalid values warn on load and fall back to `warn`. Checker selectors
+(`lint --check=...` / `lint --skip=...`) are validated too — unknown checker
+names fail loudly instead of silently running nothing.
+
 ## Context Loading
 
 ### `context_summarize`

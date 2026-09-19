@@ -1322,6 +1322,16 @@ func allCheckers() []Checker {
 	}
 }
 
+// KnownCheckerNames returns the names of all registered checkers, used to
+// validate --check/--skip selectors so typos fail loudly.
+func KnownCheckerNames() []string {
+	names := make([]string, 0, len(allCheckers()))
+	for _, c := range allCheckers() {
+		names = append(names, c.Name())
+	}
+	return names
+}
+
 // Lint runs all registered checkers and aggregates the results.
 func (e *Engine) Lint() LintResult {
 	return e.LintWithOptions(nil, nil)
@@ -1329,6 +1339,22 @@ func (e *Engine) Lint() LintResult {
 
 // LintWithOptions runs specified checkers, skipping any listed in skip.
 func (e *Engine) LintWithOptions(check []string, skip []string) LintResult {
+	// A missing wiki directory is one clear diagnostic, not a flood of
+	// per-checker lstat failures.
+	if _, err := os.Stat(e.WikiPath()); err != nil {
+		msg := fmt.Sprintf("wiki directory not found: %s (run wiki-engine init)", e.Cfg.WikiDir)
+		return LintResult{
+			OK:       false,
+			Messages: []string{fmt.Sprintf("%s: [lint] %s", e.Cfg.WikiDir, msg)},
+			Issues: []Issue{{
+				Severity: SevError,
+				Check:    "lint",
+				File:     e.Cfg.WikiDir,
+				Message:  msg,
+			}},
+		}
+	}
+
 	checkAll := true
 	checkMap := make(map[string]bool)
 	for _, c := range check {

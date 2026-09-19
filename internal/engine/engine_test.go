@@ -1244,3 +1244,22 @@ func TestDiffRefsBeforeWikiExisted(t *testing.T) {
 		t.Errorf("expected empty diff before the wiki existed, got added=%v removed=%v changed=%v", dr.Added, dr.Removed, dr.Changed)
 	}
 }
+
+func TestLintMissingWikiDir(t *testing.T) {
+	eng := newTestEngine(t.TempDir()) // no wiki/ created
+
+	result := eng.Lint()
+	if result.OK {
+		t.Fatal("Lint on a missing wiki dir should fail")
+	}
+	if len(result.Issues) != 1 {
+		t.Fatalf("expected exactly 1 issue for a missing wiki dir, got %d:\n%v", len(result.Issues), result.Messages)
+	}
+	iss := result.Issues[0]
+	if !strings.Contains(iss.Message, "wiki directory not found") {
+		t.Errorf("unexpected message: %s", iss.Message)
+	}
+	if iss.Severity != SevError {
+		t.Errorf("expected SevError, got %v", iss.Severity)
+	}
+}

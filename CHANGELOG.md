@@ -28,6 +28,9 @@ surface is defined in [README.md](README.md).
 - `diff` now fails loudly on invalid git refs instead of reporting garbage output with exit code 0.
 - `--json` is now honored by every command, including `version`, `init`, `sync-prompts`, and `upgrade`; fatal errors emit the `{ok: false, error}` envelope in JSON mode.
 - `sync-prompts` diagnostics moved to stderr and the tips reference the configured `wiki_dir`.
+- `lint --check=` / `lint --skip=` reject unknown checker names instead of silently running no checkers; `--skip=all` is rejected as a footgun.
+- Lint on a missing wiki directory reports one clear diagnostic instead of a flood of per-checker errors.
+- Invalid `fail_severity` values warn on load and fall back to `warn`.
 
 ## [0.x]
 

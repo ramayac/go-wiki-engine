@@ -335,6 +335,9 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 				}
 			}
 		}
+		if err := validateLintSelectors(check, skip); err != nil {
+			fatal(err)
+		}
 		result := eng.LintWithOptions(check, skip)
 		if useJSON {
 			errMsg := ""
@@ -752,6 +755,38 @@ func validateCommandArgs(cmd string, args []string) error {
 		positional++
 		if spec.maxPos >= 0 && positional > spec.maxPos {
 			return fmt.Errorf("unexpected argument %q for %s", a, cmd)
+		}
+	}
+	return nil
+}
+
+// validateLintSelectors rejects unknown checker names in --check/--skip so
+// that typos fail loudly instead of silently running no checkers at all.
+func validateLintSelectors(check, skip []string) error {
+	known := engine.KnownCheckerNames()
+	knownSet := make(map[string]bool, len(known))
+	for _, n := range known {
+		knownSet[n] = true
+	}
+	available := strings.Join(known, ", ")
+
+	for _, n := range check {
+		if n == "" || n == "all" {
+			continue
+		}
+		if !knownSet[n] {
+			return fmt.Errorf("unknown checker %q for lint --check (available: %s)", n, available)
+		}
+	}
+	for _, n := range skip {
+		if n == "" {
+			continue
+		}
+		if n == "all" {
+			return fmt.Errorf("--skip=all would disable every checker; run --check=<names> instead")
+		}
+		if !knownSet[n] {
+			return fmt.Errorf("unknown checker %q for lint --skip (available: %s)", n, available)
 		}
 	}
 	return nil
