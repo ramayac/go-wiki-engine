@@ -692,7 +692,7 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 }
 
 func usage(out io.Writer) {
-	fmt.Fprintln(out, `wiki-engine — repo-local wiki management tool
+	_, _ = fmt.Fprintln(out, `wiki-engine — repo-local wiki management tool
 
 Usage: wiki-engine [--json] <command> [arguments]
 
