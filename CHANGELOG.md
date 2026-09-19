@@ -39,6 +39,10 @@ surface is defined in [README.md](README.md).
 - Prompt polish: the onboard shim template now lists all seven slash commands, and the upgrade workflow wording matches the new post-upgrade version verification.
 - `.wikirc` now parses single-line `ignore` arrays (previously only the multiline form worked) and rejects empty/invalid `wiki_dir` values with a warning.
 - Usage errors in `--json` mode (`search`, `summary`, `relevant`, `impact`, `diff` without arguments, disabled `watch`) now emit the standard error envelope.
+- `init` rejects wiki directory names that escape the repository (`..`, absolute paths).
+- `context` now reports the active phase as the last `in-progress` (or last `completed`) row of phases.md instead of blindly taking the last row.
+- Front matter inline comments follow YAML rules: `#` only starts a comment outside quotes after whitespace, so `description: "C# guide"` survives.
+- Numeric `.wikirc` values are parsed strictly — `log_lines = "1.5"` warns and falls back instead of silently becoming 15.
 
 ## [0.x]
 

@@ -96,3 +96,37 @@ body`,
 		})
 	}
 }
+
+func TestParseFrontMatterHashInValue(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		want    string
+	}{
+		{"hash inside quotes survives", "---\ndescription: \"C# guide\"\n---\n", "C# guide"},
+		{"hash inside single quotes survives", "---\ndescription: 'base # comment'\n---\n", "base # comment"},
+		{"hash after whitespace in unquoted value is a comment", "---\ndescription: base # comment\n---\n", "base"},
+		{"hash mid-word in unquoted value survives", "---\ndescription: C#guide\n---\n", "C#guide"},
+		{"status with trailing comment", "---\nstatus: current # active\n---\n", "current"},
+	}
+	for _, tt := range tests {
+		fm, found, err := ParseFrontMatter(tt.content)
+		if err != nil {
+			t.Errorf("%s: ParseFrontMatter error: %v", tt.name, err)
+			continue
+		}
+		if !found {
+			t.Errorf("%s: front matter not found", tt.name)
+			continue
+		}
+		if tt.name == "status with trailing comment" {
+			if fm.Status != tt.want {
+				t.Errorf("%s: status = %q, want %q", tt.name, fm.Status, tt.want)
+			}
+			continue
+		}
+		if fm.Description != tt.want {
+			t.Errorf("%s: description = %q, want %q", tt.name, fm.Description, tt.want)
+		}
+	}
+}

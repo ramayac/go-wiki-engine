@@ -314,3 +314,24 @@ func TestLoadEmptyWikiDir(t *testing.T) {
 		}
 	}
 }
+
+func TestStrictNumericParsing(t *testing.T) {
+	// Garbage must fall back — not become a digit-salad value.
+	for _, in := range []string{"1.5", "12x", "abc"} {
+		if got := parseInt(in, 10); got != 10 {
+			t.Errorf("parseInt(%q) = %d, want fallback 10", in, got)
+		}
+	}
+	if got := parseInt(" 7 ", 10); got != 7 {
+		t.Errorf("parseInt(\" 7 \") = %d, want 7", got)
+	}
+	// Negativity enforcement lives in ParsePositiveInt, not parseInt.
+	if got := ParsePositiveInt("-3", 10); got != 10 {
+		t.Errorf("ParsePositiveInt(\"-3\", 10) = %d, want fallback 10", got)
+	}
+	for _, in := range []string{"0.7x", "1.5", "abc"} {
+		if got := parseFloat(in, 0.5); got != 0.5 {
+			t.Errorf("parseFloat(%q) = %v, want fallback 0.5", in, got)
+		}
+	}
+}

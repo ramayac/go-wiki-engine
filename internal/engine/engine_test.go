@@ -1286,3 +1286,39 @@ func TestHeadingsPropagatesOpenError(t *testing.T) {
 		t.Error("Search should propagate open errors, got nil")
 	}
 }
+
+func TestCurrentPhasePreferences(t *testing.T) {
+	root := setupWiki(t)
+	eng := newTestEngine(root)
+
+	writePhases := func(content string) {
+		p := filepath.Join(root, "wiki", "phases.md")
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// in-progress beats a later not-started row.
+	writePhases("---\nstatus: current\n---\n| Phase | Name | Status |\n|---|---|---|\n| 0 | Boot | completed |\n| 1 | Map | in-progress |\n| 2 | Ingest | not-started |\n")
+	if got := eng.currentPhase(); got != "Phase 1: Map — in-progress" {
+		t.Errorf("currentPhase = %q, want the in-progress row", got)
+	}
+
+	// Without in-progress, the last completed row wins over not-started.
+	writePhases("---\nstatus: current\n---\n| Phase | Name | Status |\n|---|---|---|\n| 0 | Boot | completed |\n| 1 | Map | completed |\n| 2 | Ingest | not-started |\n")
+	if got := eng.currentPhase(); got != "Phase 1: Map — completed" {
+		t.Errorf("currentPhase = %q, want the last completed row", got)
+	}
+
+	// No completed/in-progress rows: fall back to the last row.
+	writePhases("---\nstatus: current\n---\n| Phase | Name | Status |\n|---|---|---|\n| 0 | Boot | not-started |\n| 1 | Map | not-started |\n")
+	if got := eng.currentPhase(); got != "Phase 1: Map — not-started" {
+		t.Errorf("currentPhase = %q, want the last row", got)
+	}
+
+	// No rows at all: unknown.
+	writePhases("---\nstatus: current\n---\n# Phases\n")
+	if got := eng.currentPhase(); got != "unknown" {
+		t.Errorf("currentPhase = %q, want unknown", got)
+	}
+}

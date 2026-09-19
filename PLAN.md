@@ -28,16 +28,16 @@ Base: `feat/audit-fixes` (round 1 phases A–G merged). Phases continue the sequ
 
 ## Phase I — P1: real gaps
 
-- [ ] I1. `init` rejects wiki dirs that escape the repo (`..`, absolute, `.`)
-- [ ] I2. `currentPhase` prefers the last `in-progress` row, then the last
+- [x] I1. `init` rejects wiki dirs that escape the repo (`..`, absolute, `.`)
+- [x] I2. `currentPhase` prefers the last `in-progress` row, then the last
       `completed`, then the last row (today: last row regardless of status)
-- [ ] I3. Front matter inline-`#` stripping only for unquoted values and only
+- [x] I3. Front matter inline-`#` stripping only for unquoted values and only
       after whitespace (`description: "C# guide"` stays intact)
-- [ ] I4. Strict `parseInt`/`parseFloat` (`1.5`, `12x` no longer become 15/12);
+- [x] I4. Strict `parseInt`/`parseFloat` (`1.5`, `12x` no longer become 15/12);
       invalid values warn and fall back
-- [ ] Tests: `TestInitRejectsTraversalWikiDir`, `TestCurrentPhasePreferences`,
-      `TestParseFrontMatterHashInValue`, strict config parse cases
-- [ ] Docs: config.md; CHANGELOG
+- [x] Tests: `TestInitRejectsTraversalWikiDir`, `TestCurrentPhasePreferences`,
+      `TestParseFrontMatterHashInValue`, `TestStrictNumericParsing`
+- [x] Docs: config.md; CHANGELOG
 
 ## Phase J — P2a: robustness & hygiene
 
@@ -68,6 +68,6 @@ Base: `feat/audit-fixes` (round 1 phases A–G merged). Phases continue the sequ
 | Phase | Status | Commit |
 |---|---|---|
 | H — P0 silent misbehavior | ✅ | `fix: parse single-line ignore arrays; reject empty wiki_dir; JSON usage envelopes` |
-| I — P1 real gaps | ⬜ | — |
+| I — P1 real gaps | ✅ | `fix: reject escaping wiki dirs; active-phase preferences; YAML # rules; strict numeric parsing` |
 | J — P2a robustness & hygiene | ⬜ | — |
 | K — P2b consistency & ergonomics | ⬜ | — |

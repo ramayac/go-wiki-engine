@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -171,52 +172,25 @@ func parseInt(s string, fallback int) int {
 	if s == "" {
 		return fallback
 	}
-	if s == "0" {
-		return 0
-	}
-	n := 0
-	hasDigit := false
-	for _, c := range s {
-		if c >= '0' && c <= '9' {
-			n = n*10 + int(c-'0')
-			hasDigit = true
-		}
-	}
-	if !hasDigit {
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: invalid integer value %q; using %d\n", s, fallback)
 		return fallback
 	}
 	return n
 }
 
 func parseFloat(s string, fallback float64) float64 {
-	// Simple parser: extract digits and one decimal point.
-	var result float64
-	decimal := false
-	divisor := 1.0
-	hasDigit := false
-	for _, c := range s {
-		if c == '.' && !decimal {
-			decimal = true
-			continue
-		}
-		if c >= '0' && c <= '9' {
-			hasDigit = true
-			d := float64(c - '0')
-			if decimal {
-				divisor *= 10
-				result += d / divisor
-			} else {
-				result = result*10 + d
-			}
-		}
-	}
-	if !hasDigit {
+	s = strings.TrimSpace(s)
+	if s == "" {
 		return fallback
 	}
-	if result < 0 || result > 1 {
+	f, err := strconv.ParseFloat(s, 64)
+	if err != nil || f < 0 || f > 1 {
+		fmt.Fprintf(os.Stderr, "warning: invalid value %q; using %v\n", s, fallback)
 		return fallback
 	}
-	return result
+	return f
 }
 
 func parseBool(s string, fallback bool) bool {

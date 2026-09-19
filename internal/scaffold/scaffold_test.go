@@ -427,3 +427,16 @@ func TestSyncPromptsPreservesUserFiles(t *testing.T) {
 		t.Error("SyncPrompts did not remove stale wiki-managed file wiki-old.prompt.md")
 	}
 }
+
+func TestInitRejectsTraversalWikiDir(t *testing.T) {
+	dest := t.TempDir()
+	for _, bad := range []string{"../escape", "../../escape", ".", "..", "/absolute/path"} {
+		if err := Init(dest, bad); err == nil {
+			t.Errorf("Init with wiki dir %q should fail, got nil error", bad)
+		}
+	}
+	// A clean nested directory is still fine.
+	if err := Init(t.TempDir(), "docs/wiki"); err != nil {
+		t.Errorf("Init with nested wiki dir should succeed: %v", err)
+	}
+}

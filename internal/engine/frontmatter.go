@@ -89,9 +89,13 @@ func ParseFrontMatter(content string) (FrontMatter, bool, error) {
 		key := strings.TrimSpace(parts[0])
 		val := strings.TrimSpace(parts[1])
 
-		// Strip inline comment if any
-		if idx := strings.Index(val, "#"); idx != -1 {
-			val = strings.TrimSpace(val[:idx])
+		// Strip inline comments: YAML treats # as a comment only outside
+		// quotes and only after whitespace (or at the start of the value).
+		// Values like `description: "C# guide"` must survive intact.
+		if !strings.HasPrefix(val, `"`) && !strings.HasPrefix(val, `'`) {
+			if idx := strings.Index(val, "#"); idx != -1 && (idx == 0 || val[idx-1] == ' ' || val[idx-1] == '\t') {
+				val = strings.TrimSpace(val[:idx])
+			}
 		}
 
 		// Strip quotes if present

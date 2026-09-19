@@ -33,6 +33,10 @@ log_lines = 10
 | Default | `10` |
 |--------:|------|
 
+All numeric values are parsed strictly: invalid values (e.g. `log_lines = "1.5"`)
+warn on load and fall back to the default instead of being silently
+misinterpreted.
+
 ## Detection Thresholds
 
 ### `duplicate_threshold`

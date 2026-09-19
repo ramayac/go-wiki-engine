@@ -443,7 +443,10 @@ func parseIndexCatalog(content string) []ContextEntry {
 	return entries
 }
 
-// currentPhase reads the active phase status from phases.md.
+// currentPhase reads the active phase status from phases.md. Preference
+// order: the last in-progress row, then the last completed row, then the
+// last row — a trailing not-started row must not masquerade as the active
+// phase while an earlier phase is still in flight.
 func (e *Engine) currentPhase() string {
 	phasesRel := e.resolveWikiFile("phases.md")
 	phasesPath := filepath.Join(e.WikiPath(), filepath.FromSlash(phasesRel))
@@ -454,21 +457,35 @@ func (e *Engine) currentPhase() string {
 	defer func() { _ = f.Close() }()
 
 	phaseRowRe := regexp.MustCompile(`^\|\s*(\d+)\s*\|\s*(.+?)\s*\|\s*(\S+)\s*\|`)
-	var last string
+	var last, lastInProgress, lastCompleted string
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		m := phaseRowRe.FindStringSubmatch(scanner.Text())
-		if m != nil {
-			last = fmt.Sprintf("Phase %s: %s — %s", m[1], strings.TrimSpace(m[2]), strings.TrimSpace(m[3]))
+		if m == nil {
+			continue
+		}
+		entry := fmt.Sprintf("Phase %s: %s — %s", m[1], strings.TrimSpace(m[2]), strings.TrimSpace(m[3]))
+		last = entry
+		switch strings.TrimSpace(m[3]) {
+		case "in-progress":
+			lastInProgress = entry
+		case "completed":
+			lastCompleted = entry
 		}
 	}
 	if err := scanner.Err(); err != nil {
 		return "unknown"
 	}
-	if last == "" {
+	switch {
+	case lastInProgress != "":
+		return lastInProgress
+	case lastCompleted != "":
+		return lastCompleted
+	case last != "":
+		return last
+	default:
 		return "unknown"
 	}
-	return last
 }
 
 // SummaryResult holds a concise page preview.

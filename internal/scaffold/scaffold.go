@@ -83,9 +83,27 @@ func syncShims(destDir string) ([]string, error) {
 	return created, nil
 }
 
+// validateWikiDir rejects wiki directory names that would escape the target
+// repository (absolute paths, ".." components) or otherwise make no sense.
+func validateWikiDir(name string) error {
+	if name == "" || name == "." || name == ".." {
+		return fmt.Errorf("invalid wiki directory name %q", name)
+	}
+	if filepath.IsAbs(name) {
+		return fmt.Errorf("wiki directory must be relative to the repository: %q", name)
+	}
+	if cleaned := filepath.Clean(name); cleaned == ".." || strings.HasPrefix(cleaned, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("wiki directory must stay inside the repository: %q", name)
+	}
+	return nil
+}
+
 // Init copies the scaffold into destDir. It refuses to overwrite an existing
 // wiki directory.
 func Init(destDir, wikiDir string) error {
+	if err := validateWikiDir(wikiDir); err != nil {
+		return err
+	}
 	wikiPath := filepath.Join(destDir, wikiDir)
 	if _, err := os.Stat(wikiPath); err == nil {
 		return fmt.Errorf("%s already exists; refusing to overwrite", wikiDir)
