@@ -47,6 +47,8 @@ surface is defined in [README.md](README.md).
 - `sync-prompts` now reports `updated` and `removed` separately (plain text and JSON) instead of mixing removal markers into the updated list.
 - `context --json` omits `line_count` unless summaries are computed; `search --` with no terms shows usage; the `init` `.wikirc` rewrite is regex-based and tolerant of template whitespace.
 - `context` rejects meaningless flag combinations (`--sort` without `--active`, `--minimal`/`--summarize` with `--active`) instead of silently ignoring them; `orphans` exempts `legacy`/`deprecated` pages like `leaf-pages` does; explicit help requests print to stdout.
+- `upgrade` pins the `go install` fallback to the discovered release tag when it is known, fsyncs the staged binary before swapping it in, and `stale-content` fetches all page commit dates in a single `git log` invocation.
+- `lint --json` carries the real diagnostic in the `error` field when the wiki directory is missing; `context --active` warns when unlinked-page detection fails.
 
 ## [0.x]
 

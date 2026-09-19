@@ -369,6 +369,9 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 			errMsg := ""
 			if !result.OK {
 				errMsg = "lint issues found"
+				if result.Reason != "" {
+					errMsg = result.Reason
+				}
 			}
 			writeJSONResult(result.Issues, result.OK, errMsg)
 			if !result.OK {
@@ -464,6 +467,7 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 			unlinked, uerr := eng.ActiveUnlinkedPages()
 			if uerr != nil {
 				unlinked = nil
+				fmt.Fprintf(os.Stderr, "warning: active unlinked pages unavailable: %v\n", uerr)
 			}
 
 			if useJSON {

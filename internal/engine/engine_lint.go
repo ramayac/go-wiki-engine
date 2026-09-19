@@ -61,6 +61,9 @@ type LintResult struct {
 	OK       bool
 	Messages []string // kept for backward compatibility with tests + Refresh()
 	Issues   []Issue
+	// Reason explains a failed gate when the issues list cannot (e.g. a
+	// missing wiki directory); empty for ordinary runs.
+	Reason string
 }
 
 // --- Checker implementations ---
@@ -887,28 +890,41 @@ func jaccardSimilarity(a, b map[string]bool) float64 {
 	return float64(intersection) / float64(union)
 }
 
-// pageLastModified returns the date the page was last modified, preferring the
-// last commit date from git history. This avoids the false "everything is
-// stale" signal that filesystem mtimes produce after a fresh clone (all files
-// share the checkout time). Falls back to mtime outside git repos or when git
-// fails.
-func (e *Engine) pageLastModified(rel string, info os.FileInfo) time.Time {
-	gitPath := filepath.ToSlash(filepath.Join(e.Cfg.WikiDir, rel))
-	cmd := exec.Command("git", "log", "-1", "--format=%cd", "--date=short", "--", gitPath)
+// pageCommitDates returns the last-commit date of every file under the wiki
+// directory in a single git invocation, keyed by repo-relative slash path.
+// Files that were never committed are absent from the map (callers fall back
+// to filesystem mtime, which is also the fallback when git is unavailable).
+func (e *Engine) pageCommitDates() (map[string]time.Time, error) {
+	cmd := exec.Command("git", "log", "--date=short", "--name-only", "--format=%cd", "--", e.Cfg.WikiDir+"/")
 	cmd.Dir = e.RootDir
 	out, err := cmd.Output()
 	if err != nil {
-		return info.ModTime()
+		return nil, err
 	}
-	s := strings.TrimSpace(string(out))
-	if s == "" {
-		return info.ModTime()
+
+	dates := make(map[string]time.Time)
+	dateRe := regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
+	var current time.Time
+	scanner := bufio.NewScanner(strings.NewReader(string(out)))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+		if dateRe.MatchString(line) {
+			if t, err := time.Parse("2006-01-02", line); err == nil {
+				current = t
+			}
+			continue
+		}
+		// File line: first occurrence wins, which is the most recent commit
+		// because git log walks newest-first.
+		key := filepath.ToSlash(line)
+		if _, exists := dates[key]; !exists && !current.IsZero() {
+			dates[key] = current
+		}
 	}
-	t, err := time.Parse("2006-01-02", s)
-	if err != nil {
-		return info.ModTime()
-	}
-	return t
+	return dates, scanner.Err()
 }
 
 // staleContentChecker detects wiki pages that haven't been updated recently
@@ -928,6 +944,10 @@ func (c *staleContentChecker) Check(e *Engine) ([]Issue, error) {
 	// Check if there are active source changes (if not, everything is "stale" which is noisy).
 	changed, _ := e.Changed(e.Cfg.DefaultDiff)
 	hasSourceChanges := len(changed) > 0
+
+	// One git invocation for every page's last commit date. Falls back to
+	// per-file mtime when git is unavailable or a page has no commits yet.
+	commitDates, _ := e.pageCommitDates()
 
 	// Walk wiki .md files.
 	_ = filepath.WalkDir(wikiDir, func(path string, d os.DirEntry, err error) error {
@@ -950,7 +970,15 @@ func (c *staleContentChecker) Check(e *Engine) ([]Issue, error) {
 			return nil
 		}
 
-		if e.pageLastModified(rel, info).Before(staleThreshold) {
+		lastMod := info.ModTime()
+		if commitDates != nil {
+			key := filepath.ToSlash(filepath.Join(e.Cfg.WikiDir, wikiRel))
+			if t, ok := commitDates[key]; ok && !t.IsZero() {
+				lastMod = t
+			}
+		}
+
+		if lastMod.Before(staleThreshold) {
 			severity := SevInfo
 			msg := fmt.Sprintf("not updated in %d+ days", e.Cfg.StaleDays)
 			if hasSourceChanges {
@@ -1364,6 +1392,7 @@ func (e *Engine) LintWithOptions(check []string, skip []string) LintResult {
 				File:     e.Cfg.WikiDir,
 				Message:  msg,
 			}},
+			Reason: msg,
 		}
 	}
 

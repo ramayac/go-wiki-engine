@@ -63,6 +63,22 @@ Base: `feat/audit-fixes` (round 1 phases A–G merged). Phases continue the sequ
 - [x] Tests: integration combo rejection + help stream, `TestLintOrphansSkipsNonActive`
 - [x] Docs: repo-map context row, operations/lint.md note; CHANGELOG
 
+## Phase L — Final small fixes (release polish)
+
+- [x] L1. `upgrade` fallback pinned to the discovered release tag
+      (`go install ...@vX.Y.Z`) when the tag is known; `@latest` only when the
+      tag lookup itself failed (prevents version skew)
+- [x] L2. `context --active` warns on stderr when unlinked-page detection fails
+      instead of silently dropping the list
+- [x] L3. `replaceExecutable` fsyncs the staged binary before the rename
+      (no zero-length binary on power loss)
+- [x] L4. `lint --json` on a missing wiki dir carries the real diagnostic in
+      the envelope `error` field (`LintResult.Reason`)
+- [x] L5. `stale-content` fetches all page commit dates in one `git log` call
+      instead of one process spawn per page
+- [x] Tests: fallback pinning assertions, integration missing-wiki-dir error field
+- [x] Docs: CHANGELOG
+
 ## Status
 
 | Phase | Status | Commit |
@@ -71,7 +87,8 @@ Base: `feat/audit-fixes` (round 1 phases A–G merged). Phases continue the sequ
 | I — P1 real gaps | ✅ | `fix: reject escaping wiki dirs; active-phase preferences; YAML # rules; strict numeric parsing` |
 | J — P2a robustness & hygiene | ✅ | `fix: cap upgrade downloads; search .md only; separate sync removed list` |
 | K — P2b consistency & ergonomics | ✅ | `fix: reject meaningless context flag combos; orphans lifecycle rule; help on stdout` |
+| L — Final small fixes | ✅ | `fix: pin upgrade fallback to the release tag; fsync swap; batched stale dates; lint reason` |
 
-**Round 2 complete.** Branch `feat/audit-fixes` carries both rounds.
+**Rounds 1–3 complete.** Branch `feat/audit-fixes` carries all rounds.
 Final gates: `make test` (6 packages), `make lint`, `make audit`,
 `make integration`, plus `go test -race ./...` and `make golangci-lint`.

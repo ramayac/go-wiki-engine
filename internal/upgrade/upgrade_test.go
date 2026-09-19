@@ -183,17 +183,17 @@ func newUpgradeServer(t *testing.T, tag, assetName string, assetData []byte, che
 }
 
 // stubFallback replaces fallbackInstaller for the duration of a test and
-// returns a flag recording whether it was called.
-func stubFallback(t *testing.T) *bool {
+// records the module path it was asked to install.
+func stubFallback(t *testing.T) *string {
 	t.Helper()
-	called := false
+	var installed string
 	old := fallbackInstaller
-	fallbackInstaller = func() error {
-		called = true
+	fallbackInstaller = func(modulePath string) error {
+		installed = modulePath
 		return nil
 	}
 	t.Cleanup(func() { fallbackInstaller = old })
-	return &called
+	return &installed
 }
 
 func TestRunSuccess(t *testing.T) {
@@ -214,7 +214,7 @@ func TestRunSuccess(t *testing.T) {
 	if err := run(server.URL, dest); err != nil {
 		t.Fatalf("run failed: %v", err)
 	}
-	if *fallbackCalled {
+	if *fallbackCalled != "" {
 		t.Error("fallback invoked unexpectedly on the success path")
 	}
 	got, err := os.ReadFile(dest)
@@ -246,7 +246,7 @@ func TestRunChecksumMismatch(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "checksum validation failed") {
 		t.Fatalf("expected checksum validation error, got: %v", err)
 	}
-	if *fallbackCalled {
+	if *fallbackCalled != "" {
 		t.Error("fallback should not run after a checksum failure")
 	}
 	got, err := os.ReadFile(dest)
@@ -278,8 +278,11 @@ func TestRunFallsBackWhenNoMatchingAsset(t *testing.T) {
 	if err := run(server.URL, dest); err != nil {
 		t.Fatalf("run should fall back cleanly, got error: %v", err)
 	}
-	if !*fallbackCalled {
+	if *fallbackCalled == "" {
 		t.Error("expected fallback to be invoked when no asset matches")
+	}
+	if *fallbackCalled != modulePrefix+"@"+tag {
+		t.Errorf("fallback should be pinned to the discovered tag, got %q", *fallbackCalled)
 	}
 	got, err := os.ReadFile(dest)
 	if err != nil {
@@ -305,8 +308,8 @@ func TestRunFallsBackOnLatestTagError(t *testing.T) {
 	if err := run(server.URL, dest); err != nil {
 		t.Fatalf("run should fall back cleanly, got error: %v", err)
 	}
-	if !*fallbackCalled {
-		t.Error("expected fallback to be invoked when the latest-tag lookup fails")
+	if *fallbackCalled != module {
+		t.Errorf("fallback without a known tag should install @latest, got %q", *fallbackCalled)
 	}
 }
 
@@ -330,7 +333,7 @@ func TestRunExtractFailure(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "failed to extract binary") {
 		t.Fatalf("expected extraction error, got: %v", err)
 	}
-	if *fallbackCalled {
+	if *fallbackCalled != "" {
 		t.Error("fallback should not run after checksum-verified extraction failure")
 	}
 }

@@ -245,6 +245,18 @@ out=$("$BIN" --json lint 2>/dev/null || true)
 echo "$out" | grep -q '"ok": false' || { echo "FAIL: failing lint should report ok:false"; exit 1; }
 echo "  ok"
 
+# Test: lint on a missing wiki dir carries the diagnostic in the error field
+echo "--- json lint missing wiki dir ---"
+mkdir -p "$TMPDIR/nowikit"
+cd "$TMPDIR/nowikit"
+git init -q -b main
+git config user.email "test@test"
+git config user.name "Test"
+out=$("$BIN" --json lint 2>/dev/null || true)
+echo "$out" | grep -q '"error": "wiki directory not found' || { echo "FAIL: missing wiki dir should carry the diagnostic in the error field"; exit 1; }
+cd "$TMPDIR"
+echo "  ok"
+
 # Test: duplicate_threshold = 0 disables duplicate detection
 echo "--- duplicate_threshold 0 ---"
 echo 'duplicate_threshold = 0' >> .wikirc

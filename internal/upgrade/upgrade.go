@@ -31,6 +31,9 @@ var upgradeHTTPClient = &http.Client{
 
 const module = "github.com/ramayac/go-wiki-engine/cmd/wiki-engine@latest"
 
+// modulePrefix is the installable module path without a version suffix.
+const modulePrefix = "github.com/ramayac/go-wiki-engine/cmd/wiki-engine"
+
 // maxDownloadSize caps release downloads before checksum verification, so a
 // broken or hostile release endpoint cannot exhaust memory. It is a variable
 // so tests can lower it.
@@ -42,18 +45,18 @@ var repoURL = "https://github.com/ramayac/go-wiki-engine"
 
 // fallbackInstaller runs the `go install` fallback. It is a variable so
 // tests can stub it without invoking the real Go toolchain.
-var fallbackInstaller = func() error {
+var fallbackInstaller = func(modulePath string) error {
 	gobin, err := exec.LookPath("go")
 	if err != nil {
 		return fmt.Errorf("go not found in PATH; install Go or download a release binary from GitHub")
 	}
 
-	cmd := exec.Command(gobin, "install", module)
+	cmd := exec.Command(gobin, "install", modulePath)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Env = os.Environ()
 
-	fmt.Fprintf(os.Stderr, "running: go install %s\n", module)
+	fmt.Fprintf(os.Stderr, "running: go install %s\n", modulePath)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("upgrade fallback failed: %w", err)
 	}
@@ -82,7 +85,7 @@ func run(baseURL, executablePath string) error {
 	tag, err := getLatestTag(baseURL)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warning: failed to get latest release tag: %v\n", err)
-		return fallbackGoInstall()
+		return fallbackGoInstall("")
 	}
 	fmt.Fprintf(os.Stderr, "latest release version is %s\n", tag)
 
@@ -92,14 +95,14 @@ func run(baseURL, executablePath string) error {
 	checksumsData, err := downloadBytes(checksumsURL)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warning: failed to download checksums: %v\n", err)
-		return fallbackGoInstall()
+		return fallbackGoInstall(tag)
 	}
 
 	// Parse checksums to match our OS and Arch
 	assetName, expectedHash, err := matchAssetInChecksums(string(checksumsData), runtime.GOOS, runtime.GOARCH)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warning: %v\n", err)
-		return fallbackGoInstall()
+		return fallbackGoInstall(tag)
 	}
 	fmt.Fprintf(os.Stderr, "matched release asset: %s (expected hash: %s)\n", assetName, expectedHash)
 
@@ -109,7 +112,7 @@ func run(baseURL, executablePath string) error {
 	assetData, err := downloadBytes(assetURL)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warning: failed to download asset: %v\n", err)
-		return fallbackGoInstall()
+		return fallbackGoInstall(tag)
 	}
 
 	// Verify SHA-256 checksum
@@ -298,6 +301,12 @@ func replaceExecutable(executablePath string, newBytes []byte) error {
 		_ = tmpFile.Close()
 		return err
 	}
+	// Flush to disk before the rename so a power loss cannot leave a
+	// zero-length replacement binary.
+	if err := tmpFile.Sync(); err != nil {
+		_ = tmpFile.Close()
+		return err
+	}
 	if err := tmpFile.Close(); err != nil {
 		return err
 	}
@@ -322,7 +331,14 @@ func replaceExecutable(executablePath string, newBytes []byte) error {
 	return nil
 }
 
-func fallbackGoInstall() error {
+func fallbackGoInstall(tag string) error {
 	fmt.Fprintln(os.Stderr, "falling back to `go install`...")
-	return fallbackInstaller()
+	// Pin the install to the discovered release tag when it is known: a
+	// failed binary download must not silently install something newer
+	// than the checksum-verified release.
+	target := module
+	if tag != "" {
+		target = modulePrefix + "@" + tag
+	}
+	return fallbackInstaller(target)
 }
