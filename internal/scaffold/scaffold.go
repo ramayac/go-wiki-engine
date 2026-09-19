@@ -191,9 +191,35 @@ func SyncPrompts(destDir string) ([]string, error) {
 	return updated, err
 }
 
-// cleanOrphanedFiles removes files in the destination sync directories
-// that no longer exist in the embedded FS. Only files within the known
-// sync prefixes are considered — wiki/ and .wikirc are never touched.
+// retiredWikiFiles are files this tool once shipped in its sync directories
+// and later removed. sync-prompts still cleans them up, but they cannot be
+// matched by the wiki-* naming rule because their old names had no prefix.
+var retiredWikiFiles = map[string]bool{
+	"migrate-shims.md": true,
+	"summarize.md":     true,
+}
+
+// isWikiManaged reports whether a destination file inside one of the sync
+// prefixes is owned by wiki-engine and therefore safe to remove when it no
+// longer exists in the embedded FS. User-added files (custom slash commands,
+// extra prompts, unrelated skills) are never managed.
+func isWikiManaged(relRoot, rel string) bool {
+	// The pi.dev integration owns only the wiki/ skill directory.
+	if relRoot == ".pi/skills" {
+		return strings.HasPrefix(rel, "wiki/")
+	}
+	base := filepath.Base(rel)
+	if strings.HasPrefix(base, "wiki-") {
+		return true
+	}
+	return retiredWikiFiles[base]
+}
+
+// cleanOrphanedFiles removes wiki-managed files in the destination sync
+// directories that no longer exist in the embedded FS. Only files within the
+// known sync prefixes are considered — wiki/ and .wikirc are never touched,
+// and files not managed by wiki-engine (e.g. a user's own slash command) are
+// always preserved.
 func cleanOrphanedFiles(destDir string, embedPrefixes []string, cleaned *[]string) {
 	// Build the set of all known embedded paths (relative to destDir).
 	known := make(map[string]bool)
@@ -208,7 +234,7 @@ func cleanOrphanedFiles(destDir string, embedPrefixes []string, cleaned *[]strin
 		})
 	}
 
-	// Walk each destination prefix and remove files not in known.
+	// Walk each destination prefix and remove only wiki-managed files not in known.
 	for _, prefix := range embedPrefixes {
 		relRoot, _ := filepath.Rel("files", prefix)
 		walkRoot := filepath.Join(destDir, relRoot)
@@ -217,10 +243,13 @@ func cleanOrphanedFiles(destDir string, embedPrefixes []string, cleaned *[]strin
 				return err
 			}
 			rel, _ := filepath.Rel(destDir, path)
-			if !known[rel] {
-				if err := os.Remove(path); err == nil {
-					*cleaned = append(*cleaned, "removed "+rel)
-				}
+			relToRoot, _ := filepath.Rel(relRoot, rel)
+			relToRoot = filepath.ToSlash(relToRoot)
+			if known[rel] || !isWikiManaged(relRoot, relToRoot) {
+				return nil
+			}
+			if err := os.Remove(path); err == nil {
+				*cleaned = append(*cleaned, "removed "+rel)
 			}
 			return nil
 		})

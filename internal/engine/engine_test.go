@@ -1179,3 +1179,68 @@ func TestActiveUnlinkedPages(t *testing.T) {
 		t.Errorf("expected unlinked.md in active unlinked pages, got %v", unlinked)
 	}
 }
+
+func TestDiffInvalidRef(t *testing.T) {
+	root := setupWiki(t)
+	eng := newTestEngine(root)
+
+	gitCmd := func(args ...string) {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = root
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v failed: %v\n%s", args, err, out)
+		}
+	}
+	gitCmd("init", "-q", "-b", "main")
+	gitCmd("config", "user.email", "test@test")
+	gitCmd("config", "user.name", "Test")
+	gitCmd("add", ".")
+	gitCmd("commit", "-q", "-m", "init")
+
+	if _, err := eng.Diff("does-not-exist", "HEAD"); err == nil {
+		t.Error("Diff with an invalid from-ref should fail, got nil error")
+	}
+	if _, err := eng.Diff("HEAD", "does-not-exist"); err == nil {
+		t.Error("Diff with an invalid to-ref should fail, got nil error")
+	}
+
+	// Valid refs still work.
+	dr, err := eng.Diff("HEAD", "HEAD")
+	if err != nil {
+		t.Fatalf("Diff(HEAD, HEAD) failed: %v", err)
+	}
+	if len(dr.Added)+len(dr.Removed)+len(dr.Changed) != 0 {
+		t.Errorf("Diff(HEAD, HEAD) should be empty, got added=%v removed=%v changed=%v", dr.Added, dr.Removed, dr.Changed)
+	}
+}
+
+func TestDiffRefsBeforeWikiExisted(t *testing.T) {
+	root := t.TempDir()
+	eng := newTestEngine(root)
+
+	gitCmd := func(args ...string) {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = root
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v failed: %v\n%s", args, err, out)
+		}
+	}
+	gitCmd("init", "-q", "-b", "main")
+	gitCmd("config", "user.email", "test@test")
+	gitCmd("config", "user.name", "Test")
+	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitCmd("add", ".")
+	gitCmd("commit", "-q", "-m", "before wiki")
+
+	// A ref that predates the wiki directory must not error — it has no
+	// wiki files, not an invalid diff.
+	dr, err := eng.Diff("HEAD", "HEAD")
+	if err != nil {
+		t.Fatalf("Diff between refs without a wiki should not error: %v", err)
+	}
+	if len(dr.Added)+len(dr.Removed)+len(dr.Changed) != 0 {
+		t.Errorf("expected empty diff before the wiki existed, got added=%v removed=%v changed=%v", dr.Added, dr.Removed, dr.Changed)
+	}
+}

@@ -52,7 +52,7 @@ scaffold/               Human-readable reference copy of embedded templates
 | Command | What it does |
 |---|---|
 | `init [wiki-dir]` | Scaffold wiki, .wikirc, prompts for all tools, instructions, and AGENTS.md/CLAUDE.md shims into the current repo |
-| `sync-prompts` | Overwrite `.wiki-instructions/`, `.github/`, and `.claude/commands/` with current embedded versions (safe to run after upgrade) |
+| `sync-prompts` | Overwrite `.wiki-instructions/`, `.github/`, `.claude/commands/`, and `.pi/skills/` with current embedded versions; removes only retired wiki-managed files, never user files (safe to run after upgrade) |
 | `list` | List all files under `wiki_dir` |
 | `headings` | List all Markdown headings across wiki files |
 | `search <query>` | Case-insensitive full-text search across wiki files |

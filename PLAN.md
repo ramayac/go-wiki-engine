@@ -18,13 +18,14 @@ Base: `release/1.0-readiness`. Every phase commits once and only when `make test
 
 Fix the two release blockers: data loss and false success.
 
-- [ ] A1. `sync-prompts` must never delete user-owned files: `cleanOrphanedFiles`
+- [x] A1. `sync-prompts` must never delete user-owned files: `cleanOrphanedFiles`
       removes only wiki-managed files (`wiki-*` basename, `.pi/skills/wiki/`,
       explicit retired list: migrate-shims.md, summarize.md)
-- [ ] A2. `diff` must fail loudly on invalid git refs: `filesAtRef` verifies refs
+- [x] A2. `diff` must fail loudly on invalid git refs: `filesAtRef` verifies refs
       via `git rev-parse --verify`, `Diff` propagates every error
-- [ ] Tests: `TestSyncPromptsPreservesUserFiles`, `TestDiffInvalidRef`
-- [ ] Docs: repo-map `sync-prompts` row; CHANGELOG `[Unreleased] → Fixed`
+- [x] Tests: `TestSyncPromptsPreservesUserFiles`, `TestDiffInvalidRef`,
+      `TestDiffRefsBeforeWikiExisted`
+- [x] Docs: repo-map `sync-prompts` row; CHANGELOG `[Unreleased] → Fixed`
 
 ## Phase B — JSON contract everywhere
 
@@ -90,7 +91,7 @@ Fix the two release blockers: data loss and false success.
 
 | Phase | Status | Commit |
 |---|---|---|
-| A — Critical correctness | ⬜ | — |
+| A — Critical correctness | ✅ | `fix: sync-prompts must not delete user files; diff fails loudly on invalid refs` |
 | B — JSON contract | ⬜ | — |
 | C — Lint gate integrity | ⬜ | — |
 | D — Context summarize | ⬜ | — |

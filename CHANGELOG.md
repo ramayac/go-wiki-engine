@@ -22,6 +22,11 @@ surface is defined in [README.md](README.md).
 - File scanners now propagate scan errors instead of swallowing them.
 - `wiki-engine upgrade` internals refactored so the download flow is injectable and testable.
 
+### Fixed
+
+- `sync-prompts` no longer deletes user-owned files (custom slash commands, prompts, skills) in the sync directories — only wiki-managed files are cleaned up.
+- `diff` now fails loudly on invalid git refs instead of reporting garbage output with exit code 0.
+
 ## [0.x]
 
 Legacy pre-1.0 releases (tags `0.1.0`, `v.0.5.0`). Consolidated from the wiki

@@ -379,3 +379,51 @@ func TestSyncPromptsRemovesOrphans(t *testing.T) {
 		t.Error("SyncPrompts did not report orphan removal in updated list")
 	}
 }
+
+func TestSyncPromptsPreservesUserFiles(t *testing.T) {
+	dest := t.TempDir()
+
+	// First sync to populate the destination.
+	if _, err := SyncPrompts(dest); err != nil {
+		t.Fatalf("first SyncPrompts failed: %v", err)
+	}
+
+	// User-owned files that sync-prompts must never touch.
+	userFiles := []string{
+		".claude/commands/review.md",
+		".github/prompts/team-release.prompt.md",
+		".wiki-instructions/deploy.md",
+		".pi/skills/other/SKILL.md",
+	}
+	for _, f := range userFiles {
+		p := filepath.Join(dest, filepath.FromSlash(f))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte("user content"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// A wiki-managed file that no longer ships in the scaffold must still
+	// be removed (the cleanup path that motivated this whole mechanism).
+	staleManaged := filepath.Join(dest, ".github", "prompts", "wiki-old.prompt.md")
+	if err := os.WriteFile(staleManaged, []byte("stale"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Second sync: user files survive, wiki-managed orphan is removed.
+	if _, err := SyncPrompts(dest); err != nil {
+		t.Fatalf("second SyncPrompts failed: %v", err)
+	}
+
+	for _, f := range userFiles {
+		p := filepath.Join(dest, filepath.FromSlash(f))
+		if _, err := os.Stat(p); os.IsNotExist(err) {
+			t.Errorf("SyncPrompts deleted user-owned file %s", f)
+		}
+	}
+	if _, err := os.Stat(staleManaged); !os.IsNotExist(err) {
+		t.Error("SyncPrompts did not remove stale wiki-managed file wiki-old.prompt.md")
+	}
+}

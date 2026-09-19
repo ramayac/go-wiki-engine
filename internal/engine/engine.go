@@ -744,9 +744,17 @@ type DiffResult struct {
 func (e *Engine) Diff(from, to string) (*DiffResult, error) {
 	dr := &DiffResult{From: from, To: to}
 
-	// List wiki files at <from>.
-	fromFiles, _ := e.filesAtRef(from)
-	toFiles, _ := e.filesAtRef(to)
+	// List wiki files at <from> and <to>. Invalid refs must fail loudly —
+	// silently treating them as empty produced garbage output (everything
+	// "added") with exit code 0.
+	fromFiles, err := e.filesAtRef(from)
+	if err != nil {
+		return nil, fmt.Errorf("listing wiki files at %q: %w", from, err)
+	}
+	toFiles, err := e.filesAtRef(to)
+	if err != nil {
+		return nil, fmt.Errorf("listing wiki files at %q: %w", to, err)
+	}
 
 	fromSet := make(map[string]bool)
 	toSet := make(map[string]bool)
@@ -755,6 +763,12 @@ func (e *Engine) Diff(from, to string) (*DiffResult, error) {
 	}
 	for _, f := range toFiles {
 		toSet[f] = true
+	}
+
+	// Neither ref has a wiki directory (e.g. history points before the wiki
+	// was scaffolded) — nothing to compare, nothing changed.
+	if len(fromFiles) == 0 && len(toFiles) == 0 {
+		return dr, nil
 	}
 
 	// Added in <to> but not in <from>.
@@ -771,19 +785,33 @@ func (e *Engine) Diff(from, to string) (*DiffResult, error) {
 	}
 	// Changed (present in both, but modified).
 	changedOut, err := e.changedWikiFiles(from + ".." + to)
-	if err == nil {
-		dr.Changed = changedOut
+	if err != nil {
+		return nil, fmt.Errorf("computing changed wiki files between %q and %q: %w", from, to, err)
 	}
+	dr.Changed = changedOut
 
 	return dr, nil
 }
 
-// filesAtRef lists wiki files at a given git ref.
+// filesAtRef lists wiki files at a given git ref. The ref must exist — an
+// invalid ref is an error, not an empty list. If the ref exists but has no
+// wiki directory (e.g. a history point before the wiki was scaffolded),
+// the list is empty.
 func (e *Engine) filesAtRef(ref string) ([]string, error) {
+	check := exec.Command("git", "rev-parse", "--verify", "--quiet", ref+"^{commit}")
+	check.Dir = e.RootDir
+	out, err := check.Output()
+	if err != nil || strings.TrimSpace(string(out)) == "" {
+		return nil, fmt.Errorf("invalid git ref %q", ref)
+	}
+
 	cmd := exec.Command("git", "ls-tree", "-r", "--name-only", ref, e.Cfg.WikiDir+"/")
 	cmd.Dir = e.RootDir
-	out, err := cmd.Output()
+	out, err = cmd.Output()
 	if err != nil {
+		if ee, ok := err.(*exec.ExitError); ok && strings.Contains(string(ee.Stderr), "did not match") {
+			return nil, nil // wiki did not exist at this ref
+		}
 		return nil, err
 	}
 	var files []string
