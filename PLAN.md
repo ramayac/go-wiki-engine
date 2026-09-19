@@ -8,11 +8,11 @@ Base: `release/1.0-readiness`. Every phase commits once and only when `make test
 
 ## Definition of done (all phases)
 
-- [ ] Fix implemented, matching existing code style
-- [ ] Unit test proves the fix (negative scenarios included)
-- [ ] Docs/prompts updated to match behavior
-- [ ] `make test && make lint && make audit && make integration` green
-- [ ] PLAN.md checkboxes updated, one commit per phase
+- [x] Fix implemented, matching existing code style
+- [x] Unit test proves the fix (negative scenarios included)
+- [x] Docs/prompts updated to match behavior
+- [x] `make test && make lint && make audit && make integration` green
+- [x] PLAN.md checkboxes updated, one commit per phase
 
 ## Phase A — Critical correctness
 
@@ -102,3 +102,7 @@ Fix the two release blockers: data loss and false success.
 | E — Error propagation & resources | ✅ | `fix: propagate scanner open errors; per-file FD hygiene; verify upgraded binary` |
 | F — Unix ergonomics | ✅ | `fix: -- flag terminator and -h after commands` |
 | G — Prompt & doc polish | ✅ | `fix: prompt polish — onboard shim lists all commands, upgrade wording, changed row` |
+
+**All phases complete.** Branch `feat/audit-fixes` is ready for review/merge.
+Final gates: `make test` (6 packages), `make lint`, `make audit`,
+`make integration`, `go test -race ./...` (6 packages), `make golangci-lint` (0 issues).
