@@ -36,6 +36,7 @@ surface is defined in [README.md](README.md).
 - `markers` checker and `upgrade` zip extraction close files per iteration (file-descriptor hygiene).
 - `upgrade` verifies the replacement binary by running `wiki-engine version` after the swap.
 - Added a `--` flag terminator for free-form commands (`search`, `impact`) so arguments starting with dashes can be searched literally; `--` also protects a literal `--json` argument, and `-h`/`--help` works after any command.
+- Prompt polish: the onboard shim template now lists all seven slash commands, and the upgrade workflow wording matches the new post-upgrade version verification.
 
 ## [0.x]
 

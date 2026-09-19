@@ -84,12 +84,12 @@ Fix the two release blockers: data loss and false success.
 
 ## Phase G — Prompt & doc polish
 
-- [ ] G1. `onboard.md` shim template lists all 7 slash commands (live + scaffold + sync)
-- [ ] G2. `upgrade.md` wording: "confirming the new version" (matches new behavior)
-- [ ] G3. repo-map `changed` row: drop the "non-ignored" claim (code never filtered ignores there)
-- [ ] G4. Append dated entry to `wiki/prologue/log.md` for this fix round
-- [ ] Tests: `make audit` (instruction-layer identity), full gate suite
-- [ ] Docs: CHANGELOG final pass
+- [x] G1. `onboard.md` shim template lists all 7 slash commands (live + scaffold + sync)
+- [x] G2. `upgrade.md` wording: "confirming the new version" (matches new behavior)
+- [x] G3. repo-map `changed` row: drop the "non-ignored" claim (code never filtered ignores there)
+- [x] G4. Append dated entry to `wiki/prologue/log.md` for this fix round
+- [x] Tests: `make audit` (instruction-layer identity), full gate suite
+- [x] Docs: CHANGELOG final pass
 
 ## Status
 
@@ -101,4 +101,4 @@ Fix the two release blockers: data loss and false success.
 | D — Context summarize | ✅ | `fix: plain context --summarize shows previews; reject --active --summarize` |
 | E — Error propagation & resources | ✅ | `fix: propagate scanner open errors; per-file FD hygiene; verify upgraded binary` |
 | F — Unix ergonomics | ✅ | `fix: -- flag terminator and -h after commands` |
-| G — Prompt & doc polish | ⬜ | — |
+| G — Prompt & doc polish | ✅ | `fix: prompt polish — onboard shim lists all commands, upgrade wording, changed row` |

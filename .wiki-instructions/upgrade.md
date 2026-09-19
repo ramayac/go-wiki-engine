@@ -25,4 +25,4 @@ Upgrade the wiki-engine CLI and synchronize all instructions, then verify wiki i
    wiki-engine context --active
    ```
 
-Finish by summarizing that the upgrade is complete, listing the new versions, and confirming that the linter and active graph are healthy.
+Finish by summarizing that the upgrade is complete, confirming the new version, and confirming that the linter and active graph are healthy.
