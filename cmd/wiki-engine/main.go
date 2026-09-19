@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime/debug"
@@ -19,6 +20,11 @@ import (
 // Set by -ldflags at build time. Falls back to embedded module version when
 // installed via `go install` without ldflags (e.g. after `wiki-engine upgrade`).
 var version = "dev"
+
+// useJSONMode records whether --json was requested for this invocation. It is
+// set at the top of main() so fatal() can honor the JSON envelope contract on
+// error paths.
+var useJSONMode bool
 
 func getVersion() string {
 	if version != "dev" {
@@ -46,13 +52,18 @@ func argsAfterFilters() ([]string, bool) {
 
 // writeJSON writes the standard success envelope.
 func writeJSON(data interface{}) {
-	writeJSONResult(data, true, "")
+	writeJSONResultTo(os.Stdout, data, true, "")
 }
 
 // writeJSONResult writes the standard envelope with an explicit OK status.
 // errMsg is emitted only when ok is false.
 func writeJSONResult(data interface{}, ok bool, errMsg string) {
-	enc := json.NewEncoder(os.Stdout)
+	writeJSONResultTo(os.Stdout, data, ok, errMsg)
+}
+
+// writeJSONResultTo writes the standard envelope to w.
+func writeJSONResultTo(w io.Writer, data interface{}, ok bool, errMsg string) {
+	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
 	out := engine.JSONOutput{OK: ok, Data: data, Error: errMsg}
 	if err := enc.Encode(out); err != nil {
@@ -64,9 +75,14 @@ func writeJSONResult(data interface{}, ok bool, errMsg string) {
 func main() {
 	// Filter --json before command dispatch.
 	args, useJSON := argsAfterFilters()
+	useJSONMode = useJSON
 
 	if len(args) < 2 {
-		usage()
+		if useJSONMode {
+			writeJSONResult(nil, false, "no command given (see: wiki-engine help)")
+		} else {
+			usage()
+		}
 		os.Exit(1)
 	}
 
@@ -77,23 +93,30 @@ func main() {
 		if err := validateCommandArgs("init", args[2:]); err != nil {
 			fatal(err)
 		}
-		runInit(args)
+		runInit(args, useJSON)
 	case "sync-prompts":
 		if err := validateCommandArgs("sync-prompts", args[2:]); err != nil {
 			fatal(err)
 		}
-		runSyncPrompts()
+		runSyncPrompts(useJSON)
 	case "version":
 		if err := validateCommandArgs("version", args[2:]); err != nil {
 			fatal(err)
 		}
-		fmt.Println(getVersion())
+		if useJSON {
+			writeJSON(getVersion())
+		} else {
+			fmt.Println(getVersion())
+		}
 	case "upgrade":
 		if err := validateCommandArgs("upgrade", args[2:]); err != nil {
 			fatal(err)
 		}
 		if err := upgrade.Run(); err != nil {
 			fatal(err)
+		}
+		if useJSON {
+			writeJSON(map[string]bool{"upgraded": true})
 		}
 	case "help", "-h", "--help":
 		usage()
@@ -104,8 +127,13 @@ func main() {
 	}
 }
 
-func runSyncPrompts() {
+func runSyncPrompts(useJSON bool) {
 	dir, err := os.Getwd()
+	if err != nil {
+		fatal(err)
+	}
+
+	cfg, err := config.Load(dir)
 	if err != nil {
 		fatal(err)
 	}
@@ -121,23 +149,26 @@ func runSyncPrompts() {
 	if err != nil {
 		fatal(err)
 	}
-	if len(updated) == 0 {
-		fmt.Fprintln(os.Stderr, "sync-prompts: no instruction files found in scaffold (unexpected)")
-		return
-	}
 	for _, f := range updated {
 		_, _ = fmt.Fprintf(os.Stderr, "updated %s\n", f)
 	}
 	_, _ = fmt.Fprintf(os.Stderr, "sync-prompts: %d file(s) updated\n", len(updated))
 
 	if len(preExistingShims) > 0 {
-		_, _ = fmt.Fprintf(os.Stdout, "\ntip: %s already exist and were not modified.\n", strings.Join(preExistingShims, " and "))
-		_, _ = fmt.Fprintln(os.Stdout, "     Custom content in these files is preserved. Review it against wiki/README.md,")
-		_, _ = fmt.Fprintln(os.Stdout, "     then run wiki-engine sync-prompts again after adopting the standard redirect shims.")
+		_, _ = fmt.Fprintf(os.Stderr, "\ntip: %s already exist and were not modified.\n", strings.Join(preExistingShims, " and "))
+		_, _ = fmt.Fprintf(os.Stderr, "     Custom content in these files is preserved. Review it against %s/README.md,\n", cfg.WikiDir)
+		_, _ = fmt.Fprintln(os.Stderr, "     then run wiki-engine sync-prompts again after adopting the standard redirect shims.")
+	}
+
+	if useJSON {
+		writeJSON(map[string]interface{}{
+			"updated":          updated,
+			"shims_preserved": preExistingShims,
+		})
 	}
 }
 
-func runInit(args []string) {
+func runInit(args []string, useJSON bool) {
 	dir, err := os.Getwd()
 	if err != nil {
 		fatal(err)
@@ -148,6 +179,10 @@ func runInit(args []string) {
 	}
 	if err := scaffold.Init(dir, wikiDir); err != nil {
 		fatal(err)
+	}
+	if useJSON {
+		writeJSON(map[string]string{"wiki_dir": wikiDir})
+		return
 	}
 	fmt.Fprintf(os.Stderr, "initialized %s/ with wiki scaffold, .wikirc, prompts, instructions, AGENTS.md/CLAUDE.md shims, .claude/commands/, and .pi/skills/\n", wikiDir)
 	fmt.Fprintln(os.Stderr, "next steps:")
@@ -602,8 +637,12 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 		}
 
 	default:
-		fmt.Fprintf(os.Stderr, "unknown command: %s\n", cmd)
-		usage()
+		if useJSON {
+			writeJSONResult(nil, false, fmt.Sprintf("unknown command: %s", cmd))
+		} else {
+			fmt.Fprintf(os.Stderr, "unknown command: %s\n", cmd)
+			usage()
+		}
 		os.Exit(1)
 	}
 }
@@ -636,11 +675,16 @@ Commands:
   version                 Print the version
   help                    Show this help
 
-Add --json before the command for structured JSON output.`)
+Add --json (accepted anywhere) for structured JSON output. On error, --json
+commands emit {"ok": false, "error": "..."} and exit 1.`)
 }
 
 func fatal(err error) {
-	fmt.Fprintf(os.Stderr, "error: %v\n", err)
+	if useJSONMode {
+		writeJSONResult(nil, false, err.Error())
+	} else {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+	}
 	os.Exit(1)
 }
 
@@ -719,7 +763,11 @@ func validateCommandArgs(cmd string, args []string) error {
 func runWatchCycle(eng *engine.Engine, useJSON bool) bool {
 	wr, err := eng.WatchOnce()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "watch error: %v\n", err)
+		if useJSON {
+			writeJSONResult(nil, false, err.Error())
+		} else {
+			fmt.Fprintf(os.Stderr, "watch error: %v\n", err)
+		}
 		return true
 	}
 	if useJSON {

@@ -26,6 +26,8 @@ surface is defined in [README.md](README.md).
 
 - `sync-prompts` no longer deletes user-owned files (custom slash commands, prompts, skills) in the sync directories — only wiki-managed files are cleaned up.
 - `diff` now fails loudly on invalid git refs instead of reporting garbage output with exit code 0.
+- `--json` is now honored by every command, including `version`, `init`, `sync-prompts`, and `upgrade`; fatal errors emit the `{ok: false, error}` envelope in JSON mode.
+- `sync-prompts` diagnostics moved to stderr and the tips reference the configured `wiki_dir`.
 
 ## [0.x]
 

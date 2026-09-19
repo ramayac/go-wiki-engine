@@ -29,14 +29,14 @@ Fix the two release blockers: data loss and false success.
 
 ## Phase B — JSON contract everywhere
 
-- [ ] B1. `fatal()` emits the `{ok:false, error}` envelope in `--json` mode
+- [x] B1. `fatal()` emits the `{ok:false, error}` envelope in `--json` mode
       (unknown command, missing args, watch error path included)
-- [ ] B2. `--json` implemented for `version`, `init`, `sync-prompts`, `upgrade`
-- [ ] B3. `sync-prompts`: tip moved to stderr (never corrupts stdout), wiki-dir
+- [x] B2. `--json` implemented for `version`, `init`, `sync-prompts`, `upgrade`
+- [x] B3. `sync-prompts`: tip moved to stderr (never corrupts stdout), wiki-dir
       aware (`cfg.WikiDir`), dead "no instruction files" branch removed
-- [ ] B4. `writeJSONResult` refactored to `writeJSONResultTo(io.Writer, ...)` for testability
-- [ ] Tests: `TestWriteJSONResultTo`, integration: `--json version`
-- [ ] Docs: repo-map JSON Output Contract corrected (omitempty reality, fatal-error envelope), usage text
+- [x] B4. `writeJSONResult` refactored to `writeJSONResultTo(io.Writer, ...)` for testability
+- [x] Tests: `TestWriteJSONResultTo`, integration: `--json version`/`--json sync-prompts`/error envelopes
+- [x] Docs: repo-map JSON Output Contract corrected (omitempty reality, fatal-error envelope), usage text
 
 ## Phase C — Lint gate integrity
 
@@ -92,7 +92,7 @@ Fix the two release blockers: data loss and false success.
 | Phase | Status | Commit |
 |---|---|---|
 | A — Critical correctness | ✅ | `fix: sync-prompts must not delete user files; diff fails loudly on invalid refs` |
-| B — JSON contract | ⬜ | — |
+| B — JSON contract | ✅ | `fix: honor --json on every command and on fatal error paths` |
 | C — Lint gate integrity | ⬜ | — |
 | D — Context summarize | ⬜ | — |
 | E — Error propagation & resources | ⬜ | — |

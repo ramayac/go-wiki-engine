@@ -105,13 +105,19 @@ The workflow is:
 
 ## JSON Output Contract
 
-All commands accept `--json` and emit one JSON envelope per invocation on stdout:
+All commands accept `--json` (anywhere in the argument list) and emit one JSON
+envelope per invocation on stdout:
 
 ```json
-{ "ok": true, "data": { }, "error": "" }
+{ "ok": true, "data": { } }
 ```
 
-- `ok` reflects command success; `error` carries the failure reason for fatal errors.
+- `ok` reflects command success; on failure `error` carries the reason and `data` is omitted.
+- `data` and `error` are omitted when empty; when a command has no result (e.g. a
+  search with no matches) the envelope contains only `ok`.
+- Fatal errors also honor the contract when `--json` is present: the command
+  emits `{ "ok": false, "error": "..." }` and exits 1 (plain-text errors are
+  reserved for non-JSON invocations).
 - `lint --json` emits the issues array as `data` with `ok:false` when the `fail_severity` gate fails, and still exits 1 (matching plain-text lint).
 - `context --active --json` emits `{nodes, edges, unlinked}` — the machine-readable active graph for agent navigation.
 - `watch --once --json` emits one `WatchResult` (`changed`, `candidates`, `lint_ok`, `lint_issues`) and exits 1 when `lint_ok` is false.

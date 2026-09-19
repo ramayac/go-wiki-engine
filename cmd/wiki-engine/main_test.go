@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/ramayac/go-wiki-engine/internal/config"
@@ -53,6 +56,42 @@ func TestArgsAfterFilters(t *testing.T) {
 	_, useJSON = argsAfterFilters()
 	if useJSON {
 		t.Error("expected useJSON=false without --json")
+	}
+}
+
+func TestWriteJSONResultTo(t *testing.T) {
+	var buf bytes.Buffer
+	writeJSONResultTo(&buf, map[string]string{"wiki_dir": "docs"}, true, "")
+
+	var out map[string]json.RawMessage
+	if err := json.Unmarshal(buf.Bytes(), &out); err != nil {
+		t.Fatalf("envelope is not valid JSON: %v\n%s", err, buf.String())
+	}
+	if string(out["ok"]) != "true" {
+		t.Errorf("ok = %s, want true", out["ok"])
+	}
+	if !strings.Contains(string(out["data"]), "docs") {
+		t.Errorf("data = %s, want wiki_dir docs", out["data"])
+	}
+	if _, present := out["error"]; present {
+		t.Error("error field must be omitted when ok")
+	}
+
+	// Error envelope: data omitted, error present.
+	buf.Reset()
+	writeJSONResultTo(&buf, nil, false, "boom")
+	out = map[string]json.RawMessage{}
+	if err := json.Unmarshal(buf.Bytes(), &out); err != nil {
+		t.Fatalf("error envelope is not valid JSON: %v\n%s", err, buf.String())
+	}
+	if string(out["ok"]) != "false" {
+		t.Errorf("ok = %s, want false", out["ok"])
+	}
+	if string(out["error"]) != `"boom"` {
+		t.Errorf("error = %s, want \"boom\"", out["error"])
+	}
+	if _, present := out["data"]; present {
+		t.Error("data field must be omitted on error")
 	}
 }
 

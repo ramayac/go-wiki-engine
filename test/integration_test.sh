@@ -104,6 +104,22 @@ echo "--- json ---"
 "$BIN" --json lint | grep -q '\[\]' || { echo "FAIL: json lint failed"; exit 1; }
 echo "  ok"
 
+# Test: --json on admin commands
+echo "--- json admin commands ---"
+"$BIN" --json version | grep -q '"ok": true' || { echo "FAIL: --json version should emit an envelope"; exit 1; }
+"$BIN" --json version | grep -qE '"data": "[^"]+"' || { echo "FAIL: --json version should carry the version in data"; exit 1; }
+"$BIN" --json sync-prompts | grep -q '"updated"' || { echo "FAIL: --json sync-prompts should carry updated files"; exit 1; }
+echo "  ok"
+
+# Test: --json fatal errors carry the envelope
+echo "--- json error envelope ---"
+out=$("$BIN" --json summary does-not-exist.md 2>/dev/null || true)
+echo "$out" | grep -q '"ok": false' || { echo "FAIL: fatal error should emit ok:false envelope"; exit 1; }
+echo "$out" | grep -q '"error"' || { echo "FAIL: fatal error should carry an error field"; exit 1; }
+out=$("$BIN" --json definitely-not-a-command 2>/dev/null || true)
+echo "$out" | grep -q '"ok": false' || { echo "FAIL: unknown command should emit ok:false envelope"; exit 1; }
+echo "  ok"
+
 # Test: diff
 echo "--- diff ---"
 echo "# test change" >> wiki/README.md
