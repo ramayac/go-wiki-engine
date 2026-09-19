@@ -5,6 +5,12 @@ All notable changes to go-wiki-engine are documented here. Format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html); the compatibility
 surface is defined in [README.md](README.md).
 
+## [1.0.1] - 2026-09-19
+
+### Fixed
+
+- `upgrade` now follows redirects when downloading release assets and `checksums.txt` — GitHub serves them via 302 redirects to signed storage URLs, so the checksum-verified download path was previously failing and silently falling back to `go install`.
+
 ## [1.0.0] - 2026-09-19
 
 ### Added

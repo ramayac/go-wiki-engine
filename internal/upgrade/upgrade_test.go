@@ -365,3 +365,53 @@ func TestDownloadSizeLimit(t *testing.T) {
 		t.Errorf("downloadBytes returned %q, want hello", data)
 	}
 }
+
+func TestRunFollowsAssetRedirects(t *testing.T) {
+	// Simulate GitHub's real layout: /releases/latest redirects to the tag
+	// page (Location header), and every release asset download redirects to
+	// a signed storage URL.
+	binary := []byte("v1.0.1-binary-content")
+	assetData := newTarGzAsset(t, binary)
+	tag := "v1.0.1"
+	assetName := fmt.Sprintf("wiki-engine_%s_%s_%s.tar.gz", tag, runtime.GOOS, runtime.GOARCH)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/releases/latest", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/releases/tag/"+tag, http.StatusFound)
+	})
+	mux.HandleFunc("/releases/download/"+tag+"/checksums.txt", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/signed/checksums.txt", http.StatusFound)
+	})
+	mux.HandleFunc("/signed/checksums.txt", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = fmt.Fprintf(w, "%s  %s\n", sha256Hex(assetData), assetName)
+	})
+	mux.HandleFunc("/releases/download/"+tag+"/"+assetName, func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/signed/"+assetName, http.StatusFound)
+	})
+	mux.HandleFunc("/signed/"+assetName, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(assetData)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	fallbackCalled := stubFallback(t)
+
+	dest := filepath.Join(t.TempDir(), "wiki-engine")
+	if err := os.WriteFile(dest, []byte("old-binary"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := run(server.URL, dest); err != nil {
+		t.Fatalf("run should succeed through asset redirects, got: %v", err)
+	}
+	if *fallbackCalled != "" {
+		t.Errorf("fallback should not run when redirects are followed, got %q", *fallbackCalled)
+	}
+	got, err := os.ReadFile(dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != string(binary) {
+		t.Errorf("binary not replaced after redirects: got %q", string(got))
+	}
+}

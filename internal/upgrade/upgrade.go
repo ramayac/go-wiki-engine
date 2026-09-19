@@ -19,10 +19,16 @@ import (
 	"time"
 )
 
-// upgradeHTTPClient is shared by all upgrade network calls. Redirects are
-// followed manually via ErrUseLastResponse so getLatestTag can read the
-// Location header of GitHub's /releases/latest redirect.
+// upgradeHTTPClient is used for all release downloads. GitHub serves
+// release assets via 302 redirects to signed storage URLs, so this client
+// follows redirects normally.
 var upgradeHTTPClient = &http.Client{
+	Timeout: 30 * time.Second,
+}
+
+// latestTagHTTPClient stops at the first response so getLatestTag can read
+// the Location header of GitHub's /releases/latest redirect.
+var latestTagHTTPClient = &http.Client{
 	Timeout: 30 * time.Second,
 	CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
@@ -157,7 +163,7 @@ func run(baseURL, executablePath string) error {
 }
 
 func getLatestTag(baseURL string) (string, error) {
-	resp, err := upgradeHTTPClient.Get(baseURL + "/releases/latest")
+	resp, err := latestTagHTTPClient.Get(baseURL + "/releases/latest")
 	if err != nil {
 		return "", err
 	}
