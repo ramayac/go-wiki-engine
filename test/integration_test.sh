@@ -224,6 +224,17 @@ echo 'context_summarize = true' >> .wikirc
 "$BIN" --json context | grep -q '"summarized": true' || { echo "FAIL: context_summarize should default context to summarize mode"; exit 1; }
 echo "  ok"
 
+# Test: plain-text context --summarize includes per-page previews
+echo "--- context summarize plain ---"
+"$BIN" context --summarize | grep -q "(lines:" || { echo "FAIL: plain context --summarize should include previews and line counts"; exit 1; }
+if "$BIN" context --active --summarize >/dev/null 2>&1; then
+  echo "FAIL: --active --summarize should be rejected"
+  exit 1
+fi
+out=$("$BIN" context --active --summarize 2>&1 || true)
+echo "$out" | grep -q "cannot be combined" || { echo "FAIL: rejection should explain the combination"; exit 1; }
+echo "  ok"
+
 # Test: continuous watch is disabled when watch_interval = 0
 echo "--- watch disabled ---"
 if "$BIN" watch >/dev/null 2>&1; then

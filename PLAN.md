@@ -51,14 +51,14 @@ Fix the two release blockers: data loss and false success.
 
 ## Phase D — Context summarize coherence
 
-- [ ] D1. Plain-text `context --summarize` prints per-page previews + line counts
+- [x] D1. Plain-text `context --summarize` prints per-page previews + line counts
       (currently computed but only emitted in JSON)
-- [ ] D2. `context --active --summarize` (explicit flag) rejected with a clear
+- [x] D2. `context --active --summarize` (explicit flag) rejected with a clear
       error instead of being silently ignored (config-defaulted summarize stays ignored)
-- [ ] D3. Fix `wiki-maintainer.md` prompt (live + scaffold): recommend
+- [x] D3. Fix `wiki-maintainer.md` prompt (live + scaffold): recommend
       `context --summarize`, not the no-op `--active --summarize`; `make sync-scaffold`
-- [ ] Tests: integration additions (plain summaries, active+summarize rejection)
-- [ ] Docs: config.md clarification; CHANGELOG
+- [x] Tests: integration additions (plain summaries, active+summarize rejection)
+- [x] Docs: config.md clarification; CHANGELOG
 
 ## Phase E — Error propagation & resource hygiene
 
@@ -95,7 +95,7 @@ Fix the two release blockers: data loss and false success.
 | A — Critical correctness | ✅ | `fix: sync-prompts must not delete user files; diff fails loudly on invalid refs` |
 | B — JSON contract | ✅ | `fix: honor --json on every command and on fatal error paths` |
 | C — Lint gate integrity | ✅ | `fix: validate lint selectors and fail_severity; single diagnostic for missing wiki dir` |
-| D — Context summarize | ⬜ | — |
+| D — Context summarize | ✅ | `fix: plain context --summarize shows previews; reject --active --summarize` |
 | E — Error propagation & resources | ⬜ | — |
 | F — Unix ergonomics | ⬜ | — |
 | G — Prompt & doc polish | ⬜ | — |

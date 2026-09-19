@@ -397,6 +397,7 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 	case "context":
 		minimal := false
 		summarize := cfg.ContextSummarize
+		explicitSummarize := false
 		active := false
 		sortBy := "chrono"
 		for _, a := range args[2:] {
@@ -405,6 +406,7 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 				minimal = true
 			case "--summarize":
 				summarize = true
+				explicitSummarize = true
 			case "--active":
 				active = true
 			case "--sort=topo":
@@ -415,6 +417,12 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 		}
 
 		if active {
+			// The active graph carries no per-page summaries; reject the
+			// explicit combination instead of silently ignoring the flag.
+			// (A config-defaulted context_summarize stays ignored here.)
+			if explicitSummarize {
+				fatal(fmt.Errorf("--summarize cannot be combined with --active; run wiki-engine context --summarize for page previews"))
+			}
 			nodes, edges, err := eng.BuildWikiGraph()
 			if err != nil {
 				fatal(err)
@@ -469,6 +477,10 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 		fmt.Println("== catalog ==")
 		for _, c := range cr.Catalog {
 			fmt.Printf("%s [%s] | %s\n", c.File, c.Status, c.Description)
+			if cr.Summarized && c.Summary != "" {
+				fmt.Printf("    %s\n", strings.ReplaceAll(c.Summary, "\n", "\n    "))
+				fmt.Printf("    (lines: %d)\n", c.LineCount)
+			}
 		}
 		if len(cr.RecentLog) > 0 {
 			fmt.Println()

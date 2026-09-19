@@ -65,7 +65,7 @@ When writing or modifying any wiki page, always follow this checklist:
 ## Progressive Disclosure & Summaries
 
 When the wiki is large, use **progressive disclosure** to manage token usage and avoid reading every file:
-- **Active snapshot with summaries:** Run `wiki-engine context --active --summarize` (if `context_summarize = true` is set in `.wikirc`). This outputs each page's first heading, first paragraph, and line count.
+- **Active snapshot with summaries:** Run `wiki-engine context --summarize` (or set `context_summarize = true` in `.wikirc` to make it the default). Each catalog entry then includes the page's first heading, first paragraph, and line count, and `legacy`/`deprecated` pages are filtered out. Note: summaries are not available in the `--active` graph mode.
 - **Progressive reading:**
   - If a page has `line_count` ≤ 50, read it directly if the summary suggests relevance.
   - If a page has `line_count` > 50, first preview it with `wiki-engine summary <page>` before committing to a full read.
