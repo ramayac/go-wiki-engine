@@ -46,6 +46,7 @@ surface is defined in [README.md](README.md).
 - `upgrade` downloads are capped at 100 MiB before checksum verification; `search` only scans markdown pages.
 - `sync-prompts` now reports `updated` and `removed` separately (plain text and JSON) instead of mixing removal markers into the updated list.
 - `context --json` omits `line_count` unless summaries are computed; `search --` with no terms shows usage; the `init` `.wikirc` rewrite is regex-based and tolerant of template whitespace.
+- `context` rejects meaningless flag combinations (`--sort` without `--active`, `--minimal`/`--summarize` with `--active`) instead of silently ignoring them; `orphans` exempts `legacy`/`deprecated` pages like `leaf-pages` does; explicit help requests print to stdout.
 
 ## [0.x]
 

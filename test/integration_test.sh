@@ -54,6 +54,12 @@ test -d wiki || { echo "FAIL: --json init did not create wiki/"; exit 1; }
 cd "$TMPDIR"
 echo "  ok"
 
+# Test: help goes to stdout when explicitly requested
+echo "--- help ---"
+"$BIN" help 2>/dev/null | grep -q "wiki-engine — repo-local wiki management tool" || { echo "FAIL: help should print to stdout"; exit 1; }
+"$BIN" list -h 2>/dev/null | grep -q "Usage:" || { echo "FAIL: list -h should print usage to stdout"; exit 1; }
+echo "  ok"
+
 # Test: list
 echo "--- list ---"
 count=$("$BIN" list | wc -l)
@@ -184,6 +190,15 @@ echo -e "---\nstatus: legacy\ndescription: Legacy lint procedure\n---\n# Legacy 
 "$BIN" context --active | grep -q "  -> prologue/schema.md" || { echo "FAIL: active edge in graph missing"; exit 1; }
 # Sort topo check
 "$BIN" context --active --sort=topo | grep -q "== active wiki graph ==" || { echo "FAIL: topo sort failed"; exit 1; }
+# Meaningless flag combos must be rejected, not silently ignored
+if "$BIN" context --sort=topo >/dev/null 2>&1; then
+  echo "FAIL: --sort without --active should be rejected"
+  exit 1
+fi
+if "$BIN" context --minimal --active >/dev/null 2>&1; then
+  echo "FAIL: --minimal --active should be rejected"
+  exit 1
+fi
 # JSON graph format check
 "$BIN" --json context --active | grep -q '"nodes"' || { echo "FAIL: json graph output missing nodes"; exit 1; }
 "$BIN" --json context --active | grep -q '"edges"' || { echo "FAIL: json graph output missing edges"; exit 1; }

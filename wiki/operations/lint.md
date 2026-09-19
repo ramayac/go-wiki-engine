@@ -20,6 +20,7 @@ Keep the wiki coherent, linked, and current.
 - Links follow the standard in [schema.md](../prologue/schema.md): relative Markdown, no wiki-style `[[Page]]` links, no unclosed parentheses, and every target exists. Links are strictly page-relative — a page in a subdirectory must use `../` to reach pages in other directories.
 - Active pages are cross-linked per [schema.md](../prologue/schema.md): each page links to its related pages; the only intentional leaf is [log.md](../prologue/log.md).
 - `leaf-pages` surfaces active pages with no outgoing links at info severity — non-failing by default, visible as a reminder.
+- `orphans` surfaces active pages not reachable from the index; `legacy` and `deprecated` pages live outside the graph and are exempt (same lifecycle rule as `leaf-pages`).
 
 ## Shell-First Checks
 

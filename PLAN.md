@@ -54,14 +54,14 @@ Base: `feat/audit-fixes` (round 1 phases A–G merged). Phases continue the sequ
 
 ## Phase K — P2b: consistency & ergonomics
 
-- [ ] K1. Reject explicit `context --sort=...` without `--active` and
+- [x] K1. Reject explicit `context --sort=...` without `--active` and
       `--minimal --active` (no more silent no-op combos)
-- [ ] K2. `orphans` checker skips `legacy`/`deprecated` pages (consistent with
+- [x] K2. `orphans` checker skips `legacy`/`deprecated` pages (consistent with
       `leaf-pages`)
-- [ ] K3. `wiki-engine help` writes to stdout (explicit help request; errors
+- [x] K3. `wiki-engine help` writes to stdout (explicit help request; errors
       keep usage on stderr)
-- [ ] Tests: integration combo rejection, orphans lifecycle case, help stream
-- [ ] Docs: repo-map context row, operations/lint.md note; CHANGELOG
+- [x] Tests: integration combo rejection + help stream, `TestLintOrphansSkipsNonActive`
+- [x] Docs: repo-map context row, operations/lint.md note; CHANGELOG
 
 ## Status
 
@@ -70,4 +70,8 @@ Base: `feat/audit-fixes` (round 1 phases A–G merged). Phases continue the sequ
 | H — P0 silent misbehavior | ✅ | `fix: parse single-line ignore arrays; reject empty wiki_dir; JSON usage envelopes` |
 | I — P1 real gaps | ✅ | `fix: reject escaping wiki dirs; active-phase preferences; YAML # rules; strict numeric parsing` |
 | J — P2a robustness & hygiene | ✅ | `fix: cap upgrade downloads; search .md only; separate sync removed list` |
-| K — P2b consistency & ergonomics | ⬜ | — |
+| K — P2b consistency & ergonomics | ✅ | `fix: reject meaningless context flag combos; orphans lifecycle rule; help on stdout` |
+
+**Round 2 complete.** Branch `feat/audit-fixes` carries both rounds.
+Final gates: `make test` (6 packages), `make lint`, `make audit`,
+`make integration`, plus `go test -race ./...` and `make golangci-lint`.

@@ -1352,3 +1352,33 @@ func TestSearchSkipsNonMarkdown(t *testing.T) {
 		t.Errorf("Search missed the markdown match: %v", results)
 	}
 }
+
+func TestLintOrphansSkipsNonActive(t *testing.T) {
+	root := setupWiki(t)
+	eng := newTestEngine(root)
+
+	// A legacy page that is intentionally out of the graph is not an orphan.
+	legacy := filepath.Join(root, "wiki", "old-design.md")
+	if err := os.WriteFile(legacy, []byte("---\nstatus: legacy\ndescription: Old design\n---\n# Old Design\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// An active page not linked from the index still is.
+	active := filepath.Join(root, "wiki", "extra.md")
+	if err := os.WriteFile(active, []byte("---\nstatus: current\ndescription: Extra\n---\n# Extra\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result := eng.Lint()
+	orphaned := map[string]bool{}
+	for _, iss := range result.Issues {
+		if iss.Check == "orphans" {
+			orphaned[iss.File] = true
+		}
+	}
+	if orphaned[filepath.Join("wiki", "old-design.md")] {
+		t.Error("legacy page should not be flagged as orphan")
+	}
+	if !orphaned[filepath.Join("wiki", "extra.md")] {
+		t.Error("active unlinked page should be flagged as orphan")
+	}
+}

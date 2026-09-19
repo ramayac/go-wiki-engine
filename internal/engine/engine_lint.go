@@ -410,6 +410,18 @@ func (c *orphansChecker) Check(e *Engine) ([]Issue, error) {
 		case "index.md", "README.md":
 			continue
 		}
+		// Lifecycle: legacy/deprecated pages live outside the active graph
+		// (the leaf-pages checker treats them the same way), so they are not
+		// expected to be reachable from the index.
+		abs := filepath.Join(wikiDir, filepath.FromSlash(f))
+		data, err := os.ReadFile(abs)
+		if err != nil {
+			continue
+		}
+		fm, _, _ := ParseFrontMatter(string(data))
+		if fm.Status == "legacy" || fm.Status == "deprecated" {
+			continue
+		}
 		issues = append(issues, Issue{
 			Severity: SevWarn,
 			Check:    c.Name(),

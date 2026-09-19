@@ -87,7 +87,7 @@ func main() {
 		if useJSONMode {
 			writeJSONResult(nil, false, "no command given (see: wiki-engine help)")
 		} else {
-			usage()
+			usage(os.Stderr)
 		}
 		os.Exit(1)
 	}
@@ -103,7 +103,7 @@ func main() {
 			continue
 		}
 		if !afterTerminator && (a == "-h" || a == "--help") {
-			usage()
+			usage(os.Stdout)
 			return
 		}
 	}
@@ -139,7 +139,7 @@ func main() {
 			writeJSON(map[string]bool{"upgraded": true})
 		}
 	case "help", "-h", "--help":
-		usage()
+		usage(os.Stdout)
 	default:
 		// All other commands need a loaded config and engine.
 		cfg, eng := loadEngine()
@@ -426,6 +426,7 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 		explicitSummarize := false
 		active := false
 		sortBy := "chrono"
+		explicitSort := false
 		for _, a := range args[2:] {
 			switch a {
 			case "--minimal":
@@ -437,17 +438,22 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 				active = true
 			case "--sort=topo":
 				sortBy = "topo"
+				explicitSort = true
 			case "--sort=chrono":
 				sortBy = "chrono"
+				explicitSort = true
 			}
 		}
 
+		// Reject explicit flag combinations that would silently do nothing:
+		// summaries and the minimal snapshot belong to the catalog view, the
+		// sort belongs to the graph view.
 		if active {
-			// The active graph carries no per-page summaries; reject the
-			// explicit combination instead of silently ignoring the flag.
-			// (A config-defaulted context_summarize stays ignored here.)
 			if explicitSummarize {
 				fatal(fmt.Errorf("--summarize cannot be combined with --active; run wiki-engine context --summarize for page previews"))
+			}
+			if minimal {
+				fatal(fmt.Errorf("--minimal cannot be combined with --active"))
 			}
 			nodes, edges, err := eng.BuildWikiGraph()
 			if err != nil {
@@ -480,6 +486,10 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 				}
 			}
 			return
+		}
+
+		if explicitSort {
+			fatal(fmt.Errorf("--sort=topo|chrono requires --active (it orders the active wiki graph)"))
 		}
 
 		cr, err := eng.Context(minimal, summarize)
@@ -675,14 +685,14 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 			writeJSONResult(nil, false, fmt.Sprintf("unknown command: %s", cmd))
 		} else {
 			fmt.Fprintf(os.Stderr, "unknown command: %s\n", cmd)
-			usage()
+			usage(os.Stderr)
 		}
 		os.Exit(1)
 	}
 }
 
-func usage() {
-	fmt.Fprintln(os.Stderr, `wiki-engine — repo-local wiki management tool
+func usage(out io.Writer) {
+	fmt.Fprintln(out, `wiki-engine — repo-local wiki management tool
 
 Usage: wiki-engine [--json] <command> [arguments]
 
