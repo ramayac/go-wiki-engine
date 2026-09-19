@@ -272,8 +272,7 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 
 	case "search":
 		if len(args) < 3 {
-			fmt.Fprintln(os.Stderr, "usage: wiki-engine search <query>")
-			os.Exit(1)
+			usageError("usage: wiki-engine search <query>")
 		}
 		query := strings.Join(positionalArgs(args[2:]), " ")
 		results, err := eng.Search(query)
@@ -517,8 +516,7 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 
 	case "summary":
 		if len(args) < 3 {
-			fmt.Fprintln(os.Stderr, "usage: wiki-engine summary <page>")
-			os.Exit(1)
+			usageError("usage: wiki-engine summary <page>")
 		}
 		page := args[2]
 		sr, err := eng.Summary(page)
@@ -535,8 +533,7 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 
 	case "relevant":
 		if len(args) < 3 {
-			fmt.Fprintln(os.Stderr, "usage: wiki-engine relevant <query> [topN]")
-			os.Exit(1)
+			usageError("usage: wiki-engine relevant <query> [topN]")
 		}
 		query := args[2]
 		topN := 5
@@ -564,8 +561,7 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 			// If stdin is an interactive terminal, there is nothing to read —
 			// show usage instead of blocking.
 			if fi, err := os.Stdin.Stat(); err == nil && fi.Mode()&os.ModeCharDevice != 0 {
-				fmt.Fprintln(os.Stderr, "usage: wiki-engine impact <file...>  (or pipe from wiki-engine changed)")
-				os.Exit(1)
+				usageError("usage: wiki-engine impact <file...>  (or pipe from wiki-engine changed)")
 			}
 			// Read from stdin (pipe from wiki-engine changed).
 			scanner := bufio.NewScanner(os.Stdin)
@@ -580,8 +576,7 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 			}
 		}
 		if len(changedFiles) == 0 {
-			fmt.Fprintln(os.Stderr, "usage: wiki-engine impact <file...>  (or pipe from wiki-engine changed)")
-			os.Exit(1)
+			usageError("usage: wiki-engine impact <file...>  (or pipe from wiki-engine changed)")
 		}
 		results, err := eng.Impact(changedFiles)
 		if err != nil {
@@ -601,8 +596,7 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 
 	case "diff":
 		if len(args) < 4 {
-			fmt.Fprintln(os.Stderr, "usage: wiki-engine diff <from-ref> <to-ref>")
-			os.Exit(1)
+			usageError("usage: wiki-engine diff <from-ref> <to-ref>")
 		}
 		from, to := args[2], args[3]
 		dr, err := eng.Diff(from, to)
@@ -654,9 +648,7 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 
 		interval := cfg.WatchInterval
 		if interval <= 0 {
-			fmt.Fprintln(os.Stderr, "watch_interval is 0 in .wikirc — continuous watch is disabled.")
-			fmt.Fprintln(os.Stderr, "Set watch_interval to a positive number of seconds to enable, or run: wiki-engine watch --once")
-			os.Exit(1)
+			usageError("watch_interval is 0 in .wikirc — continuous watch is disabled. Set watch_interval to a positive number of seconds to enable, or run: wiki-engine watch --once")
 		}
 
 		// Continuous polling.
@@ -721,6 +713,17 @@ func fatal(err error) {
 		writeJSONResult(nil, false, err.Error())
 	} else {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+	}
+	os.Exit(1)
+}
+
+// usageError reports a usage problem: the usage line on stderr in plain mode,
+// the standard error envelope in --json mode. Always exits 1.
+func usageError(usageLine string) {
+	if useJSONMode {
+		writeJSONResult(nil, false, usageLine)
+	} else {
+		fmt.Fprintln(os.Stderr, usageLine)
 	}
 	os.Exit(1)
 }

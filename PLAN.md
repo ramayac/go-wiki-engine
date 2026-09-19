@@ -15,16 +15,16 @@ Base: `feat/audit-fixes` (round 1 phases A–G merged). Phases continue the sequ
 
 ## Phase H — P0: silent misbehavior
 
-- [ ] H1. Single-line `ignore = ["a", "b"]` arrays are parsed (today they are
+- [x] H1. Single-line `ignore = ["a", "b"]` arrays are parsed (today they are
       silently dropped); `]` on the last entry line also handled
-- [ ] H2. Empty/dangerous `wiki_dir` values (`""`, `.`) warn and fall back to
+- [x] H2. Empty/dangerous `wiki_dir` values (`""`, `.`) warn and fall back to
       the default instead of making `list`/`lint` walk the repo root
-- [ ] H3. `--json` usage errors emit the error envelope: search, summary,
+- [x] H3. `--json` usage errors emit the error envelope: search, summary,
       relevant, impact (both paths), diff, and the watch interval-0 guidance
       (`usageError` helper honoring `useJSONMode`)
-- [ ] Tests: `TestLoadSingleLineIgnoreArray`, `TestLoadEmptyWikiDir`,
-      integration `--json` usage cases
-- [ ] Docs: config.md ignore section; CHANGELOG
+- [x] Tests: `TestLoadSingleLineIgnoreArray`, `TestLoadIgnoreBracketOnEntryLine`,
+      `TestLoadEmptyWikiDir`, integration `--json` usage cases
+- [x] Docs: config.md ignore section; CHANGELOG
 
 ## Phase I — P1: real gaps
 
@@ -67,7 +67,7 @@ Base: `feat/audit-fixes` (round 1 phases A–G merged). Phases continue the sequ
 
 | Phase | Status | Commit |
 |---|---|---|
-| H — P0 silent misbehavior | ⬜ | — |
+| H — P0 silent misbehavior | ✅ | `fix: parse single-line ignore arrays; reject empty wiki_dir; JSON usage envelopes` |
 | I — P1 real gaps | ⬜ | — |
 | J — P2a robustness & hygiene | ⬜ | — |
 | K — P2b consistency & ergonomics | ⬜ | — |

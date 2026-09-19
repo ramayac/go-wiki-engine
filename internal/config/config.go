@@ -74,8 +74,10 @@ func Load(dir string) (*Config, error) {
 				inIgnore = false
 				continue
 			}
-			// Strip quotes and trailing comma.
+			// Strip quotes, trailing comma, and a ] that ends the entry
+			// list on the same line (e.g. `"wiki/"]`).
 			val := strings.TrimRight(line, ",")
+			val = strings.TrimSuffix(val, "]")
 			val = strings.Trim(val, `"`)
 			val = strings.TrimSpace(val)
 			if val != "" {
@@ -86,6 +88,18 @@ func Load(dir string) (*Config, error) {
 
 		// Start of ignore array.
 		if strings.HasPrefix(line, "ignore") && strings.Contains(line, "[") {
+			// Single-line form: ignore = ["wiki/", "bin/"]
+			open := strings.Index(line, "[")
+			closeIdx := strings.Index(line, "]")
+			if closeIdx > open {
+				for _, entry := range strings.Split(line[open+1:closeIdx], ",") {
+					entry = strings.Trim(strings.TrimSpace(entry), `"`)
+					if entry != "" {
+						cfg.Ignore = append(cfg.Ignore, entry)
+					}
+				}
+				continue
+			}
 			inIgnore = true
 			continue
 		}
@@ -101,6 +115,10 @@ func Load(dir string) (*Config, error) {
 
 		switch key {
 		case "wiki_dir":
+			if val == "" || val == "." {
+				fmt.Fprintf(os.Stderr, "warning: invalid wiki_dir %q; using %q\n", val, cfg.WikiDir)
+				continue
+			}
 			cfg.WikiDir = val
 		case "default_diff":
 			cfg.DefaultDiff = val

@@ -120,6 +120,19 @@ out=$("$BIN" --json definitely-not-a-command 2>/dev/null || true)
 echo "$out" | grep -q '"ok": false' || { echo "FAIL: unknown command should emit ok:false envelope"; exit 1; }
 echo "  ok"
 
+# Test: --json usage errors carry the envelope too
+echo "--- json usage errors ---"
+out=$("$BIN" --json search 2>/dev/null || true)
+echo "$out" | grep -q '"ok": false' || { echo "FAIL: --json search without query should emit ok:false"; exit 1; }
+echo "$out" | grep -q "usage" || { echo "FAIL: usage error envelope should carry the usage line"; exit 1; }
+out=$("$BIN" --json summary 2>/dev/null || true)
+echo "$out" | grep -q '"ok": false' || { echo "FAIL: --json summary without page should emit ok:false"; exit 1; }
+if "$BIN" --json search >/dev/null 2>&1; then
+  echo "FAIL: --json search without query should exit non-zero"
+  exit 1
+fi
+echo "  ok"
+
 # Test: diff
 echo "--- diff ---"
 echo "# test change" >> wiki/README.md
@@ -241,6 +254,8 @@ if "$BIN" watch >/dev/null 2>&1; then
   echo "FAIL: watch with watch_interval=0 should exit non-zero"
   exit 1
 fi
+out=$("$BIN" --json watch 2>/dev/null || true)
+echo "$out" | grep -q '"ok": false' || { echo "FAIL: --json watch guidance should emit ok:false"; exit 1; }
 echo "  ok"
 
 # Test: legacy flat wiki layout still lints (backward compatibility)

@@ -124,6 +124,12 @@ ignore = [
 ]
 ```
 
+Single-line arrays work too:
+
+```
+ignore = ["wiki/", "bin/", "*.log"]
+```
+
 | Default | `["wiki/", "bin/", "*.log", "*.tmp"]` |
 |--------:|------------------------------------------|
 

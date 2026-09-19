@@ -255,3 +255,62 @@ func TestLoadInvalidFailSeverity(t *testing.T) {
 		}
 	}
 }
+
+func TestLoadSingleLineIgnoreArray(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, ".wikirc"),
+		[]byte("wiki_dir = \"wiki\"\nignore = [\"wiki/\", \"bin/\", \"*.log\"]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(dir)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	want := []string{"wiki/", "bin/", "*.log"}
+	if len(cfg.Ignore) != len(want) {
+		t.Fatalf("single-line ignore array parsed as %v, want %v", cfg.Ignore, want)
+	}
+	for i := range want {
+		if cfg.Ignore[i] != want[i] {
+			t.Errorf("ignore[%d] = %q, want %q", i, cfg.Ignore[i], want[i])
+		}
+	}
+}
+
+func TestLoadIgnoreBracketOnEntryLine(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, ".wikirc"),
+		[]byte("ignore = [\n  \"wiki/\",\n  \"bin/\"]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(dir)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	want := []string{"wiki/", "bin/"}
+	if len(cfg.Ignore) != len(want) {
+		t.Fatalf("ignore array with ] on entry line parsed as %v, want %v", cfg.Ignore, want)
+	}
+	for i := range want {
+		if cfg.Ignore[i] != want[i] {
+			t.Errorf("ignore[%d] = %q, want %q", i, cfg.Ignore[i], want[i])
+		}
+	}
+}
+
+func TestLoadEmptyWikiDir(t *testing.T) {
+	dir := t.TempDir()
+	for _, val := range []string{`""`, `"."`} {
+		if err := os.WriteFile(filepath.Join(dir, ".wikirc"),
+			[]byte("wiki_dir = "+val+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		cfg, err := Load(dir)
+		if err != nil {
+			t.Fatalf("Load failed: %v", err)
+		}
+		if cfg.WikiDir != "wiki" {
+			t.Errorf("wiki_dir %s should fall back to %q, got %q", val, "wiki", cfg.WikiDir)
+		}
+	}
+}
