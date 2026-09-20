@@ -11,12 +11,22 @@ import (
 
 // FrontMatter holds metadata parsed from markdown YAML front matter.
 type FrontMatter struct {
-	Status       string   `json:"status"`
-	SupersededBy string   `json:"superseded_by"`
-	Description  string   `json:"description"`
-	Created      string   `json:"created,omitempty"`
-	Updated      string   `json:"updated,omitempty"`
-	Tags         []string `json:"tags,omitempty"`
+	Status       string      `json:"status"`
+	SupersededBy string      `json:"superseded_by"`
+	Description  string      `json:"description"`
+	Created      string      `json:"created,omitempty"`
+	Updated      string      `json:"updated,omitempty"`
+	Tags         []string    `json:"tags,omitempty"`
+	References   []Reference `json:"references,omitempty"`
+}
+
+// Reference is a declared cross-reference from a wiki page to something
+// outside the wiki, written as "type:value" in the front matter
+// `references` list. Supported types: source (repo file path),
+// external (http/https URL), issue (tracker key like JIRA-42).
+type Reference struct {
+	Type  string `json:"type"`
+	Value string `json:"value"`
 }
 
 // DefaultFrontMatter returns the fallback front matter if none is present.
@@ -114,6 +124,8 @@ func ParseFrontMatter(content string) (FrontMatter, bool, error) {
 			fm.Updated = val
 		case "tags":
 			fm.Tags = parseTags(val)
+		case "references":
+			fm.References = parseReferences(val)
 		}
 	}
 
@@ -129,22 +141,53 @@ func trimQuotes(s string) string {
 	return s
 }
 
-func parseTags(s string) []string {
+// parseInlineList splits an inline bracket list `[a, b, c]` into trimmed,
+// unquoted items. Empty lists yield nil.
+func parseInlineList(s string) []string {
 	s = strings.TrimPrefix(s, "[")
 	s = strings.TrimSuffix(s, "]")
 	if s == "" {
 		return nil
 	}
 	raw := strings.Split(s, ",")
-	var tags []string
+	var items []string
 	for _, t := range raw {
 		t = strings.TrimSpace(t)
 		t = trimQuotes(t)
 		if t != "" {
-			tags = append(tags, t)
+			items = append(items, t)
 		}
 	}
-	return tags
+	return items
+}
+
+func parseTags(s string) []string {
+	return parseInlineList(s)
+}
+
+// parseReferences parses an inline `references: [...]` list into typed
+// Reference entries. Items are "type:value" — only known type prefixes
+// (source, external, issue) split, so unprefixed URLs keep their colons.
+// Items without a known prefix keep type "unknown" (the references lint
+// checker flags them).
+func parseReferences(s string) []Reference {
+	var refs []Reference
+	for _, r := range parseInlineList(s) {
+		typ, val := "unknown", r
+		if idx := strings.Index(r, ":"); idx != -1 {
+			prefix := strings.TrimSpace(r[:idx])
+			switch prefix {
+			case "source", "external", "issue":
+				typ = prefix
+				val = strings.TrimSpace(r[idx+1:])
+			}
+		}
+		if val == "" {
+			continue
+		}
+		refs = append(refs, Reference{Type: typ, Value: val})
+	}
+	return refs
 }
 
 // PageFrontMatter loads and parses front matter for a page path relative to repo root.

@@ -2,6 +2,7 @@
 status: current
 description: "Overview of the repository architecture, high-signal areas, and build instructions."
 superseded_by: ""
+references: [source:cmd/wiki-engine/main.go, source:internal/engine/engine.go, source:internal/engine/graph_view.go]
 ---
 # Repo Map
 
@@ -59,12 +60,13 @@ scaffold/               Human-readable reference copy of embedded templates
 | `log-tail [n]` | Show the most recent N log headings from `log.md` |
 | `changed [diff]` | `git diff --name-only` filtered to non-wiki files |
 | `candidates [diff]` | Same as changed, further filtered by `.wikirc` ignore rules (see [config.md](config.md)) |
-| `lint [--check=<a,b>] [--skip=<a,b>]` | Check required files, front matter, index format, bare URLs, broken links (index + cross-page), log heading format and chronology, open markers, orphans, leaf pages, heading hierarchy, phase consistency, external links to source files, duplicate content, stale content — repair guide: [operations/lint.md](../operations/lint.md) |
+| `lint [--check=<a,b>] [--skip=<a,b>]` | Check required files, front matter, index format, bare URLs, broken links (index + cross-page), log heading format and chronology, open markers, orphans, leaf pages, heading hierarchy, phase consistency, external links to source files, front matter references, duplicate content, stale content — repair guide: [operations/lint.md](../operations/lint.md) |
 | `stats` | Aggregate statistics: file count, heading count, total lines, last-updated date |
 | `context [--minimal] [--active] [--sort=topo\|chrono] [--summarize]` | Condensed wiki snapshot, or the active-page graph from `index.md` with `--active` (`--sort=topo` by depth, default chronological). `--sort` requires `--active`; `--minimal`/`--summarize` are catalog-view flags and reject combination with `--active` |
+| `graph [page] [--strict] [--dot]` | Navigation map of the active wiki graph: ASCII tree from `index.md` (diamonds/cycles as `↰` markers), `graph <page>` for one page's backlinks + outgoing links + declared references, `--json` for structured nodes/edges/unlinked/stats/issues (with `<page>`: neighborhood JSON), `--dot` for Graphviz export, `--strict` exits 1 on orphaned pages or graph issues (duplicate edges, self-loops, broken links) — in every mode |
 | `summary <page>` | First heading + first paragraph preview of a page |
 | `relevant <query> [n]` | Rank wiki pages by relevance to a query |
-| `impact <file...>` | Show which wiki pages mention changed source files (or pipe from `changed`) |
+| `impact <file...>` | Show which wiki pages are affected by changed source files (or pipe from `changed`). Pages with declared front matter `source:` references match only on those exact paths; pages without references fall back to basename text scan |
 | `diff <from> <to>` | Show wiki files added/removed/changed between two git refs |
 | `watch [--once]` | Poll for changes + lint issues at interval from `.wikirc`; exits with guidance when `watch_interval` is 0; `--once` runs a single cycle and exits 1 when the lint gate (`fail_severity`) fails |
 | `refresh [diff]` | Run list + log-tail + changed + candidates + lint as a maintenance snapshot |
@@ -119,7 +121,7 @@ envelope per invocation on stdout:
   emits `{ "ok": false, "error": "..." }` and exits 1 (plain-text errors are
   reserved for non-JSON invocations).
 - `lint --json` emits the issues array as `data` with `ok:false` when the `fail_severity` gate fails, and still exits 1 (matching plain-text lint).
-- `context --active --json` emits `{nodes, edges, unlinked}` — the machine-readable active graph for agent navigation.
+- `context --active --json` emits `{nodes, edges, unlinked, issues}` — the machine-readable active graph for agent navigation; nodes carry per-page `references` from front matter.
 - `watch --once --json` emits one `WatchResult` (`changed`, `candidates`, `lint_ok`, `lint_issues`) and exits 1 when `lint_ok` is false.
 - `sync-prompts --json` emits `{updated, removed, shims_preserved}` — written files, retired wiki-managed files cleaned up, and pre-existing root shims.
 

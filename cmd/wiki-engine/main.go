@@ -185,8 +185,8 @@ func runSyncPrompts(useJSON bool) {
 
 	if useJSON {
 		writeJSON(map[string]interface{}{
-			"updated":          updated,
-			"removed":          removed,
+			"updated":         updated,
+			"removed":         removed,
 			"shims_preserved": preExistingShims,
 		})
 	}
@@ -471,7 +471,7 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 			}
 
 			if useJSON {
-				writeJSON(engine.WikiGraphJSON{Nodes: nodes, Edges: edges, Unlinked: unlinked})
+				writeJSON(engine.WikiGraphJSON{Nodes: nodes, Edges: edges, Unlinked: unlinked, Issues: []string{}})
 				return
 			}
 
@@ -484,7 +484,7 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 				fmt.Println()
 			}
 			if len(unlinked) > 0 {
-				fmt.Println("== warning: active pages not linked from index.md ==")
+				fmt.Println("== warning: active pages unreachable from index.md ==")
 				for _, u := range unlinked {
 					fmt.Printf("  %s\n", u)
 				}
@@ -533,6 +533,128 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 			fmt.Println()
 			fmt.Println("== active phase ==")
 			fmt.Println(cr.Phase)
+		}
+
+	case "graph":
+		strict := false
+		dot := false
+		var posArgs []string
+		afterTerminator := false
+		for _, a := range args[2:] {
+			if a == "--" {
+				afterTerminator = true
+				continue
+			}
+			if !afterTerminator {
+				switch a {
+				case "--strict":
+					strict = true
+					continue
+				case "--dot":
+					dot = true
+					continue
+				}
+			}
+			posArgs = append(posArgs, a)
+		}
+		page := ""
+		if len(posArgs) > 0 {
+			page = posArgs[0]
+		}
+		if dot {
+			if page != "" {
+				fatal(fmt.Errorf("--dot cannot be combined with a page argument; run wiki-engine graph --dot or wiki-engine graph <page>"))
+			}
+			if useJSON {
+				fatal(fmt.Errorf("--dot cannot be combined with --json"))
+			}
+		}
+
+		view, err := eng.BuildGraphView()
+		if err != nil {
+			fatal(err)
+		}
+		unhealthy := len(view.Unlinked) > 0 || len(view.Issues) > 0
+
+		var nv *engine.NodeView
+		if page != "" {
+			nv, err = engine.Neighborhood(view.Nodes, view.Edges, page)
+			if err != nil {
+				fatal(err)
+			}
+		}
+
+		if useJSON {
+			if nv != nil {
+				writeJSON(nv)
+			} else {
+				writeJSON(view)
+			}
+			if strict && unhealthy {
+				os.Exit(1)
+			}
+			return
+		}
+
+		if dot {
+			fmt.Print(engine.RenderDot(view.Nodes, view.Edges))
+			if unhealthy {
+				fmt.Fprintf(os.Stderr, "warning: %d unlinked page(s), %d graph issue(s); run wiki-engine graph for details\n", len(view.Unlinked), len(view.Issues))
+			}
+			if strict && unhealthy {
+				os.Exit(1)
+			}
+			return
+		}
+
+		if nv != nil {
+			fmt.Printf("%s [%s] | %s\n", nv.Node.File, nv.Node.Status, nv.Node.Description)
+			fmt.Println()
+			fmt.Println("== backlinks ==")
+			for _, b := range nv.Backlinks {
+				fmt.Printf("  <- %s\n", b)
+			}
+			fmt.Println()
+			fmt.Println("== links ==")
+			for _, l := range nv.Node.Links {
+				fmt.Printf("  -> %s\n", l)
+			}
+			if len(nv.Node.References) > 0 {
+				fmt.Println()
+				fmt.Println("== references ==")
+				for _, r := range nv.Node.References {
+					fmt.Printf("  %s: %s\n", r.Type, r.Value)
+				}
+			}
+			if strict && unhealthy {
+				os.Exit(1)
+			}
+			return
+		}
+
+		fmt.Println("== wiki graph ==")
+		fmt.Print(engine.RenderTree(view.Nodes))
+		fmt.Println()
+		fmt.Printf("stats: %d nodes, %d edges, max depth %d\n", view.Stats.NodeCount, view.Stats.EdgeCount, view.Stats.MaxDepth)
+		if len(view.Stats.Roots) > 1 {
+			fmt.Printf("roots: %s\n", strings.Join(view.Stats.Roots, ", "))
+		}
+		if len(view.Unlinked) > 0 {
+			fmt.Println()
+			fmt.Println("== warning: active pages unreachable from index.md ==")
+			for _, u := range view.Unlinked {
+				fmt.Printf("  %s\n", u)
+			}
+		}
+		if len(view.Issues) > 0 {
+			fmt.Println()
+			fmt.Println("== graph issues ==")
+			for _, i := range view.Issues {
+				fmt.Printf("  ! %s\n", i)
+			}
+		}
+		if strict && unhealthy {
+			os.Exit(1)
 		}
 
 	case "summary":
@@ -712,6 +834,8 @@ Commands:
   stats                   Show aggregate wiki statistics
   context [--minimal] [--summarize] [--active] [--sort=topo|chrono]
                            Condensed wiki snapshot / active graph for agent context loading
+  graph [page] [--strict] [--dot]
+                           Navigation map of the active wiki graph (tree, neighborhood, DOT export)
   summary <page>          Show first heading and paragraph of a page
   relevant <query> [n]    Rank wiki pages by relevance to a query
   impact <file...>        Show which wiki pages mention changed files (or pipe from changed)
@@ -779,6 +903,7 @@ var commandArgSpecs = map[string]argSpec{
 		},
 		maxPos: 0,
 	},
+	"graph":    {flags: map[string]bool{"--strict": true, "--dot": true}, maxPos: 1},
 	"summary":  {maxPos: 1},
 	"relevant": {maxPos: 2},
 	"impact":   {maxPos: -1},

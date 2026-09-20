@@ -7,6 +7,41 @@ superseded_by: ""
 
 Append-only timeline of wiki maintenance activity.
 
+## [2026-09-20] audit | round 2 — checker lifecycle consistency, shared path resolution, label accuracy, template drift
+
+- `referencesChecker` now skips legacy/deprecated pages (matching orphans/leaf-pages): archived pages may reference retired files. Regression test added.
+- Extracted shared `sourcePathExists` helper; external-links and references checkers no longer duplicate page-dir-then-repo-root resolution.
+- Removed dead nil-guard for unlinked in BuildGraphView (ActiveUnlinkedPages always returns a slice).
+- Warning label corrected to "active pages unreachable from index.md" — ActiveUnlinkedPages is reachability-based, not index-links-based.
+- Removed redundant duplicated-fixture block in TestNeighborhood.
+- Docs: repo-map lint row now enumerates the references checker; scaffold query workflow template aligned with the live wiki page (graph navigation).
+- Lesson filed: checkers share one lifecycle contract.
+
+## [2026-09-20] audit | code/prompt/doc audit after references feature — two graph logic gaps fixed, parser deduped, docs aligned
+
+- Fixed `graph --json <page>` silently ignoring the page argument — now returns neighborhood JSON (backlinks/links/references).
+- Fixed `graph <page> --strict` exiting 0 on an unhealthy wiki — the neighborhood is computed once before mode dispatch so every branch shares the strict gate.
+- Deduped front matter parsing: `parseTags` and `parseReferences` now share `parseInlineList`; fixed a stale comment claiming first-colon splitting.
+- Docs aligned: repo-map graph row + JSON shape note, query workflow, release verification (`graph --strict` added to gates), wiki README shell-first navigation, SKILL.md good-page bullet.
+- Three lessons filed in lessons.md: front matter vs prose checkers, authoritative declared refs, mode×flag test coverage.
+- Integration suite extended: JSON neighborhood, strict+neighborhood negative case.
+
+## [2026-09-20] ingest | `references` front matter — typed cross-references (source/external/issue)
+
+- New front matter field `references` — single-line bracket list of typed cross-references: `source:<repo path>` (validated to exist), `external:<url>` (http/https), `issue:<KEY>` (tracker pattern). Parsed by `ParseFrontMatter` (first-colon split, known-type prefixes).
+- Graph integration: references are annotations, never edges. `graph <page>` renders a `== references ==` section; graph JSON carries `references` per node; tree view and traversal semantics unchanged.
+- New `references` lint checker: flags missing source files, scheme-less URLs, malformed issue keys, unknown types. Registered in allCheckers (`--check=references` works).
+- `impact` precision: pages with declared `source:` refs match only on exact declared paths — prose mentions no longer create false positives. Pages without refs keep the basename text-scan fallback.
+- Dogfooded on repo-map.md, release.md, lint.md. Contract documented in schema.md (repo + scaffold). Prompt layers updated (wiki-maintainer checklist item, query workflow, pi skill).
+
+## [2026-09-20] ingest | new `graph` command — node-based navigation map
+
+- Added `wiki-engine graph`: ASCII navigation tree from `index.md` (diamonds/cycles as `↰` markers), `graph <page>` neighborhood view (backlinks + outgoing links), `--json` structured output (nodes/edges/unlinked/stats/issues), `--dot` Graphviz export, and `--strict` (exit 1 on orphaned pages or graph issues: duplicate edges, self-loops, broken links).
+- Reused the existing BFS graph builder (`BuildWikiGraph`, `ActiveUnlinkedPages`, `SortNodes`); new code is additive in `internal/engine/graph_view.go`. `WikiGraphJSON` gained `stats`/`issues` fields; `context --active` output is unchanged in shape.
+- Surfaced previously silent broken-link drops: BFS skips unreadable targets, so `BuildGraphView` re-derives broken links from active nodes via `BrokenLinks`.
+- Prompt layers updated (scaffold → embedded FS → sync-prompts): wiki-maintainer, query, and pi skill now document `graph` navigation usage.
+- Docs updated: repo-map command table, query workflow, README core commands.
+
 ## [2026-09-19] ingest | v1.0.0 and v1.0.1 released — PR #10 merged, upgrade redirect hotfix
 
 - **v1.0.0 released**: first semantic-versioned release. PR #10 merged all three audit-fix rounds into master; CI green (test, audit, lint, golangci-lint, race, integration). Release workflow built and uploaded assets for linux/darwin amd64+arm64 and windows amd64 plus `checksums.txt`.

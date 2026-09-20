@@ -2,6 +2,7 @@
 status: current
 description: "Runbook for cutting and verifying a go-wiki-engine release."
 superseded_by: ""
+references: [source:internal/upgrade/upgrade.go, source:internal/scaffold/scaffold.go, external:https://github.com/ramayac/go-wiki-engine/releases]
 ---
 # Release Runbook
 
@@ -17,7 +18,7 @@ How to cut, publish, and verify a release of go-wiki-engine.
 
 1. All gates green: `make test`, `make lint`, `make audit`, `make integration`, `make golangci-lint`, and `go test -race ./...`.
 2. `make sync-scaffold` leaves `internal/scaffold/files` unchanged.
-3. `wiki-engine lint` and `wiki-engine context --active` are clean on this repo.
+3. `wiki-engine lint`, `wiki-engine graph --strict`, and `wiki-engine context --active` are clean on this repo.
 4. `CHANGELOG.md` has its Unreleased entries moved to the new version and dated.
 
 ## Cut & Publish

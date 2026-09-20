@@ -47,7 +47,7 @@ The primary interface is slash commands in your AI tool, all sharing canonical d
 
 Run `wiki-engine help` for the full list, or `wiki-engine --json <command>` for structured output. Command-by-command details: [wiki/prologue/repo-map.md](wiki/prologue/repo-map.md).
 
-Core commands: `init`, `list`, `search`, `context --active`, `summary`, `log-tail`, `changed`, `candidates`, `lint`, `watch --once`, `diff`, `refresh`, `sync-prompts`, `upgrade`.
+Core commands: `init`, `list`, `search`, `context --active`, `graph`, `summary`, `log-tail`, `changed`, `candidates`, `lint`, `watch --once`, `diff`, `refresh`, `sync-prompts`, `upgrade`.
 
 ## Configuration (`.wikirc`)
 

@@ -789,21 +789,106 @@ func (c *externalLinksChecker) Check(e *Engine) ([]Issue, error) {
 					continue
 				}
 				// Resolve relative to the page's directory, then relative to repo root.
-				pageDir := filepath.Dir(abs)
-				resolved := filepath.Clean(filepath.Join(pageDir, baseTarget))
-				if _, err := os.Stat(resolved); os.IsNotExist(err) {
-					// Also try relative to repo root.
-					resolvedRoot := filepath.Join(e.RootDir, baseTarget)
-					if _, err2 := os.Stat(resolvedRoot); os.IsNotExist(err2) {
-						issues = append(issues, Issue{
-							Severity: SevWarn,
-							Check:    c.Name(),
-							File:     rel,
-							Line:     lineNo + 1,
-							Message:  fmt.Sprintf("broken external link: %s", target),
-						})
-					}
+				if !sourcePathExists(e, abs, baseTarget) {
+					issues = append(issues, Issue{
+						Severity: SevWarn,
+						Check:    c.Name(),
+						File:     rel,
+						Line:     lineNo + 1,
+						Message:  fmt.Sprintf("broken external link: %s", target),
+					})
 				}
+			}
+		}
+	}
+	return issues, nil
+}
+
+// sourcePathExists reports whether a source path referenced from a wiki page
+// resolves to an existing file: relative to the page's directory first, then
+// relative to the repository root. Shared by the external-links and
+// references checkers.
+func sourcePathExists(e *Engine, pageAbs, target string) bool {
+	resolved := filepath.Clean(filepath.Join(filepath.Dir(pageAbs), target))
+	if _, err := os.Stat(resolved); err == nil {
+		return true
+	}
+	_, err := os.Stat(filepath.Join(e.RootDir, target))
+	return err == nil
+}
+
+// referencesChecker validates front matter `references` entries:
+// source paths must resolve to existing files, external URLs must carry an
+// http(s) scheme, issue keys must match the conventional tracker pattern,
+// and the type prefix must be known.
+type referencesChecker struct{}
+
+var issueKeyRe = regexp.MustCompile(`^[A-Z][A-Z0-9]*-[0-9]+$`)
+
+func (c *referencesChecker) Name() string { return "references" }
+
+func (c *referencesChecker) Check(e *Engine) ([]Issue, error) {
+	var issues []Issue
+	files, err := e.List()
+	if err != nil {
+		return nil, err
+	}
+	for _, rel := range files {
+		if !strings.HasSuffix(rel, ".md") {
+			continue
+		}
+		abs := filepath.Join(e.RootDir, rel)
+		data, err := os.ReadFile(abs)
+		if err != nil {
+			continue
+		}
+		fm, found, _ := ParseFrontMatter(string(data))
+		if !found || len(fm.References) == 0 {
+			continue
+		}
+		// Lifecycle: legacy/deprecated pages live outside the active graph
+		// (orphans/leaf-pages treat them the same way) and may legitimately
+		// reference files that no longer exist — the reason they were retired.
+		if fm.Status == "legacy" || fm.Status == "deprecated" {
+			continue
+		}
+		for _, r := range fm.References {
+			switch r.Type {
+			case "source":
+				// Resolve like external-links: page dir first, then repo root.
+				if !sourcePathExists(e, abs, r.Value) {
+					issues = append(issues, Issue{
+						Severity: SevWarn,
+						Check:    c.Name(),
+						File:     rel,
+						Message:  fmt.Sprintf("reference source not found: %s", r.Value),
+					})
+				}
+			case "external":
+				if !strings.HasPrefix(r.Value, "http://") && !strings.HasPrefix(r.Value, "https://") {
+					issues = append(issues, Issue{
+						Severity: SevWarn,
+						Check:    c.Name(),
+						File:     rel,
+						Message:  fmt.Sprintf("reference external URL missing scheme: %s", r.Value),
+					})
+				}
+			case "issue":
+				if !issueKeyRe.MatchString(r.Value) {
+					issues = append(issues, Issue{
+						Severity: SevWarn,
+						Check:    c.Name(),
+						File:     rel,
+						Message:  fmt.Sprintf("reference issue key malformed: %s", r.Value),
+					})
+				}
+			default:
+				issues = append(issues, Issue{
+					Severity: SevWarn,
+					Check:    c.Name(),
+					File:     rel,
+					Message:  fmt.Sprintf("reference with unknown type %q: %s", r.Type, r.Value),
+				})
 			}
 		}
 	}
@@ -1244,9 +1329,24 @@ func (c *bareUrlChecker) Check(e *Engine) ([]Issue, error) {
 
 		lines := strings.Split(string(data), "\n")
 		inCodeBlock := false
+		inFrontMatter := false
+		fmStarted := false
 
 		for lineNo, line := range lines {
 			trimmed := strings.TrimSpace(line)
+			// Front matter declarations (e.g. `references: [external:https://...]`)
+			// are not prose: the references checker validates them instead.
+			if !fmStarted && trimmed == "---" {
+				fmStarted = true
+				inFrontMatter = true
+				continue
+			}
+			if inFrontMatter {
+				if trimmed == "---" {
+					inFrontMatter = false
+				}
+				continue
+			}
 			if strings.HasPrefix(trimmed, "```") {
 				inCodeBlock = !inCodeBlock
 				continue
@@ -1357,6 +1457,7 @@ func allCheckers() []Checker {
 		&markersChecker{},
 		&phaseConsistencyChecker{},
 		&externalLinksChecker{},
+		&referencesChecker{},
 		&duplicateContentChecker{},
 		&staleContentChecker{},
 	}

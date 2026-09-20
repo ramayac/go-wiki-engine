@@ -728,6 +728,28 @@ func (e *Engine) Impact(changedFiles []string) ([]ImpactResult, error) {
 			continue
 		}
 		content := string(data)
+		fm, _, _ := ParseFrontMatter(content)
+
+		// Pages with declared source references match only on the declared
+		// paths (repo-root relative) — prose mentions do not create impact.
+		var sourceRefs []string
+		for _, r := range fm.References {
+			if r.Type == "source" {
+				sourceRefs = append(sourceRefs, filepath.ToSlash(filepath.Clean(r.Value)))
+			}
+		}
+		if len(sourceRefs) > 0 {
+			for _, cf := range changedFiles {
+				cfSlash := filepath.ToSlash(filepath.Clean(cf))
+				for _, ref := range sourceRefs {
+					if ref == cfSlash {
+						seen[cf][rel] = true
+					}
+				}
+			}
+			continue
+		}
+
 		lower := strings.ToLower(content)
 
 		for base, cfs := range basenameToFiles {

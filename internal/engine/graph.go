@@ -60,14 +60,15 @@ func ExtractLinks(content string, currentFileDir string, wikiDir string) []strin
 
 // WikiNode represents a node in the active wiki graph.
 type WikiNode struct {
-	File        string    `json:"file"`
-	Status      string    `json:"status"`
-	Description string    `json:"description"`
-	Created     string    `json:"created,omitempty"`
-	Updated     string    `json:"updated,omitempty"`
-	ModTime     time.Time `json:"-"`
-	Links       []string  `json:"links"`
-	Depth       int       `json:"depth"`
+	File        string      `json:"file"`
+	Status      string      `json:"status"`
+	Description string      `json:"description"`
+	Created     string      `json:"created,omitempty"`
+	Updated     string      `json:"updated,omitempty"`
+	ModTime     time.Time   `json:"-"`
+	Links       []string    `json:"links"`
+	References  []Reference `json:"references,omitempty"`
+	Depth       int         `json:"depth"`
 }
 
 // WikiEdge represents a directed edge between active wiki pages.
@@ -77,10 +78,14 @@ type WikiEdge struct {
 }
 
 // WikiGraphJSON holds the serializable active wiki graph representation.
+// Unlinked and Issues always serialize as arrays (never null) when the
+// graph is built through BuildGraphView.
 type WikiGraphJSON struct {
-	Nodes    []WikiNode `json:"nodes"`
-	Edges    []WikiEdge `json:"edges"`
-	Unlinked []string   `json:"unlinked,omitempty"`
+	Nodes    []WikiNode  `json:"nodes"`
+	Edges    []WikiEdge  `json:"edges"`
+	Unlinked []string    `json:"unlinked"`
+	Stats    *GraphStats `json:"stats,omitempty"`
+	Issues   []string    `json:"issues"`
 }
 
 // BuildWikiGraph constructs the active wiki graph starting BFS from index.md.
@@ -146,6 +151,7 @@ func (e *Engine) BuildWikiGraph() ([]WikiNode, []WikiEdge, error) {
 			Updated:     fm.Updated,
 			ModTime:     mtime,
 			Links:       links,
+			References:  fm.References,
 			Depth:       curr.depth,
 		}
 
@@ -238,7 +244,7 @@ func (e *Engine) ActiveUnlinkedPages() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	var unlinked []string
+	unlinked := []string{}
 	for _, rel := range files {
 		if !strings.HasSuffix(rel, ".md") {
 			continue

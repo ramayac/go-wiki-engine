@@ -11,6 +11,74 @@ Related: [log.md](../prologue/log.md) — chronological record of every change; 
 
 ---
 
+## 2026-09-20 — Front matter declarations must be exempt from prose checkers
+
+### What happened
+
+Dogfooding the new `references` front matter field (`external:https://...` on release.md) made `wiki-engine lint` fail immediately: the `bare-urls` checker scans every line as prose and flagged the declared URL as a bare URL. The declaration was valid; the checker just didn't know about it.
+
+### Why it matters
+
+Every new structured declaration added to front matter can collide with a checker that treats the whole file as prose. If the first adopter hits a false positive, the convention dies on contact.
+
+### The fix
+
+`bareUrlChecker` now skips the front matter block entirely; front matter declarations are validated by purpose-built checkers (`references`), not prose checkers. Regression test proves a valid `external:` reference produces no bare-urls issue.
+
+### Key design principle confirmed
+
+**Structured declarations get structured validators.** When a field carries machine-readable meaning, the prose-level checkers must step aside and a dedicated checker must own it.
+
+---
+
+## 2026-09-20 — Declared references are authoritative; prose is a fallback only
+
+### What happened
+
+The naive `impact` design (basename text scan everywhere) made declared references pointless: a page that declared `source:internal/engine/graph.go` but mentioned `main.go` in prose would be flagged as impacted by any `main.go` change — a false positive the declaration was meant to prevent.
+
+### The fix
+
+Two-tier `impact`: pages with declared `source:` references match only on those exact paths; pages without references keep the basename text scan. Declarations are authoritative, fallback is for undeclared pages.
+
+### Key design principle confirmed
+
+**Explicit metadata must override inference, not compete with it.** When both signals exist, the structured one wins; the heuristic applies only where structure is absent.
+
+---
+
+## 2026-09-20 — Every mode × flag combination needs a test
+
+### What happened
+
+A post-implementation audit found two logic gaps in the `graph` command that all green tests had missed: `graph --json <page>` silently ignored the page argument (returned the whole graph), and `graph <page> --strict` exited 0 on an unhealthy wiki (the strict gate lived only in the tree branch). Both were gaps between modes, invisible to tests that exercised each mode in isolation.
+
+### The fix
+
+Integration coverage for the combinations: JSON + neighborhood, strict + neighborhood. The neighborhood is now computed once before mode dispatch, so every branch shares the same strict gate.
+
+### Key design principle confirmed
+
+**Test the cross-product of modes and flags, not just the modes.** Command surface grows combinatorially; the seams between branches are where arguments get silently dropped.
+
+---
+
+## 2026-09-20 — Every checker must respect page lifecycle
+
+### What happened
+
+A follow-up audit found the new `references` checker was the only checker that validated `legacy`/`deprecated` pages. Deprecated pages legitimately point at retired files — that is often the reason they were retired — so a single broken `source:` reference on an archived page would fail lint forever, forcing edits to pages the lifecycle contract says to leave untouched. `orphans` and `leaf-pages` already skipped them; the new checker forgot the convention.
+
+### The fix
+
+`referencesChecker` skips `legacy`/`deprecated` pages, matching `orphans`/`leaf-pages`. Regression test proves a deprecated page with broken references produces no issues.
+
+### Key design principle confirmed
+
+**Checkers share one lifecycle contract.** When a new validator joins the suite, its first question is "does this apply to archived pages?" — and the answer must match the existing checkers, or lint punishes pages that are deliberately frozen.
+
+---
+
 ## 2026-05-01 — The prompt duplication trap
 
 ### What happened
