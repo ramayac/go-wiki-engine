@@ -226,22 +226,6 @@ func TestNeighborhood(t *testing.T) {
 		t.Errorf("links = %v, want [index.md]", nv.Node.Links)
 	}
 
-	// Backlinks are sorted.
-	eng2 := graphViewFixture(t)
-	nodes2, edges2, err := eng2.BuildWikiGraph()
-	if err != nil {
-		t.Fatalf("BuildWikiGraph failed: %v", err)
-	}
-	// Same fixture builds edges in the same BFS order, so this exercises the
-	// deterministic sort path.
-	nv2, err := Neighborhood(nodes2, edges2, "c.md")
-	if err != nil {
-		t.Fatalf("Neighborhood failed: %v", err)
-	}
-	if len(nv2.Backlinks) != 2 || nv2.Backlinks[0] != "a.md" || nv2.Backlinks[1] != "b.md" {
-		t.Errorf("backlinks = %v, want sorted [a.md b.md]", nv2.Backlinks)
-	}
-
 	// Unknown page errors.
 	if _, err := Neighborhood(nodes, edges, "nope.md"); err == nil {
 		t.Error("expected error for unknown page")

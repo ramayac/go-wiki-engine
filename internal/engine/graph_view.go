@@ -194,9 +194,6 @@ func (e *Engine) BuildGraphView() (*WikiGraphJSON, error) {
 	if err != nil {
 		return nil, err
 	}
-	if unlinked == nil {
-		unlinked = []string{}
-	}
 	issues := ValidateGraph(nodes, edges, e.WikiPath())
 	if broken := e.BrokenLinks(nodes); len(broken) > 0 {
 		issues = append(issues, broken...)

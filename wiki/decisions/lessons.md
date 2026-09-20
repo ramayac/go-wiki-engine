@@ -63,6 +63,22 @@ Integration coverage for the combinations: JSON + neighborhood, strict + neighbo
 
 ---
 
+## 2026-09-20 — Every checker must respect page lifecycle
+
+### What happened
+
+A follow-up audit found the new `references` checker was the only checker that validated `legacy`/`deprecated` pages. Deprecated pages legitimately point at retired files — that is often the reason they were retired — so a single broken `source:` reference on an archived page would fail lint forever, forcing edits to pages the lifecycle contract says to leave untouched. `orphans` and `leaf-pages` already skipped them; the new checker forgot the convention.
+
+### The fix
+
+`referencesChecker` skips `legacy`/`deprecated` pages, matching `orphans`/`leaf-pages`. Regression test proves a deprecated page with broken references produces no issues.
+
+### Key design principle confirmed
+
+**Checkers share one lifecycle contract.** When a new validator joins the suite, its first question is "does this apply to archived pages?" — and the answer must match the existing checkers, or lint punishes pages that are deliberately frozen.
+
+---
+
 ## 2026-05-01 — The prompt duplication trap
 
 ### What happened

@@ -789,25 +789,32 @@ func (c *externalLinksChecker) Check(e *Engine) ([]Issue, error) {
 					continue
 				}
 				// Resolve relative to the page's directory, then relative to repo root.
-				pageDir := filepath.Dir(abs)
-				resolved := filepath.Clean(filepath.Join(pageDir, baseTarget))
-				if _, err := os.Stat(resolved); os.IsNotExist(err) {
-					// Also try relative to repo root.
-					resolvedRoot := filepath.Join(e.RootDir, baseTarget)
-					if _, err2 := os.Stat(resolvedRoot); os.IsNotExist(err2) {
-						issues = append(issues, Issue{
-							Severity: SevWarn,
-							Check:    c.Name(),
-							File:     rel,
-							Line:     lineNo + 1,
-							Message:  fmt.Sprintf("broken external link: %s", target),
-						})
-					}
+				if !sourcePathExists(e, abs, baseTarget) {
+					issues = append(issues, Issue{
+						Severity: SevWarn,
+						Check:    c.Name(),
+						File:     rel,
+						Line:     lineNo + 1,
+						Message:  fmt.Sprintf("broken external link: %s", target),
+					})
 				}
 			}
 		}
 	}
 	return issues, nil
+}
+
+// sourcePathExists reports whether a source path referenced from a wiki page
+// resolves to an existing file: relative to the page's directory first, then
+// relative to the repository root. Shared by the external-links and
+// references checkers.
+func sourcePathExists(e *Engine, pageAbs, target string) bool {
+	resolved := filepath.Clean(filepath.Join(filepath.Dir(pageAbs), target))
+	if _, err := os.Stat(resolved); err == nil {
+		return true
+	}
+	_, err := os.Stat(filepath.Join(e.RootDir, target))
+	return err == nil
 }
 
 // referencesChecker validates front matter `references` entries:
@@ -839,22 +846,23 @@ func (c *referencesChecker) Check(e *Engine) ([]Issue, error) {
 		if !found || len(fm.References) == 0 {
 			continue
 		}
+		// Lifecycle: legacy/deprecated pages live outside the active graph
+		// (orphans/leaf-pages treat them the same way) and may legitimately
+		// reference files that no longer exist — the reason they were retired.
+		if fm.Status == "legacy" || fm.Status == "deprecated" {
+			continue
+		}
 		for _, r := range fm.References {
 			switch r.Type {
 			case "source":
 				// Resolve like external-links: page dir first, then repo root.
-				pageDir := filepath.Dir(abs)
-				resolved := filepath.Clean(filepath.Join(pageDir, r.Value))
-				if _, err := os.Stat(resolved); os.IsNotExist(err) {
-					resolvedRoot := filepath.Join(e.RootDir, r.Value)
-					if _, err2 := os.Stat(resolvedRoot); os.IsNotExist(err2) {
-						issues = append(issues, Issue{
-							Severity: SevWarn,
-							Check:    c.Name(),
-							File:     rel,
-							Message:  fmt.Sprintf("reference source not found: %s", r.Value),
-						})
-					}
+				if !sourcePathExists(e, abs, r.Value) {
+					issues = append(issues, Issue{
+						Severity: SevWarn,
+						Check:    c.Name(),
+						File:     rel,
+						Message:  fmt.Sprintf("reference source not found: %s", r.Value),
+					})
 				}
 			case "external":
 				if !strings.HasPrefix(r.Value, "http://") && !strings.HasPrefix(r.Value, "https://") {

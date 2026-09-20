@@ -484,7 +484,7 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 				fmt.Println()
 			}
 			if len(unlinked) > 0 {
-				fmt.Println("== warning: active pages not linked from index.md ==")
+				fmt.Println("== warning: active pages unreachable from index.md ==")
 				for _, u := range unlinked {
 					fmt.Printf("  %s\n", u)
 				}
@@ -641,7 +641,7 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 		}
 		if len(view.Unlinked) > 0 {
 			fmt.Println()
-			fmt.Println("== warning: active pages not linked from index.md ==")
+			fmt.Println("== warning: active pages unreachable from index.md ==")
 			for _, u := range view.Unlinked {
 				fmt.Printf("  %s\n", u)
 			}

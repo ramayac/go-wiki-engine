@@ -7,6 +7,16 @@ superseded_by: ""
 
 Append-only timeline of wiki maintenance activity.
 
+## [2026-09-20] audit | round 2 — checker lifecycle consistency, shared path resolution, label accuracy, template drift
+
+- `referencesChecker` now skips legacy/deprecated pages (matching orphans/leaf-pages): archived pages may reference retired files. Regression test added.
+- Extracted shared `sourcePathExists` helper; external-links and references checkers no longer duplicate page-dir-then-repo-root resolution.
+- Removed dead nil-guard for unlinked in BuildGraphView (ActiveUnlinkedPages always returns a slice).
+- Warning label corrected to "active pages unreachable from index.md" — ActiveUnlinkedPages is reachability-based, not index-links-based.
+- Removed redundant duplicated-fixture block in TestNeighborhood.
+- Docs: repo-map lint row now enumerates the references checker; scaffold query workflow template aligned with the live wiki page (graph navigation).
+- Lesson filed: checkers share one lifecycle contract.
+
 ## [2026-09-20] audit | code/prompt/doc audit after references feature — two graph logic gaps fixed, parser deduped, docs aligned
 
 - Fixed `graph --json <page>` silently ignoring the page argument — now returns neighborhood JSON (backlinks/links/references).

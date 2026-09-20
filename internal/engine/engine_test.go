@@ -276,6 +276,26 @@ references: [source:nope.go, external:github.com/no-scheme, issue:not-a-key, bog
 			t.Errorf("check = %q, want references", iss.Check)
 		}
 	}
+
+	// Lifecycle: legacy/deprecated pages may reference retired files —
+	// the references checker must skip them like orphans/leaf-pages do.
+	deprecated := `---
+status: deprecated
+description: Retired
+superseded_by: "index.md"
+references: [source:long-gone.go, issue:OLD-1]
+---
+# Retired`
+	if err := os.WriteFile(p, []byte(deprecated), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	issues, err = checker.Check(eng)
+	if err != nil {
+		t.Fatalf("referencesChecker failed: %v", err)
+	}
+	if len(issues) != 0 {
+		t.Errorf("deprecated page references produced issues (must be skipped): %+v", issues)
+	}
 }
 
 func TestImpactReferences(t *testing.T) {
