@@ -22,6 +22,11 @@ commands and repeatable workflows for wiki operations.
 wiki-engine context --active          # Active-page graph from index.md (skips legacy/deprecated)
 wiki-engine context --active --sort=topo  # Hierarchical map: parents before children
 wiki-engine --json context --active   # Structured map: nodes + edges (+ unlinked)
+wiki-engine graph                     # Navigation tree from index.md (diamonds/cycles as ↰)
+wiki-engine graph <page>              # Neighborhood: page + backlinks + outgoing links
+wiki-engine graph --strict            # Tree + diagnostics; exit 1 on orphans/graph issues
+wiki-engine graph --dot               # Graphviz DOT export for visualization
+wiki-engine graph --json              # Structured nodes/edges/unlinked/stats/issues
 wiki-engine context --sort=chrono     # Recency map: recently-updated first
 wiki-engine context                   # Snapshot: catalog with statuses, recent log, phase
 wiki-engine context --summarize       # Snapshot with per-page previews (progressive disclosure)
@@ -70,7 +75,7 @@ Absorb repo changes into the wiki.
 
 ### 2. Query the Repo (`/wiki-query`)
 Answer questions from the wiki first.
-1. Map first: `wiki-engine context --active --sort=topo`.
+1. Map first: `wiki-engine graph` (human tree) or `wiki-engine context --active --sort=topo` (compact agent map).
 2. Locate the topic: `wiki-engine search <term>` or `wiki-engine relevant <term>`.
 3. Read along the graph's `->` links to related active pages.
 4. Use source files only if the wiki lacks evidence.

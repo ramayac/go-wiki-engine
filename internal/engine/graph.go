@@ -77,10 +77,14 @@ type WikiEdge struct {
 }
 
 // WikiGraphJSON holds the serializable active wiki graph representation.
+// Unlinked and Issues always serialize as arrays (never null) when the
+// graph is built through BuildGraphView.
 type WikiGraphJSON struct {
-	Nodes    []WikiNode `json:"nodes"`
-	Edges    []WikiEdge `json:"edges"`
-	Unlinked []string   `json:"unlinked,omitempty"`
+	Nodes    []WikiNode  `json:"nodes"`
+	Edges    []WikiEdge  `json:"edges"`
+	Unlinked []string    `json:"unlinked"`
+	Stats    *GraphStats `json:"stats,omitempty"`
+	Issues   []string    `json:"issues"`
 }
 
 // BuildWikiGraph constructs the active wiki graph starting BFS from index.md.
@@ -238,7 +242,7 @@ func (e *Engine) ActiveUnlinkedPages() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	var unlinked []string
+	unlinked := []string{}
 	for _, rel := range files {
 		if !strings.HasSuffix(rel, ".md") {
 			continue

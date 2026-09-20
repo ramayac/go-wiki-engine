@@ -202,6 +202,48 @@ fi
 # JSON graph format check
 "$BIN" --json context --active | grep -q '"nodes"' || { echo "FAIL: json graph output missing nodes"; exit 1; }
 "$BIN" --json context --active | grep -q '"edges"' || { echo "FAIL: json graph output missing edges"; exit 1; }
+# graph command: navigation tree, neighborhood, stats, strict gate
+# Run in a fresh-init project: earlier sections leave orphan pages (dup1/dup2) around.
+echo "--- graph ---"
+mkdir -p "$TMPDIR/graphproj"
+cd "$TMPDIR/graphproj"
+git init -q -b main
+git config user.email "test@test"
+git config user.name "Test"
+"$BIN" init
+"$BIN" graph | grep -q "== wiki graph ==" || { echo "FAIL: graph header missing"; exit 1; }
+"$BIN" graph | grep -q "index.md \[current\]" || { echo "FAIL: graph tree missing root node"; exit 1; }
+"$BIN" graph | grep -q "stats: " || { echo "FAIL: graph stats missing"; exit 1; }
+"$BIN" graph prologue/schema.md | grep -q "== backlinks ==" || { echo "FAIL: graph neighborhood missing backlinks"; exit 1; }
+"$BIN" graph --dot | grep -q "digraph wiki {" || { echo "FAIL: graph dot output missing digraph header"; exit 1; }
+"$BIN" --json graph | grep -q '"stats"' || { echo "FAIL: json graph output missing stats"; exit 1; }
+"$BIN" graph --strict || { echo "FAIL: graph --strict should pass on a healthy wiki"; exit 1; }
+if "$BIN" graph nope.md >/dev/null 2>&1; then
+  echo "FAIL: graph with unknown page should be rejected"
+  exit 1
+fi
+if "$BIN" graph --dot --json >/dev/null 2>&1; then
+  echo "FAIL: graph --dot --json should be rejected"
+  exit 1
+fi
+# graph --strict must fail when an orphan exists and when a link is broken
+printf '%s\n' '---' 'status: current' 'description: Orphan' '---' '# Orphan' > wiki/orphan.md
+if "$BIN" graph --strict >/dev/null 2>&1; then
+  echo "FAIL: graph --strict should fail with an orphan page"
+  exit 1
+fi
+"$BIN" graph | grep -q "orphan.md" || { echo "FAIL: graph should report the orphan page"; exit 1; }
+printf '%s\n' '---' 'status: current' 'description: Broken' '---' '# Broken' '- [nope.md](nope.md)' > wiki/broken.md
+cp wiki/index.md "$TMPDIR/index.md.bak"
+printf '%s\n' '- [broken.md](broken.md)' >> wiki/index.md
+if "$BIN" graph --strict >/dev/null 2>&1; then
+  echo "FAIL: graph --strict should fail with a broken link"
+  exit 1
+fi
+"$BIN" graph | grep -q "broken edge" || { echo "FAIL: graph should report the broken link"; exit 1; }
+cp "$TMPDIR/index.md.bak" wiki/index.md
+rm wiki/orphan.md wiki/broken.md
+cd "$TMPDIR"
 # Test: lint --check and --skip flags
 echo "--- lint flags ---"
 # Add a duplicate-content issue (by overriding dup1 and dup2 with same content)

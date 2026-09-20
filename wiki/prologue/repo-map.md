@@ -62,6 +62,7 @@ scaffold/               Human-readable reference copy of embedded templates
 | `lint [--check=<a,b>] [--skip=<a,b>]` | Check required files, front matter, index format, bare URLs, broken links (index + cross-page), log heading format and chronology, open markers, orphans, leaf pages, heading hierarchy, phase consistency, external links to source files, duplicate content, stale content — repair guide: [operations/lint.md](../operations/lint.md) |
 | `stats` | Aggregate statistics: file count, heading count, total lines, last-updated date |
 | `context [--minimal] [--active] [--sort=topo\|chrono] [--summarize]` | Condensed wiki snapshot, or the active-page graph from `index.md` with `--active` (`--sort=topo` by depth, default chronological). `--sort` requires `--active`; `--minimal`/`--summarize` are catalog-view flags and reject combination with `--active` |
+| `graph [page] [--strict] [--dot]` | Navigation map of the active wiki graph: ASCII tree from `index.md` (diamonds/cycles as `↰` markers), `graph <page>` for one page's backlinks + outgoing links, `--json` for structured nodes/edges/unlinked/stats/issues, `--dot` for Graphviz export, `--strict` exits 1 on orphaned pages or graph issues (duplicate edges, self-loops, broken links) |
 | `summary <page>` | First heading + first paragraph preview of a page |
 | `relevant <query> [n]` | Rank wiki pages by relevance to a query |
 | `impact <file...>` | Show which wiki pages mention changed source files (or pipe from `changed`) |

@@ -7,6 +7,14 @@ superseded_by: ""
 
 Append-only timeline of wiki maintenance activity.
 
+## [2026-09-20] ingest | new `graph` command — node-based navigation map
+
+- Added `wiki-engine graph`: ASCII navigation tree from `index.md` (diamonds/cycles as `↰` markers), `graph <page>` neighborhood view (backlinks + outgoing links), `--json` structured output (nodes/edges/unlinked/stats/issues), `--dot` Graphviz export, and `--strict` (exit 1 on orphaned pages or graph issues: duplicate edges, self-loops, broken links).
+- Reused the existing BFS graph builder (`BuildWikiGraph`, `ActiveUnlinkedPages`, `SortNodes`); new code is additive in `internal/engine/graph_view.go`. `WikiGraphJSON` gained `stats`/`issues` fields; `context --active` output is unchanged in shape.
+- Surfaced previously silent broken-link drops: BFS skips unreadable targets, so `BuildGraphView` re-derives broken links from active nodes via `BrokenLinks`.
+- Prompt layers updated (scaffold → embedded FS → sync-prompts): wiki-maintainer, query, and pi skill now document `graph` navigation usage.
+- Docs updated: repo-map command table, query workflow, README core commands.
+
 ## [2026-09-19] ingest | v1.0.0 and v1.0.1 released — PR #10 merged, upgrade redirect hotfix
 
 - **v1.0.0 released**: first semantic-versioned release. PR #10 merged all three audit-fix rounds into master; CI green (test, audit, lint, golangci-lint, race, integration). Release workflow built and uploaded assets for linux/darwin amd64+arm64 and windows amd64 plus `checksums.txt`.

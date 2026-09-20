@@ -56,6 +56,10 @@ When writing or modifying any wiki page, always follow this checklist:
 
 `wiki-engine context --active` is the **map** of the wiki — use it to navigate, not just to verify:
 
+- **Navigation tree:** `wiki-engine graph` prints the active wiki graph as an ASCII tree from `index.md` (diamonds and cycles render as `↰` markers). This is the human-facing map.
+- **Neighborhood view:** `wiki-engine graph <page>` shows one page with its backlinks (who links here) and outgoing links (where can I go).
+- **Health gate:** `wiki-engine graph --strict` exits non-zero when active pages are unlinked from `index.md` or the graph has issues (duplicate edges, self-loops, broken links).
+- **DOT export:** `wiki-engine graph --dot` emits Graphviz DOT for external visualization.
 - **Hierarchical map:** `wiki-engine context --active --sort=topo` lists pages parents-before-children, so you can read from the root outward.
 - **Recency map:** `--sort=chrono` lists recently-updated pages first — useful when chasing recent changes.
 - **Machine map:** `wiki-engine --json context --active` returns structured `nodes` + `edges` (+ `unlinked`) for programmatic navigation.

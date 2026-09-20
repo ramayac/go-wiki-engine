@@ -5,6 +5,14 @@ All notable changes to go-wiki-engine are documented here. Format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html); the compatibility
 surface is defined in [README.md](README.md).
 
+## [Unreleased]
+
+### Added
+
+- New `graph` command: node-based navigation map of the active wiki graph. `wiki-engine graph` prints an ASCII tree from `index.md` (diamonds and cycles render as `↰ (see above)` markers), `graph <page>` shows one page's backlinks and outgoing links, `--json` emits structured nodes/edges/unlinked/stats/issues, `--dot` exports Graphviz DOT, and `--strict` exits non-zero when active pages are unlinked from `index.md` or the graph has issues (duplicate edges, self-loops, broken links).
+- Graph health diagnostics: broken links are now surfaced as issues instead of being silently dropped by BFS traversal.
+- Prompt layers document `graph` usage (wiki-maintainer, query, pi skill).
+
 ## [1.0.1] - 2026-09-19
 
 ### Fixed
