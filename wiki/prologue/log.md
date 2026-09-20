@@ -7,6 +7,15 @@ superseded_by: ""
 
 Append-only timeline of wiki maintenance activity.
 
+## [2026-09-20] audit | code/prompt/doc audit after references feature — two graph logic gaps fixed, parser deduped, docs aligned
+
+- Fixed `graph --json <page>` silently ignoring the page argument — now returns neighborhood JSON (backlinks/links/references).
+- Fixed `graph <page> --strict` exiting 0 on an unhealthy wiki — the neighborhood is computed once before mode dispatch so every branch shares the strict gate.
+- Deduped front matter parsing: `parseTags` and `parseReferences` now share `parseInlineList`; fixed a stale comment claiming first-colon splitting.
+- Docs aligned: repo-map graph row + JSON shape note, query workflow, release verification (`graph --strict` added to gates), wiki README shell-first navigation, SKILL.md good-page bullet.
+- Three lessons filed in lessons.md: front matter vs prose checkers, authoritative declared refs, mode×flag test coverage.
+- Integration suite extended: JSON neighborhood, strict+neighborhood negative case.
+
 ## [2026-09-20] ingest | `references` front matter — typed cross-references (source/external/issue)
 
 - New front matter field `references` — single-line bracket list of typed cross-references: `source:<repo path>` (validated to exist), `external:<url>` (http/https), `issue:<KEY>` (tracker pattern). Parsed by `ParseFrontMatter` (first-colon split, known-type prefixes).

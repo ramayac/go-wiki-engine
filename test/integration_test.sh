@@ -226,6 +226,15 @@ if "$BIN" graph --dot --json >/dev/null 2>&1; then
   echo "FAIL: graph --dot --json should be rejected"
   exit 1
 fi
+# json mode honors the page argument (neighborhood JSON, not the whole graph)
+"$BIN" --json graph prologue/schema.md | grep -q '"backlinks"' || { echo "FAIL: json graph <page> missing neighborhood backlinks"; exit 1; }
+# strict applies to neighborhood mode too
+printf '%s\n' '---' 'status: current' 'description: Orphan2' '---' '# Orphan2' > wiki/orphan2.md
+if "$BIN" graph prologue/schema.md --strict >/dev/null 2>&1; then
+  echo "FAIL: graph <page> --strict should fail with an orphan page"
+  exit 1
+fi
+rm wiki/orphan2.md
 # graph --strict must fail when an orphan exists and when a link is broken
 printf '%s\n' '---' 'status: current' 'description: Orphan' '---' '# Orphan' > wiki/orphan.md
 if "$BIN" graph --strict >/dev/null 2>&1; then

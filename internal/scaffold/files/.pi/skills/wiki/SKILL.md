@@ -131,4 +131,5 @@ wiki-engine binary.
 - **One concern per file.** Split when a page covers two unrelated subsystems.
 - **Grep-friendly headings.** Terms that appear in source code.
 - **Link, don't duplicate.** Reference `repo-map.md` rather than repeating.
+- **Declare references.** When a page documents source files, issues, or external repos, put them in front matter `references: [source:..., external:..., issue:...]` — they surface in `graph <page>` and drive `impact`.
 - **Standard markdown links only.** No bare URLs, no HTML `<a>` tags, no `[[wiki-links]]`.

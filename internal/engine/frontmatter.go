@@ -141,42 +141,38 @@ func trimQuotes(s string) string {
 	return s
 }
 
-func parseTags(s string) []string {
+// parseInlineList splits an inline bracket list `[a, b, c]` into trimmed,
+// unquoted items. Empty lists yield nil.
+func parseInlineList(s string) []string {
 	s = strings.TrimPrefix(s, "[")
 	s = strings.TrimSuffix(s, "]")
 	if s == "" {
 		return nil
 	}
 	raw := strings.Split(s, ",")
-	var tags []string
+	var items []string
 	for _, t := range raw {
 		t = strings.TrimSpace(t)
 		t = trimQuotes(t)
 		if t != "" {
-			tags = append(tags, t)
+			items = append(items, t)
 		}
 	}
-	return tags
+	return items
+}
+
+func parseTags(s string) []string {
+	return parseInlineList(s)
 }
 
 // parseReferences parses an inline `references: [...]` list into typed
-// Reference entries. Each item is "type:value" — split on the FIRST colon
-// so URLs inside values survive. Items without a prefix keep type "unknown"
-// (the references lint checker flags them).
+// Reference entries. Items are "type:value" — only known type prefixes
+// (source, external, issue) split, so unprefixed URLs keep their colons.
+// Items without a known prefix keep type "unknown" (the references lint
+// checker flags them).
 func parseReferences(s string) []Reference {
-	s = strings.TrimPrefix(s, "[")
-	s = strings.TrimSuffix(s, "]")
-	if s == "" {
-		return nil
-	}
-	raw := strings.Split(s, ",")
 	var refs []Reference
-	for _, r := range raw {
-		r = strings.TrimSpace(r)
-		r = trimQuotes(r)
-		if r == "" {
-			continue
-		}
+	for _, r := range parseInlineList(s) {
 		typ, val := "unknown", r
 		if idx := strings.Index(r, ":"); idx != -1 {
 			prefix := strings.TrimSpace(r[:idx])

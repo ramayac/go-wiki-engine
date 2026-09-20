@@ -11,7 +11,7 @@ Answer repo questions from the wiki first so the agent does not start from zero 
 
 ## Procedure
 
-1. Map the wiki with `wiki-engine graph` (human navigation tree) or `wiki-engine context --active --sort=topo` (compact agent map), then read [index.md](../index.md). Use `wiki-engine graph <page>` to inspect one page's backlinks and outgoing links.
+1. Map the wiki with `wiki-engine graph` (human navigation tree) or `wiki-engine context --active --sort=topo` (compact agent map), then read [index.md](../index.md). Use `wiki-engine graph <page>` to inspect one page's backlinks, outgoing links, and declared references.
 2. Read the latest relevant entries in [log.md](../prologue/log.md).
 3. Search the wiki for the topic and follow the graph's `->` links to related pages.
 4. Read only the linked pages needed to answer the question.
@@ -22,7 +22,7 @@ Answer repo questions from the wiki first so the agent does not start from zero 
 
 ```bash
 wiki-engine graph                  # navigation tree from index.md
-wiki-engine graph <page>           # neighborhood: backlinks + outgoing links
+wiki-engine graph <page>           # neighborhood: backlinks + outgoing links + references
 wiki-engine context --active --sort=topo
 wiki-engine search <keyword>
 wiki-engine relevant <keyword>

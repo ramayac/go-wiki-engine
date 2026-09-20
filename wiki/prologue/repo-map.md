@@ -63,7 +63,7 @@ scaffold/               Human-readable reference copy of embedded templates
 | `lint [--check=<a,b>] [--skip=<a,b>]` | Check required files, front matter, index format, bare URLs, broken links (index + cross-page), log heading format and chronology, open markers, orphans, leaf pages, heading hierarchy, phase consistency, external links to source files, duplicate content, stale content — repair guide: [operations/lint.md](../operations/lint.md) |
 | `stats` | Aggregate statistics: file count, heading count, total lines, last-updated date |
 | `context [--minimal] [--active] [--sort=topo\|chrono] [--summarize]` | Condensed wiki snapshot, or the active-page graph from `index.md` with `--active` (`--sort=topo` by depth, default chronological). `--sort` requires `--active`; `--minimal`/`--summarize` are catalog-view flags and reject combination with `--active` |
-| `graph [page] [--strict] [--dot]` | Navigation map of the active wiki graph: ASCII tree from `index.md` (diamonds/cycles as `↰` markers), `graph <page>` for one page's backlinks + outgoing links, `--json` for structured nodes/edges/unlinked/stats/issues, `--dot` for Graphviz export, `--strict` exits 1 on orphaned pages or graph issues (duplicate edges, self-loops, broken links) |
+| `graph [page] [--strict] [--dot]` | Navigation map of the active wiki graph: ASCII tree from `index.md` (diamonds/cycles as `↰` markers), `graph <page>` for one page's backlinks + outgoing links + declared references, `--json` for structured nodes/edges/unlinked/stats/issues (with `<page>`: neighborhood JSON), `--dot` for Graphviz export, `--strict` exits 1 on orphaned pages or graph issues (duplicate edges, self-loops, broken links) — in every mode |
 | `summary <page>` | First heading + first paragraph preview of a page |
 | `relevant <query> [n]` | Rank wiki pages by relevance to a query |
 | `impact <file...>` | Show which wiki pages are affected by changed source files (or pipe from `changed`). Pages with declared front matter `source:` references match only on those exact paths; pages without references fall back to basename text scan |
@@ -121,7 +121,7 @@ envelope per invocation on stdout:
   emits `{ "ok": false, "error": "..." }` and exits 1 (plain-text errors are
   reserved for non-JSON invocations).
 - `lint --json` emits the issues array as `data` with `ok:false` when the `fail_severity` gate fails, and still exits 1 (matching plain-text lint).
-- `context --active --json` emits `{nodes, edges, unlinked}` — the machine-readable active graph for agent navigation.
+- `context --active --json` emits `{nodes, edges, unlinked, issues}` — the machine-readable active graph for agent navigation; nodes carry per-page `references` from front matter.
 - `watch --once --json` emits one `WatchResult` (`changed`, `candidates`, `lint_ok`, `lint_issues`) and exits 1 when `lint_ok` is false.
 - `sync-prompts --json` emits `{updated, removed, shims_preserved}` — written files, retired wiki-managed files cleaned up, and pre-existing root shims.
 

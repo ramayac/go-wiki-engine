@@ -576,8 +576,20 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 		}
 		unhealthy := len(view.Unlinked) > 0 || len(view.Issues) > 0
 
+		var nv *engine.NodeView
+		if page != "" {
+			nv, err = engine.Neighborhood(view.Nodes, view.Edges, page)
+			if err != nil {
+				fatal(err)
+			}
+		}
+
 		if useJSON {
-			writeJSON(view)
+			if nv != nil {
+				writeJSON(nv)
+			} else {
+				writeJSON(view)
+			}
 			if strict && unhealthy {
 				os.Exit(1)
 			}
@@ -595,11 +607,7 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 			return
 		}
 
-		if page != "" {
-			nv, err := engine.Neighborhood(view.Nodes, view.Edges, page)
-			if err != nil {
-				fatal(err)
-			}
+		if nv != nil {
 			fmt.Printf("%s [%s] | %s\n", nv.Node.File, nv.Node.Status, nv.Node.Description)
 			fmt.Println()
 			fmt.Println("== backlinks ==")
@@ -617,6 +625,9 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 				for _, r := range nv.Node.References {
 					fmt.Printf("  %s: %s\n", r.Type, r.Value)
 				}
+			}
+			if strict && unhealthy {
+				os.Exit(1)
 			}
 			return
 		}
