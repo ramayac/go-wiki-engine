@@ -7,6 +7,13 @@ superseded_by: ""
 
 Append-only timeline of wiki maintenance activity.
 
+## [2026-09-20] test | coverage pass — cmd 14.3%→65.0%, engine 81.2%→86.5%, upgrade 69.9%→70.5%
+
+- `cmd/wiki-engine`: stdout-capture table tests for every `runEngine` success path (list/search/stats/context/graph/summary/relevant/impact/lint/changed/candidates/refresh/watch --once), plus a subprocess re-exec harness for `main()` paths that `os.Exit` (usage, unknown command/flag, JSON envelope, version, strict graph failures). `usage`, `runInit`, `runSyncPrompts`, `runWatchCycle` covered directly.
+- `internal/engine`: git-backed fixture (base branch + feature branch, mirroring the repo's `master...HEAD` usage) for `Candidates`, `Refresh` (early-return + full report), and a real `WatchOnce` (clean → source change → lint-gate failure).
+- `internal/upgrade`: `replaceExecutable` success (content, 0755 mode, no temp leftovers) and missing-directory error path.
+- **Semantics noted, not changed:** `Changed`/`Candidates`/`watch`/`refresh` use `git diff --name-only <range>` — committed diffs only. Uncommitted working-tree edits are invisible until committed. Documented behavior (diff-range based), but worth a decision: mid-session ingest is blind before the first commit.
+
 ## [2026-09-20] audit | round 2 — checker lifecycle consistency, shared path resolution, label accuracy, template drift
 
 - `referencesChecker` now skips legacy/deprecated pages (matching orphans/leaf-pages): archived pages may reference retired files. Regression test added.

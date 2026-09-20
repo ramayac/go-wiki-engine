@@ -1531,3 +1531,171 @@ func TestLintOrphansSkipsNonActive(t *testing.T) {
 		t.Error("active unlinked page should be flagged as orphan")
 	}
 }
+
+// --- git-backed candidates/refresh/watch tests ---
+
+// gitFixtureWiki creates a setupWiki project under git with everything
+// committed, and returns the root path. Additional files can be added and
+// committed by callers before making changes.
+func gitFixtureWiki(t *testing.T) string {
+	t.Helper()
+	root := setupWiki(t)
+	gitCmd := func(args ...string) {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = root
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v failed: %v\n%s", args, err, out)
+		}
+	}
+	gitCmd("init", "-q", "-b", "main")
+	gitCmd("config", "user.email", "test@test")
+	gitCmd("config", "user.name", "Test")
+	gitCmd("add", ".")
+	gitCmd("commit", "-q", "-m", "init")
+	// Work on a feature branch so `main...HEAD` (merge-base diff) sees the
+	// feature commits, mirroring the real repo's master...HEAD usage.
+	gitCmd("checkout", "-q", "-b", "feature")
+	return root
+}
+
+func TestCandidates(t *testing.T) {
+	root := gitFixtureWiki(t)
+	gitCmd := func(args ...string) {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = root
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v failed: %v\n%s", args, err, out)
+		}
+	}
+	eng := newTestEngine(root)
+
+	// Nothing beyond the fixture: no candidates in main...HEAD.
+	candidates, err := eng.Candidates("main...HEAD")
+	if err != nil {
+		t.Fatalf("Candidates failed: %v", err)
+	}
+	if len(candidates) != 0 {
+		t.Errorf("candidates on clean tree = %v, want none", candidates)
+	}
+
+	// Commit a source file and a *.log file: main.go qualifies, x.log is
+	// filtered by the ignore list.
+	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "x.log"), []byte("log data\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitCmd("add", ".")
+	gitCmd("commit", "-q", "-m", "add source and log")
+
+	candidates, err = eng.Candidates("main...HEAD")
+	if err != nil {
+		t.Fatalf("Candidates failed: %v", err)
+	}
+	if len(candidates) != 1 || candidates[0] != "main.go" {
+		t.Errorf("candidates = %v, want [main.go] (x.log must be ignored)", candidates)
+	}
+
+	// Changed (without ignore filtering) still reports the log file.
+	changed, err := eng.Changed("main...HEAD")
+	if err != nil {
+		t.Fatalf("Changed failed: %v", err)
+	}
+	if len(changed) != 2 {
+		t.Errorf("changed = %v, want [main.go x.log]", changed)
+	}
+}
+
+func TestRefresh(t *testing.T) {
+	root := gitFixtureWiki(t)
+	gitCmd := func(args ...string) {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = root
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v failed: %v\n%s", args, err, out)
+		}
+	}
+	eng := newTestEngine(root)
+
+	// No candidates: the early-return path.
+	report, err := eng.Refresh("main...HEAD")
+	if err != nil {
+		t.Fatalf("Refresh failed: %v", err)
+	}
+	if !strings.Contains(report, "no wiki refresh needed") {
+		t.Errorf("refresh on clean tree should report nothing to do, got:\n%s", report)
+	}
+
+	// One candidate: the full report path.
+	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitCmd("add", ".")
+	gitCmd("commit", "-q", "-m", "add source")
+	report, err = eng.Refresh("main...HEAD")
+	if err != nil {
+		t.Fatalf("Refresh failed: %v", err)
+	}
+	for _, want := range []string{"== wiki files ==", "== changed files ==", "== ingest candidates ==", "main.go", "== lint =="} {
+		if !strings.Contains(report, want) {
+			t.Errorf("refresh report missing %q:\n%s", want, report)
+		}
+	}
+}
+
+func TestWatchOnceGitBacked(t *testing.T) {
+	root := gitFixtureWiki(t)
+	gitCmd := func(args ...string) {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = root
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v failed: %v\n%s", args, err, out)
+		}
+	}
+	eng := newTestEngine(root)
+
+	// Clean: no changed files, lint gate OK.
+	wr, err := eng.WatchOnce()
+	if err != nil {
+		t.Fatalf("WatchOnce failed: %v", err)
+	}
+	if len(wr.Changed) != 0 || len(wr.Candidates) != 0 {
+		t.Errorf("clean watch = %+v, want no changes", wr)
+	}
+	if !wr.LintOK {
+		t.Errorf("clean wiki should lint OK, issues: %+v", wr.LintIssues)
+	}
+
+	// A committed source change is reported; the lint gate stays OK.
+	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitCmd("add", ".")
+	gitCmd("commit", "-q", "-m", "add source")
+	wr, err = eng.WatchOnce()
+	if err != nil {
+		t.Fatalf("WatchOnce failed: %v", err)
+	}
+	if len(wr.Changed) != 1 || wr.Changed[0] != "main.go" {
+		t.Errorf("changed = %v, want [main.go]", wr.Changed)
+	}
+	if len(wr.Candidates) != 1 || wr.Candidates[0] != "main.go" {
+		t.Errorf("candidates = %v, want [main.go]", wr.Candidates)
+	}
+	if !wr.LintOK {
+		t.Errorf("lint should stay OK, issues: %+v", wr.LintIssues)
+	}
+
+	// A broken wiki link flips the lint gate.
+	if err := os.WriteFile(filepath.Join(root, "wiki", "index.md"), []byte("---\nstatus: current\ndescription: Index\n---\n# Index\n\n- [missing.md](missing.md)\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	wr, err = eng.WatchOnce()
+	if err != nil {
+		t.Fatalf("WatchOnce failed: %v", err)
+	}
+	if wr.LintOK {
+		t.Error("lint gate should fail with a broken index link")
+	}
+}
