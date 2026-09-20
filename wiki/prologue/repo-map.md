@@ -2,6 +2,7 @@
 status: current
 description: "Overview of the repository architecture, high-signal areas, and build instructions."
 superseded_by: ""
+references: [source:cmd/wiki-engine/main.go, source:internal/engine/engine.go, source:internal/engine/graph_view.go]
 ---
 # Repo Map
 
@@ -65,7 +66,7 @@ scaffold/               Human-readable reference copy of embedded templates
 | `graph [page] [--strict] [--dot]` | Navigation map of the active wiki graph: ASCII tree from `index.md` (diamonds/cycles as `↰` markers), `graph <page>` for one page's backlinks + outgoing links, `--json` for structured nodes/edges/unlinked/stats/issues, `--dot` for Graphviz export, `--strict` exits 1 on orphaned pages or graph issues (duplicate edges, self-loops, broken links) |
 | `summary <page>` | First heading + first paragraph preview of a page |
 | `relevant <query> [n]` | Rank wiki pages by relevance to a query |
-| `impact <file...>` | Show which wiki pages mention changed source files (or pipe from `changed`) |
+| `impact <file...>` | Show which wiki pages are affected by changed source files (or pipe from `changed`). Pages with declared front matter `source:` references match only on those exact paths; pages without references fall back to basename text scan |
 | `diff <from> <to>` | Show wiki files added/removed/changed between two git refs |
 | `watch [--once]` | Poll for changes + lint issues at interval from `.wikirc`; exits with guidance when `watch_interval` is 0; `--once` runs a single cycle and exits 1 when the lint gate (`fail_severity`) fails |
 | `refresh [diff]` | Run list + log-tail + changed + candidates + lint as a maintenance snapshot |

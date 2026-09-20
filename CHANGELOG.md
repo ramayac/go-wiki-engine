@@ -12,6 +12,12 @@ surface is defined in [README.md](README.md).
 - New `graph` command: node-based navigation map of the active wiki graph. `wiki-engine graph` prints an ASCII tree from `index.md` (diamonds and cycles render as `↰ (see above)` markers), `graph <page>` shows one page's backlinks and outgoing links, `--json` emits structured nodes/edges/unlinked/stats/issues, `--dot` exports Graphviz DOT, and `--strict` exits non-zero when active pages are unlinked from `index.md` or the graph has issues (duplicate edges, self-loops, broken links).
 - Graph health diagnostics: broken links are now surfaced as issues instead of being silently dropped by BFS traversal.
 - Prompt layers document `graph` usage (wiki-maintainer, query, pi skill).
+- New `references` front matter field: typed cross-references (`source:<path>`, `external:<url>`, `issue:<KEY>`) declared in a single-line bracket list. References are node annotations, not graph edges — they surface in `wiki-engine graph <page>` and graph JSON.
+- New `references` lint checker: flags missing source files, scheme-less URLs, malformed issue keys, and unknown reference types.
+
+### Changed
+
+- `wiki-engine impact` is now exact for pages with declared `source:` references: such pages match only on their declared paths (prose mentions are ignored). Pages without references keep the basename text-scan fallback.
 
 ## [1.0.1] - 2026-09-19
 

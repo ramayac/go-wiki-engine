@@ -60,14 +60,15 @@ func ExtractLinks(content string, currentFileDir string, wikiDir string) []strin
 
 // WikiNode represents a node in the active wiki graph.
 type WikiNode struct {
-	File        string    `json:"file"`
-	Status      string    `json:"status"`
-	Description string    `json:"description"`
-	Created     string    `json:"created,omitempty"`
-	Updated     string    `json:"updated,omitempty"`
-	ModTime     time.Time `json:"-"`
-	Links       []string  `json:"links"`
-	Depth       int       `json:"depth"`
+	File        string      `json:"file"`
+	Status      string      `json:"status"`
+	Description string      `json:"description"`
+	Created     string      `json:"created,omitempty"`
+	Updated     string      `json:"updated,omitempty"`
+	ModTime     time.Time   `json:"-"`
+	Links       []string    `json:"links"`
+	References  []Reference `json:"references,omitempty"`
+	Depth       int         `json:"depth"`
 }
 
 // WikiEdge represents a directed edge between active wiki pages.
@@ -150,6 +151,7 @@ func (e *Engine) BuildWikiGraph() ([]WikiNode, []WikiEdge, error) {
 			Updated:     fm.Updated,
 			ModTime:     mtime,
 			Links:       links,
+			References:  fm.References,
 			Depth:       curr.depth,
 		}
 

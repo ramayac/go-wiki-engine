@@ -2,6 +2,7 @@
 status: current
 description: "Runbook for cutting and verifying a go-wiki-engine release."
 superseded_by: ""
+references: [source:internal/upgrade/upgrade.go, source:internal/scaffold/scaffold.go, external:https://github.com/ramayac/go-wiki-engine/releases]
 ---
 # Release Runbook
 

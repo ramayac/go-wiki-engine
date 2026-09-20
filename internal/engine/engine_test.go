@@ -210,6 +210,135 @@ func TestLintInvalidLogHeading(t *testing.T) {
 	}
 }
 
+func TestLintReferencesChecker(t *testing.T) {
+	root := t.TempDir()
+	writeTestWiki(t, root, map[string]string{
+		"wiki/index.md": "---\nstatus: current\ndescription: Index\n---\n# Index\n",
+		"main.go":       "package main\n",
+	})
+	eng := newTestEngine(root)
+	checker := &referencesChecker{}
+
+	// Valid references produce no issues.
+	valid := `---
+status: current
+description: Valid
+references: [source:main.go, external:https://example.com/docs, issue:JIRA-42]
+---
+# Valid`
+	p := filepath.Join(root, "wiki", "index.md")
+	if err := os.WriteFile(p, []byte(valid), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	issues, err := checker.Check(eng)
+	if err != nil {
+		t.Fatalf("referencesChecker failed: %v", err)
+	}
+	if len(issues) != 0 {
+		t.Errorf("valid references produced issues: %+v", issues)
+	}
+
+	// The bare-urls checker must ignore front matter declarations —
+	// `external:https://...` is a declared reference, not prose.
+	bareIssues, err := (&bareUrlChecker{}).Check(eng)
+	if err != nil {
+		t.Fatalf("bareUrlChecker failed: %v", err)
+	}
+	if len(bareIssues) != 0 {
+		t.Errorf("bare-urls flagged a front matter reference: %+v", bareIssues)
+	}
+
+	// Each invalid kind is flagged exactly once.
+	invalid := `---
+status: current
+description: Invalid
+references: [source:nope.go, external:github.com/no-scheme, issue:not-a-key, bogus:x]
+---
+# Invalid`
+	if err := os.WriteFile(p, []byte(invalid), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	issues, err = checker.Check(eng)
+	if err != nil {
+		t.Fatalf("referencesChecker failed: %v", err)
+	}
+	wantFrags := []string{"not found", "missing scheme", "malformed", "unknown type"}
+	if len(issues) != len(wantFrags) {
+		t.Fatalf("issues = %+v, want %d (one per invalid kind)", issues, len(wantFrags))
+	}
+	for i, frag := range wantFrags {
+		if !strings.Contains(issues[i].Message, frag) {
+			t.Errorf("issues[%d] = %q, want fragment %q", i, issues[i].Message, frag)
+		}
+	}
+	for _, iss := range issues {
+		if iss.Check != "references" {
+			t.Errorf("check = %q, want references", iss.Check)
+		}
+	}
+}
+
+func TestImpactReferences(t *testing.T) {
+	root := t.TempDir()
+	writeTestWiki(t, root, map[string]string{
+		"wiki/index.md": `---
+status: current
+description: Index
+---
+# Index
+- [declared.md](declared.md)
+- [prose.md](prose.md)
+`,
+		"wiki/declared.md": `---
+status: current
+description: Declared
+references: [source:internal/engine/graph.go]
+---
+# Declared
+Prose also mentions main.go here.
+`,
+		"wiki/prose.md": `---
+status: current
+description: Prose
+---
+# Prose
+This page discusses graph.go in prose.
+`,
+	})
+
+	eng := newTestEngine(root)
+	res, err := eng.Impact([]string{"internal/engine/graph.go", "cmd/wiki-engine/main.go"})
+	if err != nil {
+		t.Fatalf("Impact failed: %v", err)
+	}
+	got := make(map[string][]string)
+	for _, r := range res {
+		got[r.ChangedFile] = r.WikiPages
+	}
+
+	// declared.md matches graph.go via its exact declared reference...
+	if !contains(got["internal/engine/graph.go"], "wiki/declared.md") {
+		t.Errorf("graph.go pages = %v, want wiki/declared.md via structured reference", got["internal/engine/graph.go"])
+	}
+	// ...and its prose mention of main.go is IGNORED (declared refs are authoritative).
+	if contains(got["cmd/wiki-engine/main.go"], "wiki/declared.md") {
+		t.Errorf("main.go pages = %v, prose mention must not count for a page with declared references", got["cmd/wiki-engine/main.go"])
+	}
+	// prose.md has no declared refs: the basename text scan still applies.
+	if !contains(got["internal/engine/graph.go"], "wiki/prose.md") {
+		t.Errorf("graph.go pages = %v, want wiki/prose.md via text fallback", got["internal/engine/graph.go"])
+	}
+}
+
+func contains(list []string, s string) bool {
+	for _, v := range list {
+		if v == s {
+			return true
+		}
+	}
+	return false
+}
+
 func TestLintMarker(t *testing.T) {
 	root := setupWiki(t)
 	repoMap := filepath.Join(root, "wiki", "repo-map.md")

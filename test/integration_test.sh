@@ -241,6 +241,20 @@ if "$BIN" graph --strict >/dev/null 2>&1; then
   exit 1
 fi
 "$BIN" graph | grep -q "broken edge" || { echo "FAIL: graph should report the broken link"; exit 1; }
+# references in front matter surface in the neighborhood view and are linted
+echo "package main" > main.go
+printf '%s\n' '---' 'status: current' 'description: Refs' 'references: [source:main.go, issue:JIRA-42]' '---' '# Refs' > wiki/refs.md
+printf '%s\n' '- [refs.md](refs.md)' >> wiki/index.md
+"$BIN" graph refs.md | grep -q "== references ==" || { echo "FAIL: graph neighborhood missing references section"; exit 1; }
+"$BIN" graph refs.md | grep -q "issue: JIRA-42" || { echo "FAIL: graph neighborhood missing issue reference"; exit 1; }
+"$BIN" lint --check=references || { echo "FAIL: lint --check=references should pass on valid references"; exit 1; }
+# a broken source reference fails the references checker
+printf '%s\n' '---' 'status: current' 'description: Bad' 'references: [source:nope.go, issue:not-a-key]' '---' '# Bad' > wiki/badref.md
+if "$BIN" lint --check=references >/dev/null 2>&1; then
+  echo "FAIL: lint --check=references should fail on broken source and malformed issue"
+  exit 1
+fi
+rm wiki/refs.md wiki/badref.md
 cp "$TMPDIR/index.md.bak" wiki/index.md
 rm wiki/orphan.md wiki/broken.md
 cd "$TMPDIR"

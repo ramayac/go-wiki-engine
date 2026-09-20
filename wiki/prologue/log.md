@@ -7,6 +7,14 @@ superseded_by: ""
 
 Append-only timeline of wiki maintenance activity.
 
+## [2026-09-20] ingest | `references` front matter — typed cross-references (source/external/issue)
+
+- New front matter field `references` — single-line bracket list of typed cross-references: `source:<repo path>` (validated to exist), `external:<url>` (http/https), `issue:<KEY>` (tracker pattern). Parsed by `ParseFrontMatter` (first-colon split, known-type prefixes).
+- Graph integration: references are annotations, never edges. `graph <page>` renders a `== references ==` section; graph JSON carries `references` per node; tree view and traversal semantics unchanged.
+- New `references` lint checker: flags missing source files, scheme-less URLs, malformed issue keys, unknown types. Registered in allCheckers (`--check=references` works).
+- `impact` precision: pages with declared `source:` refs match only on exact declared paths — prose mentions no longer create false positives. Pages without refs keep the basename text-scan fallback.
+- Dogfooded on repo-map.md, release.md, lint.md. Contract documented in schema.md (repo + scaffold). Prompt layers updated (wiki-maintainer checklist item, query workflow, pi skill).
+
 ## [2026-09-20] ingest | new `graph` command — node-based navigation map
 
 - Added `wiki-engine graph`: ASCII navigation tree from `index.md` (diamonds/cycles as `↰` markers), `graph <page>` neighborhood view (backlinks + outgoing links), `--json` structured output (nodes/edges/unlinked/stats/issues), `--dot` Graphviz export, and `--strict` (exit 1 on orphaned pages or graph issues: duplicate edges, self-loops, broken links).

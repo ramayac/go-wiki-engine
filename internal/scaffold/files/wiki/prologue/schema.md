@@ -98,12 +98,20 @@ superseded_by: ""        # (Conditional) path to the replacing page if status is
 created: "2026-01-15"     # (Optional) creation date used by chronological graph sorting
 updated: "2026-08-14"     # (Optional) last-updated date used by chronological graph sorting
 tags: ["foo", "bar"]     # (Optional) single-line tag list
+references: ["source:internal/engine/graph.go", "external:https://github.com/x/y", "issue:JIRA-42"]  # (Optional) declared cross-references
 ---
 ```
 
 Optional fields:
 - `created` / `updated` — `YYYY-MM-DD` dates used by `wiki-engine context --active --sort=chrono`; filesystem mtime is the fallback when absent.
 - `tags` — single-line bracket list; reserved for future filtering.
+- `references` — single-line bracket list of typed cross-references to things outside the wiki:
+  - `source:<path>` — repo-root-relative source file path (also resolved against the page's directory first); validated to exist by the `references` lint checker and matched exactly by `wiki-engine impact`.
+  - `external:<url>` — external URL; must start with `http://` or `https://`.
+  - `issue:<KEY>` — issue tracker key matching `PROJECT-123` style (e.g. JIRA keys).
+  - Unknown types and items without a known prefix are flagged by `wiki-engine lint` (checker `references`).
+  - References are annotations, not graph edges: they never affect page-to-page traversal, but appear in `wiki-engine graph <page>` and the graph JSON.
+
 
 ### Status Definitions
 

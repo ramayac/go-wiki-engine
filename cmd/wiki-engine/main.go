@@ -611,6 +611,13 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 			for _, l := range nv.Node.Links {
 				fmt.Printf("  -> %s\n", l)
 			}
+			if len(nv.Node.References) > 0 {
+				fmt.Println()
+				fmt.Println("== references ==")
+				for _, r := range nv.Node.References {
+					fmt.Printf("  %s: %s\n", r.Type, r.Value)
+				}
+			}
 			return
 		}
 

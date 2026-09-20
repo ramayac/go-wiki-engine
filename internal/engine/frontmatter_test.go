@@ -130,3 +130,54 @@ func TestParseFrontMatterHashInValue(t *testing.T) {
 		}
 	}
 }
+
+func TestParseFrontMatterReferences(t *testing.T) {
+	content := `---
+status: current
+description: Ref Page
+references: [source:internal/engine/graph.go, external:https://github.com/x/y, issue:JIRA-42]
+---
+# Title`
+	fm, found, err := ParseFrontMatter(content)
+	if err != nil {
+		t.Fatalf("ParseFrontMatter error: %v", err)
+	}
+	if !found {
+		t.Fatal("front matter not found")
+	}
+	want := []Reference{
+		{Type: "source", Value: "internal/engine/graph.go"},
+		{Type: "external", Value: "https://github.com/x/y"},
+		{Type: "issue", Value: "JIRA-42"},
+	}
+	if len(fm.References) != len(want) {
+		t.Fatalf("references = %+v, want %+v", fm.References, want)
+	}
+	for i := range want {
+		if fm.References[i] != want[i] {
+			t.Errorf("references[%d] = %+v, want %+v", i, fm.References[i], want[i])
+		}
+	}
+
+	// Item without a type prefix is kept as unknown (lint flags it).
+	fm2, _, _ := ParseFrontMatter("---\nreferences: [https://github.com/x/y]\n---\n# T")
+	if len(fm2.References) != 1 || fm2.References[0].Type != "unknown" {
+		t.Errorf("unprefixed item = %+v, want unknown type", fm2.References)
+	}
+
+	// URLs contain a colon; the split must happen on the FIRST colon only.
+	fm3, _, _ := ParseFrontMatter("---\nreferences: [external:https://github.com/x/y]\n---\n# T")
+	if len(fm3.References) != 1 || fm3.References[0].Value != "https://github.com/x/y" {
+		t.Errorf("url value = %+v, want full URL preserved", fm3.References)
+	}
+
+	// Empty list and missing field yield no references.
+	fm4, _, _ := ParseFrontMatter("---\nreferences: []\n---\n# T")
+	if fm4.References != nil {
+		t.Errorf("empty list references = %+v, want nil", fm4.References)
+	}
+	fm5, _, _ := ParseFrontMatter("---\nstatus: current\n---\n# T")
+	if fm5.References != nil {
+		t.Errorf("missing field references = %+v, want nil", fm5.References)
+	}
+}

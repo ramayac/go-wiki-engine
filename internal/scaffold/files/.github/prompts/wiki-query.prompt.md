@@ -9,7 +9,7 @@ Answer the user's repository question from the wiki first.
 
 ## Required context
 
-- Run `wiki-engine graph` for the human navigation map (ASCII tree from `index.md`), or `wiki-engine context --active --sort=topo` for the compact agent map (parents before children). Use `--sort=chrono` for recency, `wiki-engine --json context --active` for a structured nodes/edges map, and `wiki-engine graph <page>` to inspect one page's backlinks and outgoing links.
+- Run `wiki-engine graph` for the human navigation map (ASCII tree from `index.md`), or `wiki-engine context --active --sort=topo` for the compact agent map (parents before children). Use `--sort=chrono` for recency, `wiki-engine --json context --active` for a structured nodes/edges map, and `wiki-engine graph <page>` to inspect one page's backlinks, outgoing links, and declared references.
 - Search the wiki with `wiki-engine search <term>` or `wiki-engine relevant <term>`.
 - Read only the active wiki pages needed to answer the question.
 - Follow the guidelines in [wiki-maintainer.md](wiki-maintainer.md).

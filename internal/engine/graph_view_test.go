@@ -343,6 +343,57 @@ description: OK
 	}
 }
 
+func TestReferencesInGraph(t *testing.T) {
+	root := t.TempDir()
+	writeTestWiki(t, root, map[string]string{
+		"wiki/index.md": `---
+status: current
+description: Index
+---
+# Index
+- [page.md](page.md)
+`,
+		"wiki/page.md": `---
+status: current
+description: Page
+references: [source:internal/engine/graph.go, issue:JIRA-42]
+---
+# Page
+`,
+	})
+
+	eng := newTestEngine(root)
+	nodes, edges, err := eng.BuildWikiGraph()
+	if err != nil {
+		t.Fatalf("BuildWikiGraph failed: %v", err)
+	}
+	var refNode *WikiNode
+	for i := range nodes {
+		if nodes[i].File == "page.md" {
+			refNode = &nodes[i]
+			break
+		}
+	}
+	if refNode == nil {
+		t.Fatal("page.md missing from graph")
+	}
+	if len(refNode.References) != 2 {
+		t.Fatalf("references = %+v, want 2 entries", refNode.References)
+	}
+	if refNode.References[0].Type != "source" || refNode.References[0].Value != "internal/engine/graph.go" {
+		t.Errorf("references[0] = %+v, want source:internal/engine/graph.go", refNode.References[0])
+	}
+
+	// The neighborhood view carries references too.
+	nv, err := Neighborhood(nodes, edges, "page.md")
+	if err != nil {
+		t.Fatalf("Neighborhood failed: %v", err)
+	}
+	if len(nv.Node.References) != 2 || nv.Node.References[1].Value != "JIRA-42" {
+		t.Errorf("neighborhood references = %+v, want issue:JIRA-42 present", nv.Node.References)
+	}
+}
+
 func TestRenderDot(t *testing.T) {
 	nodes := []WikiNode{
 		{File: "index.md", Links: []string{"a.md"}},

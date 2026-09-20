@@ -23,7 +23,7 @@ wiki-engine context --active          # Active-page graph from index.md (skips l
 wiki-engine context --active --sort=topo  # Hierarchical map: parents before children
 wiki-engine --json context --active   # Structured map: nodes + edges (+ unlinked)
 wiki-engine graph                     # Navigation tree from index.md (diamonds/cycles as ↰)
-wiki-engine graph <page>              # Neighborhood: page + backlinks + outgoing links
+wiki-engine graph <page>              # Neighborhood: page + backlinks + outgoing links (+ references)
 wiki-engine graph --strict            # Tree + diagnostics; exit 1 on orphans/graph issues
 wiki-engine graph --dot               # Graphviz DOT export for visualization
 wiki-engine graph --json              # Structured nodes/edges/unlinked/stats/issues
@@ -55,6 +55,7 @@ Every wiki page has YAML front matter with a `status`:
 status: current          # planned | current | legacy | deprecated
 description: "One-line summary of this page's purpose"
 superseded_by: ""        # required when status is deprecated
+references: [source:internal/engine/graph.go, issue:JIRA-42]  # optional typed cross-references
 ---
 ```
 

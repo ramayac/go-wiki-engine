@@ -50,14 +50,15 @@ When writing or modifying any wiki page, always follow this checklist:
    ---
    ```
 7. **Cross-link pages:** Every page you create or update must link to its related pages (and link back where useful). The only intentional leaf is `log.md`. Verify with `wiki-engine context --active` that the page appears in the active graph and no unlinked warnings remain. `wiki-engine lint` surfaces violations via the `leaf-pages` check (info severity).
-8. **Run `make audit`:** after structural changes (page moves, new category directories, scaffold or prompt edits), run `make audit` to catch page-relative links, stale `wiki/<path>.md` references, and instruction-layer drift.
+8. **Declare references:** when a page documents specific source files, issue tracker keys, or external repos/docs, declare them in front matter — `references: [source:internal/engine/graph.go, external:https://..., issue:JIRA-42]`. References are annotations (not graph edges): they appear in `wiki-engine graph <page>`, make `wiki-engine impact` exact, and are validated by the `references` lint checker. Contract: [schema.md](../../wiki/prologue/schema.md).
+9. **Run `make audit`:** after structural changes (page moves, new category directories, scaffold or prompt edits), run `make audit` to catch page-relative links, stale `wiki/<path>.md` references, and instruction-layer drift.
 
 ## Graph Navigation & Search
 
 `wiki-engine context --active` is the **map** of the wiki — use it to navigate, not just to verify:
 
 - **Navigation tree:** `wiki-engine graph` prints the active wiki graph as an ASCII tree from `index.md` (diamonds and cycles render as `↰` markers). This is the human-facing map.
-- **Neighborhood view:** `wiki-engine graph <page>` shows one page with its backlinks (who links here) and outgoing links (where can I go).
+- **Neighborhood view:** `wiki-engine graph <page>` shows one page with its backlinks (who links here), outgoing links (where can I go), and declared front matter references.
 - **Health gate:** `wiki-engine graph --strict` exits non-zero when active pages are unlinked from `index.md` or the graph has issues (duplicate edges, self-loops, broken links).
 - **DOT export:** `wiki-engine graph --dot` emits Graphviz DOT for external visualization.
 - **Hierarchical map:** `wiki-engine context --active --sort=topo` lists pages parents-before-children, so you can read from the root outward.
