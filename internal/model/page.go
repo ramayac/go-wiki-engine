@@ -52,6 +52,8 @@ type Page struct {
 	ResolvedSources []ResolvedSource
 	ModTime         time.Time
 	LineCount       int
+	HasBOM          bool // file started with a UTF-8 BOM (stripped from RawContent)
+	CRLF            bool // file used CRLF line endings (RawContent uses LF)
 }
 
 // ExpectedID returns the canonical page ID derived from the page's filename
@@ -105,6 +107,8 @@ func (p *Page) InternalMDLinks() []string {
 	return out
 }
 
+const utf8BOM = "\ufeff"
+
 var (
 	headingLevelRe = regexp.MustCompile(`^(#{1,6}) (.+)$`)
 	mdLinkRe       = regexp.MustCompile(`\[([^\]]*)\]\(([^)]+)\)`)
@@ -112,7 +116,9 @@ var (
 
 // ParsePage parses raw Markdown bytes into a typed Page in one pass.
 func ParsePage(repoRoot, wikiRoot, wikiDir, wikiRel, absPath string, raw []byte, modTime time.Time) *Page {
-	norm := strings.ReplaceAll(string(raw), "\r\n", "\n")
+	text, hasBOM := strings.CutPrefix(string(raw), utf8BOM)
+	crlf := strings.Count(text, "\r\n")
+	norm := strings.ReplaceAll(text, "\r\n", "\n")
 	fmRes := ParseFrontMatter(norm)
 	lines := strings.Split(norm, "\n")
 	// Do not count a trailing empty element caused by a terminating newline as an extra line.
@@ -144,13 +150,15 @@ func ParsePage(repoRoot, wikiRoot, wikiDir, wikiRel, absPath string, raw []byte,
 		Lines:         lines,
 		ModTime:       modTime,
 		LineCount:     lineCount,
+		HasBOM:        hasBOM,
+		CRLF:          crlf > 0 && crlf > strings.Count(norm, "\n")-crlf,
 	}
 
 	pageDir := filepath.Dir(absPath)
 
 	// Extract headings and links in one pass over lines (skipping frontmatter and fenced code blocks for headings,
 	// and skipping frontmatter for links so YAML reference values are not parsed as markdown links).
-	inCodeBlock := false
+	var fence FenceTracker
 	inHTMLComment := false
 	fmEndLine := fmRes.BodyStartLine - 1 // 1-based inclusive end of frontmatter (0 if none)
 
@@ -160,11 +168,10 @@ func ParsePage(repoRoot, wikiRoot, wikiDir, wikiRel, absPath string, raw []byte,
 		if fmRes.State == FrontMatterPresent && lineNo <= fmEndLine {
 			continue
 		}
-		if strings.HasPrefix(trimmed, "```") {
-			inCodeBlock = !inCodeBlock
+		if fence.Skip(line) {
 			continue
 		}
-		if !inCodeBlock {
+		if !fence.InFence() {
 			if strings.Contains(trimmed, "<!--") {
 				inHTMLComment = true
 			}
@@ -184,7 +191,7 @@ func ParsePage(repoRoot, wikiRoot, wikiDir, wikiRel, absPath string, raw []byte,
 		}
 
 		// Extract markdown links (skip fenced code blocks to avoid false positives in examples).
-		if inCodeBlock {
+		if fence.InFence() {
 			continue
 		}
 		for _, m := range mdLinkRe.FindAllStringSubmatch(line, -1) {
@@ -247,4 +254,44 @@ func ParsePage(repoRoot, wikiRoot, wikiDir, wikiRel, absPath string, raw []byte,
 	}
 
 	return page
+}
+
+// FenceTracker follows fenced code blocks (``` and ~~~) line by line. A fence
+// closes on a line of the same character that is at least as long as the
+// opening fence and has no text after it.
+type FenceTracker struct {
+	char byte
+	size int
+}
+
+// InFence reports whether the line last passed to Skip is inside a fenced block.
+func (f *FenceTracker) InFence() bool { return f.size > 0 }
+
+// Skip updates the tracker with one line. It returns true when the line is a
+// fence delimiter, so callers can skip it as well as lines inside the fence.
+func (f *FenceTracker) Skip(line string) bool {
+	t := strings.TrimSpace(line)
+	if len(t) < 3 || (t[0] != '`' && t[0] != '~') {
+		return false
+	}
+	n := 0
+	for n < len(t) && t[n] == t[0] {
+		n++
+	}
+	if n < 3 {
+		return false
+	}
+	if f.size == 0 {
+		// A backtick fence cannot have a backtick in its info string.
+		if t[0] == '`' && strings.Contains(t[n:], "`") {
+			return false
+		}
+		f.char, f.size = t[0], n
+		return true
+	}
+	if t[0] == f.char && n >= f.size && strings.TrimSpace(t[n:]) == "" {
+		f.size = 0
+		return true
+	}
+	return false
 }

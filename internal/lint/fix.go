@@ -146,7 +146,7 @@ func Fix(repoRoot, wikiDir string) (*FixResult, error) {
 				finalContent = body
 			}
 			if finalContent != p.RawContent {
-				if err := os.WriteFile(p.AbsPath, []byte(finalContent), 0o644); err != nil {
+				if err := os.WriteFile(p.AbsPath, []byte(restoreEncoding(p, finalContent)), 0o644); err != nil {
 					return nil, fmt.Errorf("write %s: %w", p.Path, err)
 				}
 				res.Files = append(res.Files, FileFixReport{
@@ -169,7 +169,7 @@ func Fix(repoRoot, wikiDir string) (*FixResult, error) {
 	if snap2.Index != nil {
 		updatedIndex, idxFixes := fixIndexPage(snap2)
 		if len(idxFixes) > 0 && updatedIndex != snap2.Index.RawContent {
-			if err := os.WriteFile(snap2.Index.AbsPath, []byte(updatedIndex), 0o644); err != nil {
+			if err := os.WriteFile(snap2.Index.AbsPath, []byte(restoreEncoding(snap2.Index, updatedIndex)), 0o644); err != nil {
 				return nil, fmt.Errorf("write %s: %w", snap2.Index.Path, err)
 			}
 			merged := false
@@ -193,6 +193,18 @@ func Fix(repoRoot, wikiDir string) (*FixResult, error) {
 	}
 
 	return res, nil
+}
+
+// restoreEncoding puts back the line endings and byte order mark that the page
+// had on disk. The snapshot holds pages as LF text without a BOM.
+func restoreEncoding(p *model.Page, content string) string {
+	if p.CRLF {
+		content = strings.ReplaceAll(content, "\n", "\r\n")
+	}
+	if p.HasBOM {
+		content = "\ufeff" + content
+	}
+	return content
 }
 
 func convertWikiLinks(body string, page *model.Page, stemMatches map[string][]*model.Page) (string, int) {
