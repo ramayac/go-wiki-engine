@@ -79,3 +79,5 @@ sources:
 6. **Plan (`/wiki-plan`):** `search` + `graph <id>` + `impact` → write `.wiki-engine/handoff.md` (temporary; never durable wiki).
 
 Lint, refresh, and watch are CLI commands, not prompts: run `wiki-engine lint --fix`, `wiki-engine refresh`, and `wiki-engine watch --once`.
+
+To measure whether the wiki helps an agent, use the Claude Code skill `.claude/skills/wiki-benchmark/`. It needs Claude Code, because it spawns agents.

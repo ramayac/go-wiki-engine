@@ -40,6 +40,8 @@ name: "Wiki Maintainer"
 | Writing an implementation handoff to `.wiki-engine/handoff.md` | `wiki-plan` |
 | Upgrading the CLI version and reconciling prompts | `wiki-upgrade` |
 
+To measure whether the wiki helps an agent, a Claude Code user runs the `wiki-benchmark` skill (`.claude/skills/wiki-benchmark/`). It is not a prompt, and it needs questions that the repo owner wrote.
+
 ## Page Lifecycle & Types
 
 Every wiki page must contain a valid YAML front matter block with `id`, `lifecycle`, and `description` (and optional `title`, `type`, `status`, `severity`, `related`, `depends_on`, `sources`, `references`). Missing metadata never defaults to active.

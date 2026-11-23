@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -336,6 +337,72 @@ func TestInstructionLayersIdentical(t *testing.T) {
 	}
 	if len(problems) > 0 {
 		t.Errorf("instruction layer drift:\n  %s", strings.Join(problems, "\n  "))
+	}
+}
+
+// TestBenchmarkSkillParity keeps the dogfooded .claude/skills/wiki-benchmark/
+// layer in step with the scaffold copy. Every file must match byte for byte,
+// except questions.md, which a repo owner edits after install. The scaffold
+// questions.md must stay a template, and prepare.sh must stay executable.
+func TestBenchmarkSkillParity(t *testing.T) {
+	root := repoRoot(t)
+	const skill = ".claude/skills/wiki-benchmark"
+	const userOwned = "questions.md"
+	const marker = "<!-- TEMPLATE: replace these example questions -->"
+	scafDir := filepath.Join(root, "scaffold", filepath.FromSlash(skill))
+	liveDir := filepath.Join(root, filepath.FromSlash(skill))
+
+	scafFiles, err := collectFiles(scafDir, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	liveFiles, err := collectFiles(liveDir, nil)
+	if err != nil {
+		t.Fatalf("root skill layer missing: %v", err)
+	}
+	sort.Strings(scafFiles)
+	sort.Strings(liveFiles)
+	if len(scafFiles) < 6 {
+		t.Fatalf("scaffold skill has %d files, expected SKILL.md, prepare.sh, questions.md and the headless files: %v", len(scafFiles), scafFiles)
+	}
+	if strings.Join(scafFiles, "\n") != strings.Join(liveFiles, "\n") {
+		t.Errorf("%s file set differs from scaffold\nscaffold-only: %v\nroot-only: %v",
+			skill, diffStrings(scafFiles, liveFiles), diffStrings(liveFiles, scafFiles))
+	}
+	for _, rel := range scafFiles {
+		a, err := os.ReadFile(filepath.Join(scafDir, filepath.FromSlash(rel)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, err := os.ReadFile(filepath.Join(liveDir, filepath.FromSlash(rel)))
+		if err != nil {
+			continue // already reported by the file-set check
+		}
+		if rel != userOwned && string(a) != string(b) {
+			t.Errorf("%s/%s differs from scaffold copy", skill, rel)
+		}
+	}
+
+	for _, rel := range []string{userOwned, "SKILL.md"} {
+		data, err := os.ReadFile(filepath.Join(scafDir, rel))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(data), marker) {
+			t.Errorf("scaffold %s/%s must carry the template marker", skill, rel)
+		}
+	}
+
+	if runtime.GOOS != "windows" {
+		for _, dir := range []string{scafDir, liveDir} {
+			fi, err := os.Stat(filepath.Join(dir, "prepare.sh"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if fi.Mode()&0o100 == 0 {
+				t.Errorf("%s/prepare.sh is not executable (mode %s)", dir, fi.Mode())
+			}
+		}
 	}
 }
 

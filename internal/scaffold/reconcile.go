@@ -189,13 +189,7 @@ func Reconcile(destDir string, opts ReconcileOptions) (*ReconcileResult, error) 
 	}
 
 	// 2. Reconcile prompt files, tool symlinks, and retired managed files.
-	prefixes := []string{
-		"files/.wiki-instructions",
-		"files/.github/prompts",
-		"files/.github/instructions",
-		"files/.claude/commands",
-		"files/.pi/skills",
-	}
+	prefixes := syncPrefixes
 	for _, prefix := range prefixes {
 		if err := syncEmbeddedDir(destDir, prefix, &res.Updated); err != nil {
 			return nil, err
@@ -337,6 +331,7 @@ func isPromptLayerPath(rel string) bool {
 		".github/instructions",
 		".claude/commands",
 		".pi/skills",
+		skillDir,
 	} {
 		if s == p || strings.HasPrefix(s, p+"/") {
 			return true

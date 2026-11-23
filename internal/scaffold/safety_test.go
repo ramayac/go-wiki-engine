@@ -67,6 +67,11 @@ func TestWritesRefuseSymlinksOutsideRepo(t *testing.T) {
 		{"github dir", ".github", false, syncRun},
 		{"pi skills wiki dir", ".pi/skills/wiki", false, syncRun},
 		{"pi dir", ".pi", false, syncRun},
+		{"claude skills dir", ".claude/skills", false, syncRun},
+		{"benchmark skill dir", ".claude/skills/wiki-benchmark", false, syncRun},
+		{"headless dir", ".claude/skills/wiki-benchmark/headless", false, syncRun},
+		{"claude skills dir init", ".claude/skills", false, initRun},
+		{"benchmark skill dir init", ".claude/skills/wiki-benchmark", false, initRun},
 		{"AGENTS.md sync", "AGENTS.md", true, syncRun},
 		{"CLAUDE.md sync", "CLAUDE.md", true, syncRun},
 		{"AGENTS.md init", "AGENTS.md", true, initRun},
@@ -93,7 +98,7 @@ func TestWritesRefuseSymlinksOutsideRepo(t *testing.T) {
 			} else {
 				target = outside
 				// Files the engine would write if it followed the link.
-				for _, n := range []string{"ingest.md", "wiki-ingest.md", "wiki-ingest.prompt.md", "wiki-maintainer.instructions.md", "SKILL.md", "index.md"} {
+				for _, n := range []string{"ingest.md", "wiki-ingest.md", "wiki-ingest.prompt.md", "wiki-maintainer.instructions.md", "SKILL.md", "index.md", "prepare.sh", "questions.md", "bench.py", "README.md"} {
 					mustWrite(t, filepath.Join(outside, n), sentinel)
 				}
 			}
