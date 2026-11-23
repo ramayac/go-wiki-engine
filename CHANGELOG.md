@@ -25,6 +25,9 @@ surface is defined in [README.md](README.md).
 
 ### Fixed
 
+- **Forgeable provenance in `upgrade`:** A release-served `<asset>.intoto.jsonl` could report "verified" and satisfy `--require-attestation`. The code path is removed, so only a successful `gh attestation verify` verifies.
+- **Release tag validation in `upgrade`:** The tag from the redirect must match `vMAJOR.MINOR.PATCH[-pre]` (64 characters at most) before any download or `go install`.
+- **Silent downgrade in `upgrade`:** The upgrade now refuses a latest release lower than the running version and names both versions. Dev and dirty builds may still upgrade.
 - **JSON `null` for empty results:** Empty results (`changed`, `candidates`, `search`, `relevant`, `log-tail`, `headings`, `diff`, `impact`, `watch --once`, `context`, graph neighborhood, `sync-prompts`) now encode as `[]`, not `null`.
 - **`--` terminator:** `summary`, `diff`, and `log-tail` now treat `--` as the end of flags, like the other commands.
 - **Unknown command with a broken `.wikirc`:** The command name is checked before `.wikirc` loads, so the error says "unknown command".
@@ -49,6 +52,7 @@ surface is defined in [README.md](README.md).
 
 ### Changed
 
+- **`wiki-engine upgrade` verifies provenance only through `gh attestation verify`:** It is now pinned to the `release.yml` signer workflow as well as the repository. The upgrade no longer trusts an `.intoto.jsonl` file served by the release. Without `gh` or attestations it still proceeds on the checksum, unless `--require-attestation` is set; any other `gh` failure stops the upgrade. `SECURITY.md` and the release page now state what is proven.
 - **Exit codes now separate usage errors from runtime failures:** Usage errors (unknown command or flag, missing or extra argument, invalid flag value, conflicting flags) exit `2`; they exited `1` before. Runtime and finding failures stay at `1`. `check` keeps `0`/`1`/`2`. See the exit-code table in [README.md](README.md).
 - **`--json` `ok` now matches the exit code:** `graph --strict` and `watch --once` emit `"ok": false` with an `error` summary (and the same `data`) when they exit `1`.
 - **`refresh --json` emits one JSON object** (`diff_range`, `needed`, `wiki_files`, `recent_log`, `changed`, `candidates`, `lint`). `refresh` now exits `1` when its lint section fails, using the same `fail_severity` gate as `lint`.

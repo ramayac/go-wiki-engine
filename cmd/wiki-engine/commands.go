@@ -348,7 +348,7 @@ func runSchema(args []string, useJSON bool) {
 }
 
 func runUpgrade(args []string, useJSON bool) {
-	opts := upgrade.Options{}
+	opts := upgrade.Options{CurrentVersion: getVersion()}
 	for _, a := range args[2:] {
 		switch a {
 		case "--from-source":
