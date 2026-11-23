@@ -15,7 +15,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -35,6 +37,13 @@ var latestTagHTTPClient = &http.Client{
 }
 
 const modulePrefix = "github.com/ramayac/go-wiki-engine/cmd/wiki-engine"
+
+// Identity that `gh attestation verify` pins release assets to. A fork changes
+// these two constants (and repoURL) together.
+const (
+	attestationRepo = "ramayac/go-wiki-engine"
+	signerWorkflow  = "ramayac/go-wiki-engine/.github/workflows/release.yml"
+)
 
 // Size caps for both compressed download and expanded binary extraction.
 // Variables so unit tests can lower them.
@@ -81,6 +90,11 @@ var sourceInstaller = func(modulePath string) error {
 type Options struct {
 	FromSource         bool // explicitly install from source via `go install` pinned to release tag
 	RequireAttestation bool // fail if build provenance attestation is unavailable
+
+	// CurrentVersion is the running binary's version. When it parses as a
+	// release version, upgrade refuses to install a lower tag. A dev, dirty, or
+	// otherwise unparseable version counts as unknown and may upgrade.
+	CurrentVersion string
 }
 
 // Run executes the fail-closed default self-upgrade.
@@ -99,7 +113,7 @@ func RunWithOptions(opts Options) (*VerificationReport, error) {
 }
 
 // runWithOptions implements the fail-closed upgrade flow:
-//  1. Discover release tag.
+//  1. Discover release tag, validate it, and refuse a downgrade.
 //  2. If --from-source, run pinned `go install <module>@<tag>` and stop.
 //  3. Download checksums.txt.
 //  4. Match platform asset.
@@ -125,6 +139,9 @@ func runWithOptions(baseURL, executablePath string, opts Options) (*Verification
 	}
 	report.Tag = tag
 	fmt.Fprintf(os.Stderr, "latest release version is %s\n", tag)
+	if err := checkNotDowngrade(opts.CurrentVersion, tag); err != nil {
+		return report, fmt.Errorf("upgrade refused: %w", err)
+	}
 
 	// Explicit --from-source path: pinned strictly to the resolved release tag.
 	if opts.FromSource {
@@ -172,7 +189,7 @@ func runWithOptions(baseURL, executablePath string, opts Options) (*Verification
 	fmt.Fprintln(os.Stderr, "checksum validation succeeded")
 
 	// 5. Verify build provenance attestation when available (fail closed on failure).
-	attStatus, attDetail, attErr := attestationVerifier(baseURL, tag, assetName, tmpAsset, computedHash)
+	attStatus, attDetail, attErr := attestationVerifier(baseURL, tmpAsset)
 	report.AttestationStatus = attStatus
 	report.AttestationDetail = attDetail
 	if attErr != nil || attStatus == StatusFailed {
@@ -226,7 +243,95 @@ func getLatestTag(baseURL string) (string, error) {
 	if len(parts) != 2 || strings.TrimSpace(parts[1]) == "" {
 		return "", fmt.Errorf("unexpected redirect location format: %s", loc)
 	}
-	return strings.TrimSpace(parts[1]), nil
+	tag := strings.TrimSpace(parts[1])
+	if err := validateTag(tag); err != nil {
+		return "", err
+	}
+	return tag, nil
+}
+
+// tagPattern is the strict shape of a release tag: it ends up in download URLs
+// and in `go install <module>@<tag>`, so nothing else may pass.
+var tagPattern = regexp.MustCompile(`^v?([0-9]+)\.([0-9]+)\.([0-9]+)([-+.][0-9A-Za-z.-]+)?$`)
+
+const maxTagLength = 64
+
+// semver is the numeric part of a version plus whether it has a pre-release suffix.
+type semver struct {
+	major, minor, patch uint64
+	pre                 bool
+}
+
+// validateTag rejects any tag that is not a plain release version.
+func validateTag(tag string) error {
+	if len(tag) > maxTagLength || !tagPattern.MatchString(tag) {
+		return fmt.Errorf("invalid release tag %q (expected vMAJOR.MINOR.PATCH)", truncate(tag, 40))
+	}
+	if _, ok := parseSemver(tag); !ok {
+		return fmt.Errorf("invalid release tag %q (version number too large)", truncate(tag, 40))
+	}
+	return nil
+}
+
+func truncate(s string, n int) string {
+	if len(s) > n {
+		return s[:n] + "..."
+	}
+	return s
+}
+
+// parseSemver reads major.minor.patch from a tag-shaped version.
+func parseSemver(v string) (semver, bool) {
+	m := tagPattern.FindStringSubmatch(v)
+	if m == nil || len(v) > maxTagLength {
+		return semver{}, false
+	}
+	var nums [3]uint64
+	for i := range nums {
+		n, err := strconv.ParseUint(m[i+1], 10, 64)
+		if err != nil {
+			return semver{}, false
+		}
+		nums[i] = n
+	}
+	return semver{nums[0], nums[1], nums[2], m[4] != ""}, true
+}
+
+// buildSuffix is what release.yml appends to the tag: -<commit>-<UTC date>.
+var buildSuffix = regexp.MustCompile(`-[0-9a-f]{7,40}-[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]+Z$`)
+
+// less reports whether a is lower than b. A pre-release is lower than the same
+// release. Two pre-releases of the same version compare equal.
+func (a semver) less(b semver) bool {
+	switch {
+	case a.major != b.major:
+		return a.major < b.major
+	case a.minor != b.minor:
+		return a.minor < b.minor
+	case a.patch != b.patch:
+		return a.patch < b.patch
+	}
+	return a.pre && !b.pre
+}
+
+// checkNotDowngrade refuses a tag that is lower than the running version.
+// An unknown running version (dev, dirty, git-describe, empty) always passes.
+func checkNotDowngrade(current, tag string) error {
+	if strings.Contains(current, "dirty") {
+		return nil
+	}
+	cur, ok := parseSemver(buildSuffix.ReplaceAllString(current, ""))
+	if !ok {
+		return nil
+	}
+	latest, ok := parseSemver(tag)
+	if !ok {
+		return nil
+	}
+	if latest.less(cur) {
+		return fmt.Errorf("latest release %s is lower than the running version %s (downgrade refused)", tag, current)
+	}
+	return nil
 }
 
 func downloadBytes(url string) ([]byte, error) {

@@ -90,7 +90,7 @@ make install          # go install globally
 ## Self-Upgrade
 
 ```bash
-wiki-engine upgrade                 # Fail-closed checksum + provenance verified binary upgrade
+wiki-engine upgrade                 # Checksum-verified binary upgrade; attestation checked when `gh` is available
 wiki-engine upgrade --from-source   # Explicit pinned `go install` from release tag
 wiki-engine init                    # Reconcile prompts, symlinks, and shims in each repo
 ```

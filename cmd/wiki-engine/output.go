@@ -121,7 +121,7 @@ Commands:
   watch [--once]           Poll for changes and lint issues (interval from .wikirc)
   refresh [diff-range]     Run the full maintenance snapshot
   upgrade [--from-source] [--require-attestation]
-                           Fail-closed self-upgrade from GitHub Releases (checksum + provenance)
+                           Self-upgrade from GitHub Releases (SHA-256 checksum; gh attestation check; refuses downgrades)
   version                  Print the version
   help                     Show this help
 

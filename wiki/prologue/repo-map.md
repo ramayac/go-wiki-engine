@@ -67,7 +67,7 @@ internal/audit/         Repo-wide reference, action-pin SHA, schema, prompt, and
 | `diff <from> <to>` | Show wiki files added/removed/changed between two Git refs |
 | `watch [--once]` | Poll for changes + lint issues (`--once` exits 1 when lint fails) |
 | `refresh [diff-range]` | Full maintenance snapshot: files, log, changed, candidates, lint (exits 1 when lint fails; honors `--json`) |
-| `upgrade [--from-source] [--require-attestation]` | Fail-closed self-upgrade with SHA-256 checksum & provenance verification (explicit `--from-source` for pinned `go install`) |
+| `upgrade [--from-source] [--require-attestation]` | Fail-closed self-upgrade with SHA-256 checksum, `gh attestation verify` provenance check, tag validation, and downgrade refusal (explicit `--from-source` for pinned `go install`) |
 | `version` | Print build version |
 
 ## JSON & Exit-Code Contracts

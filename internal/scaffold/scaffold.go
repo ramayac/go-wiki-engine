@@ -129,7 +129,7 @@ func writeScaffoldFile(root, dest, rel string, data []byte) error {
 			if err != nil {
 				return err
 			}
-			fmt.Fprintf(warnOut, "backed up edited %s to %s\n", rel, filepath.ToSlash(filepath.Base(bak)))
+			_, _ = fmt.Fprintf(warnOut, "backed up edited %s to %s\n", rel, filepath.ToSlash(filepath.Base(bak)))
 		}
 	}
 	if err := os.Remove(dest); err != nil && !os.IsNotExist(err) {
