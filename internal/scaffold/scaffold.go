@@ -4,13 +4,16 @@ package scaffold
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/ramayac/go-wiki-engine/internal/paths"
@@ -36,7 +39,7 @@ var (
 
 // promptWorkflows are the canonical workflow files in .wiki-instructions/ that
 // are symlinked into the tool-specific directories.
-var promptWorkflows = []string{"ingest", "lint", "onboard", "plan", "query", "refresh", "save", "seed", "upgrade", "watch"}
+var promptWorkflows = []string{"ingest", "plan", "query", "save", "seed", "upgrade"}
 
 // toolDirLinks maps destination-relative paths to symlink targets relative to
 // the directory containing the link.
@@ -274,19 +277,35 @@ func SyncPrompts(destDir string) (updated, removed []string, err error) {
 
 // retiredManagedFiles are files earlier releases shipped in the sync
 // directories that the current embed no longer has. Paths are relative to the
-// repo root, with forward slashes. The engine deletes these and no other
-// regular file.
-var retiredManagedFiles = map[string]bool{
-	".claude/commands/wiki-migrate-shims.md":       true,
-	".github/prompts/wiki-migrate-shims.prompt.md": true,
-	".wiki-instructions/migrate-shims.md":          true,
-	".wiki-instructions/summarize.md":              true,
+// repo root, with forward slashes. The value lists the SHA-256 of every
+// version this repo shipped at that path (see shippedDigests).
+//
+// A regular file whose bytes match a digest is deleted. A regular file with
+// other bytes is backed up first. An empty list means the engine deletes the
+// file as it is. A symlink into .wiki-instructions/ is deleted. The engine
+// removes no other file.
+var retiredManagedFiles = buildRetiredManagedFiles()
+
+func buildRetiredManagedFiles() map[string][]string {
+	retired := map[string][]string{
+		".claude/commands/wiki-migrate-shims.md":       nil,
+		".github/prompts/wiki-migrate-shims.prompt.md": nil,
+		".wiki-instructions/migrate-shims.md":          nil,
+		".wiki-instructions/summarize.md":              nil,
+	}
+	for name, digests := range shippedDigests {
+		retired[".wiki-instructions/"+name+".md"] = digests
+		retired[".claude/commands/wiki-"+name+".md"] = digests
+		retired[".github/prompts/wiki-"+name+".prompt.md"] = digests
+	}
+	return retired
 }
 
-// isEngineOwned reports whether the engine may delete path. It owns a retired
-// file, and a symlink that points into .wiki-instructions/ (its own tool links).
+// isEngineOwned reports whether the engine may delete path as it is. It owns a
+// retired file without digests, and a symlink that points into
+// .wiki-instructions/ (its own tool links).
 func isEngineOwned(destDir, path, rel string, info os.FileInfo) bool {
-	if retiredManagedFiles[rel] {
+	if digests, ok := retiredManagedFiles[rel]; ok && len(digests) == 0 {
 		return true
 	}
 	if info.Mode()&os.ModeSymlink == 0 {
@@ -301,6 +320,28 @@ func isEngineOwned(destDir, path, rel string, info os.FileInfo) bool {
 	}
 	inRel, err := filepath.Rel(filepath.Join(destDir, ".wiki-instructions"), link)
 	return err == nil && inRel != "." && inRel != ".." && !strings.HasPrefix(inRel, ".."+string(filepath.Separator))
+}
+
+// retireRegular deletes a retired regular file. It copies the file to a .bak
+// file first unless its bytes match a digest the engine shipped. It reports
+// whether it deleted the file.
+func retireRegular(destDir, path, rel string, digests []string) bool {
+	if guardWrite(destDir, path) != nil {
+		return false
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	sum := sha256.Sum256(data)
+	if !slices.Contains(digests, hex.EncodeToString(sum[:])) {
+		bak, err := backupFile(path, data)
+		if err != nil {
+			return false
+		}
+		_, _ = fmt.Fprintf(warnOut, "backed up edited retired %s to %s\n", rel, filepath.ToSlash(filepath.Base(bak)))
+	}
+	return os.Remove(path) == nil
 }
 
 func cleanOrphanedFiles(destDir string, embedPrefixes []string, cleaned *[]string) {
@@ -328,7 +369,16 @@ func cleanOrphanedFiles(destDir string, embedPrefixes []string, cleaned *[]strin
 			}
 			rel, _ := filepath.Rel(destDir, path)
 			relSlash := filepath.ToSlash(rel)
-			if known[relSlash] || !isEngineOwned(destDir, path, relSlash, info) {
+			if known[relSlash] {
+				return nil
+			}
+			if digests, ok := retiredManagedFiles[relSlash]; ok && len(digests) > 0 && info.Mode().IsRegular() {
+				if retireRegular(destDir, path, relSlash, digests) {
+					*cleaned = append(*cleaned, relSlash)
+				}
+				return nil
+			}
+			if !isEngineOwned(destDir, path, relSlash, info) {
 				return nil
 			}
 			if err := os.Remove(path); err == nil {

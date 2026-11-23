@@ -60,8 +60,8 @@ func TestShippedPromptsUseRealCommandsAndFlags(t *testing.T) {
 		}
 		files = append(files, m...)
 	}
-	if len(files) < 10 {
-		t.Fatalf("found only %d shipped prompt files, want at least 10", len(files))
+	if len(files) < 8 {
+		t.Fatalf("found only %d shipped prompt files, want at least 8", len(files))
 	}
 
 	checked := 0

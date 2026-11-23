@@ -48,7 +48,7 @@ internal/audit/         Repo-wide reference, action-pin SHA, schema, prompt, and
 | Command | What it does |
 |---|---|
 | `init [wiki-dir] [--wiki-dir=<name>]` | Scaffold a new wiki, idempotently reconcile an existing managed wiki, or safely rename with `--wiki-dir` |
-| `sync-prompts` | Compatibility command to update `.wiki-instructions/`, `.github/`, `.claude/commands/`, and `.pi/skills/` |
+| `sync-prompts` | Compatibility command to update `.wiki-instructions/`, `.github/`, `.claude/commands/`, and `.pi/skills/`. Deletes a retired prompt when it is unchanged and moves an edited one to `<name>.bak` |
 | `schema [--type=<t>] [--section=<s>]` | Print the embedded v2 wiki schema, lifecycle rules, or page templates |
 | `list [--active]` | List all contained wiki files (or active pages only) |
 | `headings` | List all Markdown headings across wiki files |

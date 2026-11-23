@@ -73,11 +73,9 @@ sources:
 
 1. **Ingest (`/wiki-ingest`):** no ingest history and no real pages → run Seed. Otherwise read commit messages and the PR body (`gh`) → `check` / `impact` → `search` / `graph <id>` → update pages with exact `sources:` and the reason → update `index.md` + one `log.md` entry → `lint --fix` + `lint` → `check` → `health`.
 2. **Query (`/wiki-query`):** `graph` / `context --active --sort=topo` → `search` / `relevant` → read active pages (ignore `planned`, follow `superseded_by`) → widen to `sources:` only if needed.
-3. **Refresh (`/wiki-refresh`):** `refresh` + `check` → update impacted pages → `lint` + `check`.
-4. **Onboard (`/wiki-onboard`):** `schema` → survey repo → migrate external docs → populate `repo-map.md` + typed pages → `lint` + `check` + `graph --strict`.
-5. **Lint (`/wiki-lint`):** `lint --fix` → `lint --json` + `check --json` → resolve remaining issues → `lint` + `check` + `graph --strict`.
-6. **Upgrade (`/wiki-upgrade`):** `upgrade` → `init` (reconcile prompts) → `lint` + `check`.
-7. **Watch (`/wiki-watch`):** `watch --once` + `check` → `impact` → ingest → `lint` + `check`.
-8. **Seed (`/wiki-seed`):** inventory repo → group by domain → `search` + `impact` for overlaps → confirm plan → write pages (omit `## Why` when no source states it) + `repo-map.md` + phases → `index.md` + one `log.md` entry → `lint --fix` + `lint` → `check` + `health` + `graph --strict`.
-9. **Save (`/wiki-save`):** `search` → `graph <id>` → update or create a page with `sources:`, the reason, and `## Stops applying when` → `index.md` + one `log.md` entry → `lint --fix` + `lint` → `check` → `health`.
-10. **Plan (`/wiki-plan`):** `search` + `graph <id>` + `impact` → write `.wiki-engine/handoff.md` (temporary; never durable wiki).
+3. **Upgrade (`/wiki-upgrade`):** `upgrade` → `init` (reconcile prompts) → `lint` + `check`.
+4. **Seed (`/wiki-seed`):** inventory repo → group by domain → `search` + `impact` for overlaps → confirm plan → write pages (omit `## Why` when no source states it) + `repo-map.md` + phases → `index.md` + one `log.md` entry → `lint --fix` + `lint` → `check` + `health` + `graph --strict`.
+5. **Save (`/wiki-save`):** `search` → `graph <id>` → update or create a page with `sources:`, the reason, and `## Stops applying when` → `index.md` + one `log.md` entry → `lint --fix` + `lint` → `check` → `health`.
+6. **Plan (`/wiki-plan`):** `search` + `graph <id>` + `impact` → write `.wiki-engine/handoff.md` (temporary; never durable wiki).
+
+Lint, refresh, and watch are CLI commands, not prompts: run `wiki-engine lint --fix`, `wiki-engine refresh`, and `wiki-engine watch --once`.

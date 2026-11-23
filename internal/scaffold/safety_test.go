@@ -93,7 +93,7 @@ func TestWritesRefuseSymlinksOutsideRepo(t *testing.T) {
 			} else {
 				target = outside
 				// Files the engine would write if it followed the link.
-				for _, n := range []string{"lint.md", "wiki-lint.md", "wiki-lint.prompt.md", "wiki-maintainer.instructions.md", "SKILL.md", "index.md"} {
+				for _, n := range []string{"ingest.md", "wiki-ingest.md", "wiki-ingest.prompt.md", "wiki-maintainer.instructions.md", "SKILL.md", "index.md"} {
 					mustWrite(t, filepath.Join(outside, n), sentinel)
 				}
 			}
@@ -157,7 +157,7 @@ func TestSyncReplacesSymlinkedManagedFilesWithoutFollowing(t *testing.T) {
 	repo := filepath.Join(base, "repo")
 	outsideFile := filepath.Join(base, "outside", "keep.md")
 	mustWrite(t, outsideFile, "OUTSIDE DATA\n")
-	for _, rel := range []string{".claude/commands/wiki-lint.md", ".wiki-instructions/lint.md"} {
+	for _, rel := range []string{".claude/commands/wiki-ingest.md", ".wiki-instructions/ingest.md"} {
 		p := filepath.Join(repo, rel)
 		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 			t.Fatal(err)
@@ -172,13 +172,13 @@ func TestSyncReplacesSymlinkedManagedFilesWithoutFollowing(t *testing.T) {
 	if b, _ := os.ReadFile(outsideFile); string(b) != "OUTSIDE DATA\n" {
 		t.Errorf("outside file changed: %q", b)
 	}
-	for _, rel := range []string{".claude/commands/wiki-lint.md", ".wiki-instructions/lint.md"} {
+	for _, rel := range []string{".claude/commands/wiki-ingest.md", ".wiki-instructions/ingest.md"} {
 		if got, _ := os.Readlink(filepath.Join(repo, rel)); got == outsideFile {
 			t.Errorf("%s still points outside the repo", rel)
 		}
 	}
-	if b, _ := os.ReadFile(filepath.Join(repo, ".claude/commands/wiki-lint.md")); !bytes.Contains(b, []byte("#")) {
-		t.Error("wiki-lint.md should resolve to the embedded prompt")
+	if b, _ := os.ReadFile(filepath.Join(repo, ".claude/commands/wiki-ingest.md")); !bytes.Contains(b, []byte("#")) {
+		t.Error("wiki-ingest.md should resolve to the embedded prompt")
 	}
 }
 
@@ -287,13 +287,13 @@ func TestSyncPromptsBacksUpEditedManagedFile(t *testing.T) {
 	if _, _, err := SyncPrompts(repo); err != nil {
 		t.Fatal(err)
 	}
-	embedded, err := os.ReadFile(filepath.Join(repo, ".claude/commands/wiki-lint.md"))
+	embedded, err := os.ReadFile(filepath.Join(repo, ".claude/commands/wiki-ingest.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Edited regular file: backed up, replaced by the link, one stderr line.
-	dest := filepath.Join(repo, ".claude/commands/wiki-lint.md")
+	dest := filepath.Join(repo, ".claude/commands/wiki-ingest.md")
 	if err := os.Remove(dest); err != nil {
 		t.Fatal(err)
 	}
@@ -303,7 +303,7 @@ func TestSyncPromptsBacksUpEditedManagedFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	if fi, _ := os.Lstat(dest); fi.Mode()&os.ModeSymlink == 0 {
-		t.Error("wiki-lint.md was not replaced by a symlink")
+		t.Error("wiki-ingest.md was not replaced by a symlink")
 	}
 	if b, _ := os.ReadFile(dest + ".bak"); string(b) != "older backup\n" {
 		t.Errorf("existing .bak was overwritten: %q", b)
@@ -311,7 +311,7 @@ func TestSyncPromptsBacksUpEditedManagedFile(t *testing.T) {
 	if b, _ := os.ReadFile(dest + ".bak.1"); string(b) != "hand written\n" {
 		t.Errorf(".bak.1 = %q, want the hand-written content", b)
 	}
-	if got := strings.Count(warn.String(), "\n"); got != 1 || !strings.Contains(warn.String(), "wiki-lint.md.bak.1") {
+	if got := strings.Count(warn.String(), "\n"); got != 1 || !strings.Contains(warn.String(), "wiki-ingest.md.bak.1") {
 		t.Errorf("want one stderr line naming the backup, got %q", warn.String())
 	}
 

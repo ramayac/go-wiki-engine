@@ -36,11 +36,22 @@ wiki-engine lint
 wiki-engine check
 ```
 
-Re-running `wiki-engine init` is idempotent: it reconciles prompts, symlinks, ignore entries, and versioned root shims while preserving user-authored pages, `.wikirc`, and `AGENTS.md`/`CLAUDE.md` content. Pass `wiki-engine init --wiki-dir <name>` to rename an existing wiki directory safely. `init <name>` fails when `.wikirc` names a different directory. `init` and `sync-prompts` refuse to write through a symlink that leaves the repo, copy an edited prompt file to `<name>.bak` before replacing it, and delete only files the engine owns.
+Re-running `wiki-engine init` is idempotent: it reconciles prompts, symlinks, ignore entries, and versioned root shims while preserving user-authored pages, `.wikirc`, and `AGENTS.md`/`CLAUDE.md` content. Pass `wiki-engine init --wiki-dir <name>` to rename an existing wiki directory safely. `init <name>` fails when `.wikirc` names a different directory. `init` and `sync-prompts` refuse to write through a symlink that leaves the repo, copy an edited prompt file to `<name>.bak` before replacing it, and delete only files the engine owns. A retired prompt (`onboard`, `lint`, `refresh`, `watch`) is deleted when it is unchanged and moved to `<name>.bak` when you edited it.
 
 ## Slash Commands
 
-The primary interface is slash commands in your AI tool, all sharing canonical definitions in `.wiki-instructions/`: `/wiki-ingest`, `/wiki-query`, `/wiki-refresh`, `/wiki-onboard`, `/wiki-lint`, `/wiki-upgrade`, `/wiki-watch`. The multi-tool integration model is documented in [wiki/prologue/repo-map.md](wiki/prologue/repo-map.md).
+The primary interface is slash commands in your AI tool, all sharing canonical definitions in `.wiki-instructions/`.
+
+| Command | Purpose |
+|---|---|
+| `/wiki-seed` | Fill an empty or thin wiki from the code and docs, grouped by domain. |
+| `/wiki-ingest` | Absorb a code diff into the affected wiki pages. |
+| `/wiki-query` | Answer a question from the wiki, with citations. |
+| `/wiki-plan` | Write an implementation handoff from wiki and repo evidence. |
+| `/wiki-save` | Save a lesson, decision, or procedure from a session into the wiki. |
+| `/wiki-upgrade` | Migrate the wiki to the current schema after a CLI upgrade. |
+
+**Cold start:** run `wiki-engine init`, then `/wiki-seed` to write the first pages. Lint, refresh, and watch are CLI commands, not slash commands: run `wiki-engine lint`, `wiki-engine refresh`, and `wiki-engine watch --once`. The multi-tool integration model is documented in [wiki/prologue/repo-map.md](wiki/prologue/repo-map.md).
 
 ## Commands
 

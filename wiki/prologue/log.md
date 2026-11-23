@@ -8,6 +8,12 @@ description: "Append-only timeline of wiki maintenance activity."
 
 Append-only timeline of wiki maintenance activity.
 
+## [2026-11-23] refactor | prompt set aligned with sibling; four prompts retired
+
+- The shipped prompts are now `seed`, `ingest`, `query`, `plan`, `save`, and `upgrade`. The prompts `onboard`, `lint`, `refresh`, and `watch` are retired. Their CLI commands stay. See [index.md](../index.md).
+- `sync-prompts` and `init` delete a retired prompt only when it is unchanged. An edited retired prompt moves to `<name>.bak`. See [repo-map.md](repo-map.md).
+- `/wiki-seed` records open questions in an `## Open questions` section of [repo-map.md](repo-map.md).
+
 ## [2026-11-23] ingest | governance parity: health command, why and stop-condition templates, markers
 
 - Added `wiki-engine health`: advisory maintenance signals that exit `0` and never fail CI. See [repo-map.md](repo-map.md).
