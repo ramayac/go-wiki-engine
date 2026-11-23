@@ -66,7 +66,7 @@ internal/audit/         Repo-wide reference, action-pin SHA, schema, prompt, and
 | `impact [--fuzzy] <file...>` | Exact source/directory/link impact with match reasons in JSON (`--fuzzy` opts in to basename prose scan) |
 | `diff <from> <to>` | Show wiki files added/removed/changed between two Git refs |
 | `watch [--once]` | Poll for changes + lint issues (`--once` exits 1 when lint fails) |
-| `refresh [diff-range]` | Full maintenance snapshot: files, log, changed, candidates, lint |
+| `refresh [diff-range]` | Full maintenance snapshot: files, log, changed, candidates, lint (exits 1 when lint fails; honors `--json`) |
 | `upgrade [--from-source] [--require-attestation]` | Fail-closed self-upgrade with SHA-256 checksum & provenance verification (explicit `--from-source` for pinned `go install`) |
 | `version` | Print build version |
 
@@ -75,7 +75,7 @@ internal/audit/         Repo-wide reference, action-pin SHA, schema, prompt, and
 - Global JSON envelope (version `1`): `{"ok": bool, "data": ..., "error": "..."}`
 - Graph JSON schema version: `2`
 - Frontmatter schema version: `2`
-- Exit codes: `0` success (including `check` review recommendations), `1` content/lint/check breakage or usage error, `2` Git/config/setup error.
+- Exit codes: `0` success (including `check` review recommendations), `1` runtime or finding failure (lint, `graph --strict`, `refresh` lint, `check` breakage), `2` usage error (`check` also uses `2` for Git/setup errors). See [README.md](../../README.md#contracts--compatibility-policy).
 
 ## Build and Release Path
 

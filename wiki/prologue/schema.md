@@ -119,8 +119,9 @@ Page authority (`lifecycle`) is separate from decision/incident workflow (`statu
 
 - Global JSON envelope (version `1`): `{"ok": bool, "data": ..., "error": "..."}`
 - Exit `0`: Success (including `wiki-engine check` with review recommendations only)
-- Exit `1`: Content/lint/check breakage or usage error
-- Exit `2`: Git, config, or setup error (e.g., `wiki-engine check` outside git or invalid base ref)
+- Exit `1`: Runtime or finding failure (lint, `graph --strict`, `refresh` lint, `check` breakage, git/config/I/O errors)
+- Exit `2`: Usage error (unknown command or flag, bad argument or flag value); `wiki-engine check` also uses `2` for git or setup errors (outside git, invalid base ref)
+- With `--json`, `ok` is `false` whenever the exit code is non-zero; empty lists encode as `[]`, never `null`
 
 ## Related
 

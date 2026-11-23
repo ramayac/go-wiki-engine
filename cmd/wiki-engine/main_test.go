@@ -441,10 +441,10 @@ func TestMainReexec(t *testing.T) {
 		wantExit int
 		wantOut  string
 	}{
-		{"no args shows usage", root, nil, 1, "Usage:"},
-		{"unknown command", root, []string{"nope"}, 1, "unknown command"},
-		{"json unknown command envelope", root, []string{"--json", "nope"}, 1, `"ok": false`},
-		{"unknown flag rejected", root, []string{"list", "--bogus"}, 1, "unknown flag"},
+		{"no args shows usage", root, nil, 2, "Usage:"},
+		{"unknown command", root, []string{"nope"}, 2, "unknown command"},
+		{"json unknown command envelope", root, []string{"--json", "nope"}, 2, `"ok": false`},
+		{"unknown flag rejected", root, []string{"list", "--bogus"}, 2, "unknown flag"},
 		{"version", root, []string{"version"}, 0, "dev"},
 		{"list works", root, []string{"list"}, 0, "wiki/index.md"},
 		{"graph strict clean passes", root, []string{"graph", "--strict"}, 0, "== wiki graph =="},

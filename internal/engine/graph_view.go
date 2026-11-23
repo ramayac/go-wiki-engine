@@ -111,7 +111,7 @@ func Neighborhood(nodes []WikiNode, edges []WikiEdge, page string) (*NodeView, e
 		return nil, err
 	}
 	seenBack := make(map[string]bool)
-	var backlinks []string
+	backlinks := []string{}
 	for _, e := range edges {
 		if e.To == node.File && !seenBack[e.From] {
 			seenBack[e.From] = true
@@ -129,7 +129,7 @@ func NeighborhoodForWiki(nodes []WikiNode, edges []WikiEdge, wikiDir, page strin
 		return nil, err
 	}
 	seenBack := make(map[string]bool)
-	var backlinks []string
+	backlinks := []string{}
 	for _, e := range edges {
 		if e.To == node.File && !seenBack[e.From] {
 			seenBack[e.From] = true

@@ -20,6 +20,9 @@ func (e *Engine) WatchOnce() (*WatchResult, error) {
 	}
 
 	changed := cs.NonWikiChanged(e.Cfg.WikiDir)
+	if changed == nil {
+		changed = []string{}
+	}
 	candidates := e.candidateFiles(cs)
 
 	lintRes := e.Lint()
