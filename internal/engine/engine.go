@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -171,39 +172,85 @@ func (e *Engine) Candidates(diffRange string) ([]string, error) {
 
 // CandidatesWithOptions filters ChangedWithOptions through .wikirc ignore patterns.
 func (e *Engine) CandidatesWithOptions(opts ChangeOptions) ([]string, error) {
-	changed, err := e.ChangedWithOptions(opts)
+	cs, err := e.DiscoverChanges(opts)
 	if err != nil {
 		return nil, err
 	}
+	return e.candidateFiles(cs), nil
+}
+
+// candidateFiles returns the live, non-wiki changed files that no ignore
+// pattern matches. Deleted files and the old side of renames are not candidates.
+func (e *Engine) candidateFiles(cs *git.ChangeSet) []string {
 	var filtered []string
-	for _, f := range changed {
+	for _, f := range cs.LiveNonWikiChanged(e.Cfg.WikiDir) {
 		if !e.isIgnored(f) {
 			filtered = append(filtered, f)
 		}
 	}
-	return filtered, nil
+	return filtered
 }
 
-func (e *Engine) isIgnored(path string) bool {
+// isIgnored reports whether rel (a slash path relative to the engine root)
+// matches any `ignore` pattern from .wikirc.
+func (e *Engine) isIgnored(rel string) bool {
 	for _, pattern := range e.Cfg.Ignore {
-		if strings.HasSuffix(pattern, "/") {
-			if strings.HasPrefix(path, pattern) {
-				return true
-			}
-			continue
-		}
-		if strings.Contains(pattern, "*") {
-			matched, _ := filepath.Match(pattern, filepath.Base(path))
-			if matched {
-				return true
-			}
-			continue
-		}
-		if path == pattern {
+		if ignoreMatches(pattern, rel) {
 			return true
 		}
 	}
 	return false
+}
+
+// ignoreMatches applies one gitignore-like pattern to a slash path:
+//   - A bare name or glob (no "/") matches any path segment.
+//   - A pattern with "/" is anchored at the root and matched segment by segment;
+//     a "**" segment matches zero or more segments.
+//   - A trailing "/" matches a directory and everything beneath it.
+//
+// A match on a directory also covers every path beneath it.
+func ignoreMatches(pattern, rel string) bool {
+	pattern = filepath.ToSlash(pattern)
+	rel = filepath.ToSlash(rel)
+	dirOnly := strings.HasSuffix(pattern, "/")
+	anchored := strings.HasPrefix(pattern, "/")
+	pattern = strings.Trim(pattern, "/")
+	if pattern == "" {
+		return false
+	}
+	segs := strings.Split(rel, "/")
+	if !anchored && !dirOnly && !strings.Contains(pattern, "/") {
+		for _, s := range segs {
+			if ok, _ := path.Match(pattern, s); ok {
+				return true
+			}
+		}
+		return false
+	}
+	return matchSegments(strings.Split(pattern, "/"), segs, dirOnly)
+}
+
+// matchSegments reports whether pat matches a leading run of segs. With
+// needBeneath, at least one segment must remain after the match.
+func matchSegments(pat, segs []string, needBeneath bool) bool {
+	if len(pat) == 0 {
+		return !needBeneath || len(segs) > 0
+	}
+	if pat[0] == "**" {
+		for i := 0; i <= len(segs); i++ {
+			if matchSegments(pat[1:], segs[i:], needBeneath) {
+				return true
+			}
+		}
+		return false
+	}
+	if len(segs) == 0 {
+		return false
+	}
+	if ok, _ := path.Match(pat[0], segs[0]); !ok {
+		return false
+	}
+	return matchSegments(pat[1:], segs[1:], needBeneath)
 }
 
 // JSONOutput is the standard JSON envelope for all commands.
@@ -322,7 +369,7 @@ func (e *Engine) filesAtRef(ref string) ([]string, error) {
 	if !git.RefExists(e.RootDir, ref) {
 		return nil, fmt.Errorf("invalid git ref %q", ref)
 	}
-	cmd := exec.Command("git", "ls-tree", "-r", "--name-only", ref, e.Cfg.WikiDir+"/")
+	cmd := exec.Command("git", "ls-tree", "-r", "-z", "--name-only", ref, "--", e.Cfg.WikiDir+"/")
 	cmd.Dir = e.RootDir
 	out, err := cmd.Output()
 	if err != nil {
@@ -331,29 +378,31 @@ func (e *Engine) filesAtRef(ref string) ([]string, error) {
 		}
 		return nil, err
 	}
+	return splitNUL(out), nil
+}
+
+// splitNUL splits NUL-terminated git output into non-empty entries.
+func splitNUL(out []byte) []string {
 	var files []string
-	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-		if line != "" {
-			files = append(files, line)
+	for _, f := range strings.Split(string(out), "\x00") {
+		if f != "" {
+			files = append(files, f)
 		}
 	}
-	return files, nil
+	return files
 }
 
 func (e *Engine) changedWikiFiles(diffRange string) ([]string, error) {
-	cmd := exec.Command("git", "diff", "--name-only", diffRange, "--", e.Cfg.WikiDir+"/")
+	if err := git.ValidateDiffRange(e.RootDir, diffRange); err != nil {
+		return nil, fmt.Errorf("invalid diff range: %w", err)
+	}
+	cmd := exec.Command("git", "diff", "-z", "--name-only", "--relative", "--end-of-options", diffRange, "--", e.Cfg.WikiDir+"/")
 	cmd.Dir = e.RootDir
 	out, err := cmd.Output()
 	if err != nil {
 		return nil, err
 	}
-	var files []string
-	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-		if line != "" {
-			files = append(files, line)
-		}
-	}
-	return files, nil
+	return splitNUL(out), nil
 }
 
 // Refresh runs the full maintenance snapshot and returns a formatted report.
@@ -364,12 +413,7 @@ func (e *Engine) Refresh(diffRange string) (string, error) {
 		return "", err
 	}
 	changed := cs.NonWikiChanged(e.Cfg.WikiDir)
-	var candidates []string
-	for _, f := range changed {
-		if !e.isIgnored(f) {
-			candidates = append(candidates, f)
-		}
-	}
+	candidates := e.candidateFiles(cs)
 	if len(candidates) == 0 {
 		label := diffRange
 		if label == "" {

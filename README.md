@@ -24,7 +24,7 @@ make build
 ### Prerequisites
 
 - **Go 1.24+** — to build from source or install via `go install`.
-- **git** — required by the diff-driven commands: `changed`, `candidates`, `check`, `refresh`, `watch`, `diff`, and `impact`.
+- **git** 2.24 or newer — required by the diff-driven commands: `changed`, `candidates`, `check`, `refresh`, `watch`, `diff`, and `impact`.
 - **Prebuilt binaries** — linux amd64/arm64, darwin amd64/arm64, and windows amd64 on [GitHub Releases](https://github.com/ramayac/go-wiki-engine/releases) with SHA-256 checksums and build-provenance attestations.
 
 ```bash

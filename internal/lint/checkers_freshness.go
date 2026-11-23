@@ -179,6 +179,17 @@ func (c *staleContentChecker) Check(snap *model.WikiSnapshot, cfg *config.Config
 	if cfg.StaleDays <= 0 {
 		return nil, nil
 	}
+	// A shallow clone has truncated history: commit dates would be too recent and
+	// file mtimes are the checkout time, so every page would look fresh. Skip
+	// and say so, so the missing result is not read as "nothing is stale".
+	if git.IsShallow(snap.Root) {
+		return []Issue{{
+			Severity: SevInfo,
+			Check:    c.Name(),
+			File:     cfg.WikiDir,
+			Message:  "skipped: shallow clone has truncated git history (run `git fetch --unshallow` to enable)",
+		}}, nil
+	}
 	staleThreshold := time.Now().AddDate(0, 0, -cfg.StaleDays)
 
 	// Unified git change discovery (best-effort; outside git repo hasSourceChanges=false).

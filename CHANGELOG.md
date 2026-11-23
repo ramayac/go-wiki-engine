@@ -23,6 +23,14 @@ surface is defined in [README.md](README.md).
 - New `references` front matter field: typed cross-references (`source:<path>`, `external:<url>`, `issue:<KEY>`) declared in a single-line bracket list. References are node annotations, not graph edges — they surface in `wiki-engine graph <page>` and graph JSON.
 - New `references` lint checker: flags missing source files, scheme-less URLs, malformed issue keys, and unknown reference types.
 
+### Fixed
+
+- **Git option injection:** `changed`, `candidates`, `refresh`, `watch --once`, and the `stale-content` check passed the diff range to `git diff` unchecked, so `--output=<path>` could overwrite a file. Ranges now must be revisions or `a..b` / `a...b` of existing revisions, `default_diff` may not start with `-`, and git calls pass `--end-of-options` and `--` where a user or config value reaches them. `diff` with a `wiki_dir` that starts with `-` no longer fails. Git 2.24 or newer is required.
+- **Default diff on repos without `main`:** `main...HEAD` no longer fails on `master` (or other) repos; the engine detects the base branch like `check`. Git errors now show git's reason and tell "not a git repository" from "unknown revision".
+- **Subdirectory projects:** `changed` and `candidates` return paths relative to `.wikirc`, unquoted for non-ASCII names. `candidates` no longer lists deleted files or the old path of a rename.
+- **`ignore` patterns:** patterns with `/` now match the full path (`docs/*.md`, `**`), and bare names match any path segment.
+- **Non-ASCII wiki paths and shallow clones:** `stale-content` now sees non-ASCII page names and skips (with one `info` issue) in a shallow clone. `check` reports a cited commit missing from a shallow clone as a warning (`unverifiable_commit`), not `invalid_commit`.
+
 ### Changed
 
 - **`wiki-engine impact` is exact by default:** Matches declared `sources`, directory coverage, and exact Markdown repo links with explicit match reasons in JSON; basename prose matching is opt-in via `--fuzzy`.
