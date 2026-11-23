@@ -68,6 +68,14 @@ type HealthMarker struct {
 	RationaleNotRecorded int    `json:"rationale_not_recorded"`
 }
 
+// HealthThresholds lists the numeric thresholds behind the health signals, so a
+// consumer can interpret them.
+type HealthThresholds struct {
+	AgingDays        int `json:"aging_days"`
+	DriftDays        int `json:"drift_days"`
+	LogRotationBytes int `json:"log_rotation_bytes"`
+}
+
 // HealthResult holds the advisory maintenance signals of `wiki-engine health`.
 // Every signal is advisory: none of them is a lint failure.
 type HealthResult struct {
@@ -92,6 +100,9 @@ type HealthResult struct {
 	// missing-rationale marker. It is a prompt to resolve them, not a lint
 	// failure.
 	OpenMarkers []HealthMarker `json:"open_markers"`
+	// Thresholds lists the limits that decide aging_work, updated_behind_git,
+	// and log_needs_rotation.
+	Thresholds HealthThresholds `json:"thresholds"`
 }
 
 // Health computes the advisory maintenance signals from one snapshot.
@@ -118,6 +129,11 @@ func (e *Engine) healthAt(now time.Time) (*HealthResult, error) {
 		DuplicateTitles:  []HealthDuplicateTitle{},
 		IndexOnlyPages:   []string{},
 		OpenMarkers:      []HealthMarker{},
+		Thresholds: HealthThresholds{
+			AgingDays:        healthAgingWorkDays,
+			DriftDays:        healthGitDriftDays,
+			LogRotationBytes: healthLogRotateBytes,
+		},
 	}
 	for _, lc := range schema.ValidLifecycles {
 		res.Lifecycles[lc] = 0

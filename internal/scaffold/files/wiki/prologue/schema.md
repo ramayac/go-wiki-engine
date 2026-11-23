@@ -107,8 +107,8 @@ Page templates (`wiki-engine schema --type <type>`) ask `concept` and `entity` p
 
 ## Exit Codes & JSON Contract
 
-- Global JSON envelope (version `1`): `{"ok": bool, "data": ..., "error": "..."}`
+- Global JSON envelope (version `1`): `{"ok": bool, "meta": {...}, "data": ..., "error": "...", "error_code": "usage|findings|runtime"}`. Consumers must ignore unknown keys. The per-command key table is `wiki-engine schema --section json`.
 - Graph JSON schema version: `2`
 - Exit `0`: Success (including `wiki-engine check` with review recommendations only)
-- Exit `1`: Content/lint/check breakage or usage error
-- Exit `2`: Git, config, or setup error
+- Exit `1`: Runtime or finding failure (lint, `graph --strict`, `check` breakage, git, config, or I/O errors)
+- Exit `2`: Usage error; `wiki-engine check` also uses `2` for git or setup errors

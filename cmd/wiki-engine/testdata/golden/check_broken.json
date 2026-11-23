@@ -1,0 +1,65 @@
+{
+  "ok": false,
+  "meta": {
+    "base": "main",
+    "command": "check",
+    "schema_version": "1",
+    "working_tree": true
+  },
+  "data": {
+    "base": "main",
+    "merge_base": "<SHA>",
+    "working_tree": true,
+    "changed_files": [
+      "src/main.go",
+      "wiki/extra.md"
+    ],
+    "untracked": [
+      "wiki/extra.md"
+    ],
+    "broken": [
+      {
+        "page": "wiki/extra.md",
+        "id": "extra",
+        "kind": "missing_source",
+        "severity": "broken",
+        "target": "src/missing.go",
+        "message": "cited source does not exist: src/missing.go"
+      }
+    ],
+    "warnings": [
+      {
+        "page": "wiki/extra.md",
+        "id": "extra",
+        "kind": "missing_source",
+        "severity": "warning",
+        "target": "src/gone.go",
+        "line": 13,
+        "message": "broken repo link in changed page: src/gone.go"
+      }
+    ],
+    "pages_to_review": [
+      {
+        "page": "wiki/auth.md",
+        "id": "auth",
+        "kind": "source_changed",
+        "severity": "review",
+        "changed_files": [
+          "src/main.go"
+        ],
+        "match_reasons": [
+          "source"
+        ]
+      }
+    ],
+    "summary": {
+      "broken": 1,
+      "warnings": 1,
+      "pages_to_review": 1,
+      "changed_files": 2
+    },
+    "exit_code": 1
+  },
+  "error": "1 broken citation(s) introduced on branch",
+  "error_code": "findings"
+}

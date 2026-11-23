@@ -130,7 +130,7 @@ Page authority (`lifecycle`) is separate from decision/incident workflow (`statu
 
 ## Exit Codes & JSON Contract
 
-- Global JSON envelope (version `1`): `{"ok": bool, "data": ..., "error": "..."}`
+- Global JSON envelope (version `1`): `{"ok": bool, "meta": {...}, "data": ..., "error": "...", "error_code": "usage|findings|runtime"}`. `meta` carries `schema_version`, `command`, and command keys. Consumers must ignore unknown keys. The per-command key table is `wiki-engine schema --section json`; tests pin it in `cmd/wiki-engine/testdata/golden/`.
 - Exit `0`: Success (including `wiki-engine check` with review recommendations only)
 - Exit `1`: Runtime or finding failure (lint, `graph --strict`, `refresh` lint, `check` breakage, git/config/I/O errors)
 - Exit `2`: Usage error (unknown command or flag, bad argument or flag value); `wiki-engine check` also uses `2` for git or setup errors (outside git, invalid base ref)

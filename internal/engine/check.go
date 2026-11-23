@@ -23,21 +23,44 @@ type CheckOptions struct {
 
 // CheckFinding represents one broken citation or warning discovered by `check`.
 type CheckFinding struct {
-	Page    string `json:"page"`
-	ID      string `json:"id,omitempty"`
-	Kind    string `json:"kind"` // "missing_source", "deleted_source", "renamed_source", "invalid_commit", "unverifiable_commit", "containment", "frontmatter"
-	Target  string `json:"target,omitempty"`
+	Page string `json:"page"`
+	ID   string `json:"id,omitempty"`
+	Kind string `json:"kind"` // "missing_source", "deleted_source", "renamed_source", "invalid_commit", "unverifiable_commit", "containment", "frontmatter"
+	// Severity is "broken" for entries in Broken and "warning" for entries in Warnings.
+	Severity string `json:"severity"`
+	Target   string `json:"target,omitempty"`
+	// Line is the 1-based line in Page where the finding was found, when known.
+	Line    int    `json:"line,omitempty"`
 	Message string `json:"message"`
 }
 
 // ReviewRecommendation points to an unchanged live wiki page whose cited source
 // file was modified on the branch.
 type ReviewRecommendation struct {
-	Page         string   `json:"page"`
-	ID           string   `json:"id,omitempty"`
+	Page string `json:"page"`
+	ID   string `json:"id,omitempty"`
+	// Kind is always "source_changed"; Severity is always "review".
+	Kind         string   `json:"kind"`
+	Severity     string   `json:"severity"`
 	ChangedFiles []string `json:"changed_files"`
 	MatchReasons []string `json:"match_reasons"`
 }
+
+// CheckSummary counts the entries of a CheckResult.
+type CheckSummary struct {
+	Broken        int `json:"broken"`
+	Warnings      int `json:"warnings"`
+	PagesToReview int `json:"pages_to_review"`
+	ChangedFiles  int `json:"changed_files"`
+}
+
+// Finding severities and the review kind used in `check` JSON.
+const (
+	SeverityBroken  = "broken"
+	SeverityWarning = "warning"
+	SeverityReview  = "review"
+	KindReview      = "source_changed"
+)
 
 // CheckResult is the structured output of `wiki-engine check`.
 type CheckResult struct {
@@ -49,6 +72,9 @@ type CheckResult struct {
 	Broken        []CheckFinding         `json:"broken"`
 	Warnings      []CheckFinding         `json:"warnings"`
 	PagesToReview []ReviewRecommendation `json:"pages_to_review"`
+	Summary       CheckSummary           `json:"summary"`
+	// ExitCode is the exit code of the command for this result: 0, or 1 on breakage.
+	ExitCode int `json:"exit_code"`
 }
 
 // HasBreakage reports whether the branch introduced any broken citations (exit 1).
@@ -193,6 +219,7 @@ func (e *Engine) Check(opts CheckOptions) (*CheckResult, error) {
 					Page:    p.Path,
 					ID:      p.ID,
 					Kind:    "containment",
+					Line:    lk.Line,
 					Target:  lk.RawTarget,
 					Message: fmt.Sprintf("link escapes repository boundary: %s", lk.RawTarget),
 				})
@@ -204,6 +231,7 @@ func (e *Engine) Check(opts CheckOptions) (*CheckResult, error) {
 						Page:    p.Path,
 						ID:      p.ID,
 						Kind:    "missing_source",
+						Line:    lk.Line,
 						Target:  lk.RawTarget,
 						Message: fmt.Sprintf("broken repo link in changed page: %s", lk.RawTarget),
 					})
@@ -276,6 +304,7 @@ func (e *Engine) Check(opts CheckOptions) (*CheckResult, error) {
 						Page:    p.Path,
 						ID:      p.ID,
 						Kind:    "renamed_source",
+						Line:    lk.Line,
 						Target:  linkPath,
 						Message: fmt.Sprintf("linked repo file %s was renamed to %s", linkPath, newPath),
 					})
@@ -288,6 +317,7 @@ func (e *Engine) Check(opts CheckOptions) (*CheckResult, error) {
 						Page:    p.Path,
 						ID:      p.ID,
 						Kind:    "deleted_source",
+						Line:    lk.Line,
 						Target:  linkPath,
 						Message: fmt.Sprintf("linked repo file %s was deleted on this branch", linkPath),
 					})
@@ -323,6 +353,26 @@ func (e *Engine) Check(opts CheckOptions) (*CheckResult, error) {
 	sort.Slice(res.PagesToReview, func(i, j int) bool {
 		return res.PagesToReview[i].Page < res.PagesToReview[j].Page
 	})
+
+	for i := range res.Broken {
+		res.Broken[i].Severity = SeverityBroken
+	}
+	for i := range res.Warnings {
+		res.Warnings[i].Severity = SeverityWarning
+	}
+	for i := range res.PagesToReview {
+		res.PagesToReview[i].Kind = KindReview
+		res.PagesToReview[i].Severity = SeverityReview
+	}
+	res.Summary = CheckSummary{
+		Broken:        len(res.Broken),
+		Warnings:      len(res.Warnings),
+		PagesToReview: len(res.PagesToReview),
+		ChangedFiles:  len(res.ChangedFiles),
+	}
+	if res.HasBreakage() {
+		res.ExitCode = 1
+	}
 
 	return res, nil
 }

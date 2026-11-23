@@ -433,11 +433,12 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 			usageError("usage: wiki-engine search <query>")
 		}
 		if ranked && !opts.Keyword {
-			results, err := eng.SearchRanked(query, opts)
+			results, total, err := eng.SearchRankedTotal(query, opts)
 			if err != nil {
 				fatal(err)
 			}
 			if useJSON {
+				setSearchMeta(query, "ranked", opts, total, len(results))
 				writeJSON(results)
 				return
 			}
@@ -446,11 +447,12 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 			}
 			return
 		}
-		results, err := eng.SearchLines(query, opts)
+		results, total, err := eng.SearchLinesTotal(query, opts)
 		if err != nil {
 			fatal(err)
 		}
 		if useJSON {
+			setSearchMeta(query, "lines", opts, total, len(results))
 			writeJSON(results)
 			return
 		}
@@ -520,7 +522,7 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 		res, err := eng.Check(checkOpts)
 		if err != nil {
 			if errors.Is(err, engine.ErrCheckSetup) {
-				fatalWithCode(err, 2)
+				fatalWithCode(err, exitUsage)
 			}
 			fatal(err)
 		}
@@ -529,7 +531,9 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 			if res.HasBreakage() {
 				errMsg = fmt.Sprintf("%d broken citation(s) introduced on branch", len(res.Broken))
 			}
-			writeJSONResult(res, !res.HasBreakage(), errMsg)
+			setMeta("base", res.Base)
+			setMeta("working_tree", res.WorkingTree)
+			writeFindings(res, !res.HasBreakage(), errMsg)
 			if res.HasBreakage() {
 				os.Exit(1)
 			}
@@ -612,7 +616,7 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 					errMsg = result.Reason
 				}
 			}
-			writeJSONResult(result.Issues, result.OK, errMsg)
+			writeFindings(result.Issues, result.OK, errMsg)
 			if !result.OK {
 				os.Exit(1)
 			}
@@ -648,7 +652,7 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 			if !res.Lint.OK {
 				errMsg = fmt.Sprintf("refresh lint failed: %d issue(s)", len(res.Lint.Issues))
 			}
-			writeJSONResult(res, res.Lint.OK, errMsg)
+			writeFindings(res, res.Lint.OK, errMsg)
 		} else {
 			fmt.Print(res.Text())
 		}
@@ -861,11 +865,16 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 
 		if useJSON {
 			var data interface{} = view
+			setMeta("root", "index.md")
+			setMeta("mode", "full")
 			if nv != nil {
 				data = nv
+				setMeta("root", nv.Node.File)
+				setMeta("mode", "neighborhood")
 			}
+			setMeta("include_sources", includeSources)
 			if strict && unhealthy {
-				writeJSONResult(data, false, fmt.Sprintf("graph strict check failed: %d unlinked page(s), %d graph issue(s)", len(view.Unlinked), len(view.Issues)))
+				writeFindings(data, false, fmt.Sprintf("graph strict check failed: %d unlinked page(s), %d graph issue(s)", len(view.Unlinked), len(view.Issues)))
 				os.Exit(exitFailure)
 			}
 			writeJSON(data)
@@ -1099,6 +1108,17 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 	}
 }
 
+// setSearchMeta sets the search-specific meta keys.
+func setSearchMeta(query, mode string, opts engine.SearchOptions, total, returned int) {
+	setMeta("query", query)
+	setMeta("mode", mode)
+	setMeta("total", total)
+	setMeta("returned", returned)
+	setMeta("limit", opts.Limit)
+	setMeta("truncated", total > returned)
+	setMeta("include_history", opts.IncludeHistory)
+}
+
 func parseSearchArgs(args []string) (opts engine.SearchOptions, pos []string, ranked bool) {
 	afterTerminator := false
 	for i := 0; i < len(args); i++ {
@@ -1193,7 +1213,7 @@ func watchCycle(eng *engine.Engine, useJSON bool, last *string) bool {
 	if err != nil {
 		if shouldPrintWatch(last, "error: "+err.Error()) {
 			if useJSON {
-				writeJSONResult(nil, false, err.Error())
+				writeJSONError(err.Error(), errCodeRuntime)
 			} else {
 				fmt.Fprintf(os.Stderr, "watch error: %v\n", err)
 			}
@@ -1209,7 +1229,7 @@ func watchCycle(eng *engine.Engine, useJSON bool, last *string) bool {
 		if !wr.LintOK {
 			errMsg = fmt.Sprintf("watch lint failed: %d issue(s)", len(wr.LintIssues))
 		}
-		writeJSONResult(wr, wr.LintOK, errMsg)
+		writeFindings(wr, wr.LintOK, errMsg)
 		return !wr.LintOK
 	}
 	if len(wr.Changed) > 0 {

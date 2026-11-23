@@ -141,3 +141,15 @@ func TestConventionsSection(t *testing.T) {
 		t.Errorf("full schema must include the conventions section (err %v)", err)
 	}
 }
+
+func TestJSONSection(t *testing.T) {
+	out, err := RenderText("", "json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"`meta`", "`error_code`", "`usage`", "`findings`", "`runtime`", "ignore unknown keys", "`referrals`", "`thresholds`", "`exit_code`", "`term_coverage`", "`truncated`"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("json section missing %q", want)
+		}
+	}
+}

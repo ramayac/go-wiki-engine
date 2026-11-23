@@ -25,6 +25,14 @@ go test -race ./...   # race detector
 
 All of these run in CI (`.github/workflows/test.yml`).
 
+## JSON Contract Tests
+
+`cmd/wiki-engine/json_contract_test.go` compares the `--json` output of `search`, `graph`, `health`, `check`, and one error per `error_code` with golden files in `cmd/wiki-engine/testdata/golden/`. Temp paths, commit hashes, and timestamps are normalized first. `TestJSONCompat` fails when a key of the previous shape disappears or changes type. After an intended, additive output change, review the diff and regenerate:
+
+```bash
+go test ./cmd/wiki-engine -run TestJSONGolden -update
+```
+
 ## Scaffold Changes
 
 `scaffold/` is the human-readable source of truth for the templates embedded

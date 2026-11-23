@@ -1,0 +1,25 @@
+{
+  "ok": true,
+  "meta": {
+    "base": "main",
+    "command": "check",
+    "schema_version": "1",
+    "working_tree": true
+  },
+  "data": {
+    "base": "main",
+    "merge_base": "<SHA>",
+    "working_tree": true,
+    "changed_files": [],
+    "broken": [],
+    "warnings": [],
+    "pages_to_review": [],
+    "summary": {
+      "broken": 0,
+      "warnings": 0,
+      "pages_to_review": 0,
+      "changed_files": 0
+    },
+    "exit_code": 0
+  }
+}

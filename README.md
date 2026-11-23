@@ -82,8 +82,15 @@ Releases use clean `vX.Y.Z` semantic versions. The compatibility surface covered
   | `2` | Usage error: unknown command or flag, missing or extra argument, invalid flag value. `check` also uses `2` for git and setup errors (e.g., outside a Git repo or invalid base ref) |
 
   `-h` and `--help` exit `0`.
-- **Global JSON envelope (version `1`):** `{"ok": bool, "data": ..., "error": "..."}`. With `--json`, `ok` is `false` whenever the exit code is non-zero, and `data` is kept when the command has findings to report. Empty lists encode as `[]`, never `null`.
-- **Graph JSON schema (version `2`):** `{"schema_version": "2", "nodes": [], "edges": [], "unlinked": [], "stats": {}, "issues": []}`
+- **Global JSON envelope (version `1`):** `{"ok": bool, "meta": {...}, "data": ..., "error": "...", "error_code": "..."}`. With `--json`, `ok` is `false` whenever the exit code is non-zero, and `data` is kept when the command has findings to report. `meta` (always `schema_version` and `command`, plus command keys) is on every success and on every failure that keeps `data`. `error_code` is on failures: `usage` (exit 2), `findings` (the command ran and found problems), or `runtime` (other exit 1). Empty lists encode as `[]`, never `null`. **Consumers must ignore unknown keys:** new keys ship in minor releases. Full key table: `wiki-engine schema --section json`.
+
+  | Command | `meta` keys | New `data` keys |
+  |---------|-------------|-----------------|
+  | `search` | `query`, `mode`, `total`, `returned`, `limit`, `truncated`, `include_history` | per hit: `path`, `title`, `type`, `tags`; ranked also `term_coverage` |
+  | `graph` | `root`, `mode`, `include_sources` | per node: `type`, `tags`, `referrals` |
+  | `health` | common keys | `thresholds` |
+  | `check` | `base`, `working_tree` | `summary`, `exit_code`; per entry: `severity`, `line` |
+- **Graph JSON schema (version `2`):** `{"schema_version": "2", "nodes": [], "edges": [], "unlinked": [], "stats": {}, "issues": []}`. Additive node keys do not change the version.
 - **Frontmatter schema (version `2`):** Real YAML (`gopkg.in/yaml.v3`) with `id`, `title`, `type`, `lifecycle`, workflow `status`/`severity`, `related`, `depends_on`, structured `sources`, and structured `references`.
   - **Migration policy:** v1 frontmatter (`status: planned|current|legacy|deprecated` and inline `references: [source:...]`) remains readable for one major release; `wiki-engine lint --fix` migrates pages deterministically. Missing lifecycle metadata never becomes active by default.
   - **Major-version policy:** Additive JSON fields, flags, and config keys ship in minor releases; breaking removals (such as retiring v1 frontmatter fallbacks or the `relevant` alias) require a major release.
