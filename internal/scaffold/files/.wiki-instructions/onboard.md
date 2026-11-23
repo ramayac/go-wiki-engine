@@ -9,118 +9,20 @@ Run a full-project wiki onboarding. This is a **cold-start** survey — do not r
 
 ## Required context
 
-- Run `wiki-engine context --active` to check whether the wiki has been populated.
+- Start from active context: run `wiki-engine context --active` to check whether the wiki has been populated.
+- Inspect the embedded schema templates with `wiki-engine schema` and `wiki-engine schema --type <concept|entity|incident|decision|runbook>`.
 - Read [wiki/phases.md](../../wiki/prologue/phases.md) — check which phases are still `not-started`.
-- Skim the top-level directory to understand what kind of project this is.
+- Read each page's `lifecycle` before relying on it: ignore `planned` placeholders as current fact and follow `superseded_by` links.
 - If wiki-engine is not installed, read [wiki/index.md](../../wiki/index.md) instead.
 
 ## Execution steps
 
-### 1. Discover the repo shape
-
-```bash
-wiki-engine candidates
-```
-
-If candidates returns no output, fall back to surveying the repo manually:
-- List top-level directories.
-- Read the root `README.md`, `Makefile`, and any `package.json` / `go.mod` / `pyproject.toml`.
-- Check for existing docs in common locations: `docs/`, `AGENTS.md`, `CLAUDE.md`, `CONTRIBUTING.md`, `ARCHITECTURE.md`, `ADR/`, `notes/`.
-
-### 2. Check for external knowledge to migrate
-
-Before creating new pages, scan for files that already contain durable knowledge outside `wiki/`:
-- `docs/` or `doc/` — planning docs, design decisions, lessons learned
-- `AGENTS.md` — AI agent SOPs and architectural rules
-- `CLAUDE.md` — Claude-specific conventions or workflows
-- `CONTRIBUTING.md` — developer workflow rules
-- `ARCHITECTURE.md`, `DESIGN.md`, or similar top-level docs
-
-If any file contains custom instructions (not just a redirect shim), migrate the durable knowledge:
-- Coding conventions or team workflow → add to [wiki/README.md](../../wiki/README.md).
-- Architecture or component notes → add to [wiki/repo-map.md](../../wiki/prologue/repo-map.md).
-- Broad AI guidance (how the agent should behave) → add an **AI Agent Guidance** section in [wiki/README.md](../../wiki/README.md).
-- If it is large or specialized, copy into a dedicated wiki page in the appropriate category directory (e.g. `wiki/architectures/agents-guide.md`) with a valid front matter block.
-- Once migrated, replace `AGENTS.md` and `CLAUDE.md` with standard redirect shims:
-  ```markdown
-  # AI Agent Instructions (or Claude Instructions)
-
-  This project uses a structured wiki for all documentation and agent context.
-
-  Start here: **[wiki/index.md](wiki/index.md)**
-
-  The wiki covers architecture, conventions, active phases, and the project change log.
-  To update or query the wiki, use the `/wiki-ingest`, `/wiki-query`, `/wiki-refresh`,
-  `/wiki-onboard`, `/wiki-lint`, `/wiki-upgrade`, or `/wiki-watch` Copilot slash
-  commands (installed in `.github/prompts/`).
-  ```
-- Replace other migrated external files with a one-line stub pointing to their new wiki location, or delete them if they are fully superseded.
-- Note the migration details in `wiki/prologue/log.md`.
-
-### 3. Populate wiki/prologue/repo-map.md
-
-Fill in every section — do not leave placeholder comments:
-- **Purpose** — one or two sentence description of what the project does.
-- **High-Signal Areas** — the most important source directories and files, with a one-line role for each.
-- **Generated Artifacts** — build outputs, caches, test fixtures.
-- **Build and Run Path** — exact commands to build, test, and run. Copy from Makefile/README if available.
-- **Ignored Paths** — list paths from `.wikirc` `ignore` array.
-
-### 4. Create initial topic pages
-
-Decide what the first wiki topic pages should be based on what you found. Common patterns:
-
-| Page name | When to create |
-|---|---|
-| `architecture.md` | Any project with multiple layers or subsystems |
-| `gameplay-systems.md` / `domain.md` | Domain-specific rules and data models |
-| `bots.md` / `agents.md` | Projects with automation, bots, or AI integration |
-| `api.md` | Projects with a public API |
-| `data-model.md` | Projects with a significant schema |
-
-Read only the source files needed to populate each page. Write durable facts only — not implementation details that change every PR.
-**Required:** Include a proper YAML front matter block at the top of every new page (and `wiki/prologue/repo-map.md` if not already present):
-```yaml
----
-status: current          # current | planned
-description: "One-line summary of this page's purpose"
----
-```
-Ensure all pages use standard relative Markdown links (e.g., `[Text](file.md)`) to connect topics and source references.
-
-### 5. Update wiki/index.md
-
-Add a section for every new page created using standard relative Markdown links. Keep the index as the entry point — it should describe every page in one line.
-
-### 6. Advance wiki/prologue/phases.md
-
-After completing the above:
-- Mark **Phase 1 (Populate repo map)** as `completed`.
-- Mark **Phase 2 (First ingest cycle)** as `completed`.
-- Add a **Phase 3** row if ongoing ingest makes sense (it almost always does):
-
-  ```md
-  | 3 | Ongoing ingest | in-progress | Run ingest after each meaningful commit batch |
-  ```
-
-### 7. Append to wiki/prologue/log.md
-
-Use the required heading format:
-
-```md
-## [YYYY-MM-DD] ingest | initial full-repo wiki build
-```
-
-Include: what was added, what was migrated from external files, and anything that needs human review.
-
-### 8. Run lint
-
-```bash
-wiki-engine lint
-```
-
-Fix any issues before finishing.
-
----
+1. **Discover the repo shape:** Run `wiki-engine candidates` or survey top-level directories, `README.md`, `Makefile`, and build manifests.
+2. **Check for external knowledge to migrate:** Scan `docs/`, `AGENTS.md`, `CLAUDE.md`, `CONTRIBUTING.md`, `ARCHITECTURE.md` and migrate durable knowledge into `wiki/` (leaving stubs or reconciled fenced shims via `wiki-engine init`).
+3. **Populate [wiki/repo-map.md](../../wiki/prologue/repo-map.md):** Fill in Purpose, High-Signal Areas, Generated Artifacts, Build and Run Path, and Ignored Paths.
+4. **Create initial typed topic pages:** Include valid YAML frontmatter (`id`, `title`, `type`, `lifecycle: current`, `description`, and exact `sources:`) and standard relative Markdown links.
+5. **Update [wiki/index.md](../../wiki/index.md)** and advance [wiki/phases.md](../../wiki/prologue/phases.md).
+6. **Append to [wiki/log.md](../../wiki/prologue/log.md)** using `## [YYYY-MM-DD] ingest | initial full-repo wiki build`.
+7. **Verify:** Run `wiki-engine lint`, `wiki-engine check`, and `wiki-engine graph --strict` and fix any issues before finishing.
 
 Finish by summarising what was created, what was migrated, and what still needs human review.

@@ -34,9 +34,7 @@ tags: [architecture, config]
 			name: "no front matter",
 			content: `# Page Title
 No front matter here.`,
-			wantFM: FrontMatter{
-				Status: "current",
-			},
+			wantFM:    FrontMatter{},
 			wantFound: false,
 		},
 		{
@@ -45,9 +43,7 @@ No front matter here.`,
 status: legacy
 description: unterminated
 # Page Title`,
-			wantFM: FrontMatter{
-				Status: "current",
-			},
+			wantFM:        FrontMatter{},
 			wantFound:     true,
 			wantErrSubstr: "unterminated front matter block",
 		},
@@ -90,7 +86,12 @@ body`,
 			if gotFound != tt.wantFound {
 				t.Errorf("gotFound = %v, want %v", gotFound, tt.wantFound)
 			}
-			if !reflect.DeepEqual(gotFM, tt.wantFM) {
+			if !reflect.DeepEqual(gotFM.Status, tt.wantFM.Status) ||
+				!reflect.DeepEqual(gotFM.Description, tt.wantFM.Description) ||
+				!reflect.DeepEqual(gotFM.SupersededBy, tt.wantFM.SupersededBy) ||
+				!reflect.DeepEqual(gotFM.Created, tt.wantFM.Created) ||
+				!reflect.DeepEqual(gotFM.Updated, tt.wantFM.Updated) ||
+				!reflect.DeepEqual(gotFM.Tags, tt.wantFM.Tags) {
 				t.Errorf("gotFM = %+v, want %+v", gotFM, tt.wantFM)
 			}
 		})

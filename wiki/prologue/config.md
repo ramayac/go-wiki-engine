@@ -1,7 +1,8 @@
 ---
-status: current
+id: config
+title: Configuration Reference
+lifecycle: current
 description: "Specification and usage guide for the .wikirc configuration file."
-superseded_by: ""
 ---
 # Configuration Reference
 
@@ -10,12 +11,45 @@ All settings live in `.wikirc` at the repo root. If the file is absent, sensible
 ## Paths
 
 ### `wiki_dir`
-Directory name for the wiki, relative to repo root.
+Single safe directory segment for the wiki, relative to repo root. Empty values, `.`, `..`, absolute paths, path separators, and repository metadata names (`.git`, `.github`, etc.) are rejected at load time.
 ```
 wiki_dir = "wiki"
 ```
 | Default | `"wiki"` |
 |--------:|----------|
+
+### `base_ref`
+Optional fallback Git base ref for branch-aware `check`, `changed`, and `candidates` (overrides auto-detection when `--base` is not passed).
+```
+base_ref = "main"
+```
+| Default | `""` (auto-detected) |
+|--------:|----------------------|
+
+### `issue_pattern`
+Optional Go regex used to validate `issue` references in frontmatter.
+```
+issue_pattern = "^[A-Z][A-Z0-9]*-[0-9]+$"
+```
+| Default | `^[A-Z][A-Z0-9]*-[0-9]+$` |
+|--------:|---------------------------|
+
+### `schema_version`
+Optional schema version identifier.
+```
+schema_version = "2"
+```
+| Default | `"2"` |
+|--------:|-------|
+
+### `context_max_pages` / `context_max_bytes`
+Bounds for `wiki-engine context` catalog output (reports `truncated: true` and `truncated_reason` when reached; `0` disables a bound).
+```
+context_max_pages = 100
+context_max_bytes = 65536
+```
+| Default | `100` pages / `65536` bytes |
+|--------:|-----------------------------|
 
 ### `default_diff`
 Git diff range used by `changed`, `candidates`, `refresh`, and `watch`.

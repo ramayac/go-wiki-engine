@@ -9,6 +9,14 @@ surface is defined in [README.md](README.md).
 
 ### Added
 
+- **Strict path containment (`internal/paths`):** Single-segment `wiki_dir` validation and symlink-aware boundary enforcement across `.wikirc`, `init`, `sync-prompts`, `summary`, graph traversal, and source resolution.
+- **Real YAML frontmatter & typed wiki model (`internal/model`, `internal/schema`):** Replaced hand-written frontmatter parser with `gopkg.in/yaml.v3`, preserving line numbers and unknown fields with zero implicit active defaults; added stable page `id`, semantic `type` (`concept`, `entity`, `incident`, `decision`, `runbook`), separate authority `lifecycle` (`current`, `wip`, `implemented`, `planned`, `legacy`, `superseded`) vs decision/incident workflow `status`, `related`/`depends_on` relationships, and structured `sources`/`references`.
+- **Single-read lint architecture & mechanical fixes (`internal/lint`):** Every lint run loads one consistent `WikiSnapshot` (reading each file once); added grouped selectors (`schema`, `links`, `graph`, `freshness`, `security`) and idempotent `wiki-engine lint --fix`.
+- **Unified Git pipeline & `wiki-engine check` (`internal/git`):** Merge-base discovery with rename/delete tracking, working-tree and untracked changes (`--no-working-tree` for reproducible CI), and branch-aware citation/drift checks (exit 0 ok/review, 1 breakage, 2 setup error).
+- **Embedded schema CLI (`wiki-engine schema`):** Prints authoritative schema, sections, and ready-to-use templates (`--type`, `--section`, `--json`).
+- **Idempotent bootstrap & rename (`internal/scaffold`):** Re-running `wiki-engine init` reconciles prompts, symlinks, ignore entries, and versioned root shims while preserving user content; `wiki-engine init --wiki-dir <name>` safely renames a wiki directory.
+- **Supply-chain hardening:** All GitHub Actions pinned by immutable 40-char commit SHA (enforced by `internal/audit`), minimal workflow permissions, SLSA build-provenance attestations in `release.yml`, per-platform `.sha256` files, `govulncheck`, and Dependency Review in CI.
+- **Upgraded search, graph, and bounded context:** Field-weighted search ranker (`search --ranked` / `relevant`) with `--tag`, `--type`, `--lifecycle`, `--include-history`, `--limit`, `--keyword`; graph JSON `schema_version: "2"`, ID lookup, `related`/`depends_on` edges, and opt-in `--include-sources`; bounded `context` with `--max-pages`/`--max-bytes` truncation reporting.
 - New `graph` command: node-based navigation map of the active wiki graph. `wiki-engine graph` prints an ASCII tree from `index.md` (diamonds and cycles render as `↰ (see above)` markers), `graph <page>` shows one page's backlinks, outgoing links, and declared references, `--json` emits structured nodes/edges/unlinked/stats/issues (with `<page>`: neighborhood JSON), `--dot` exports Graphviz DOT, and `--strict` exits non-zero when active pages are unreachable from `index.md` or the graph has issues (duplicate edges, self-loops, broken links) — in every mode.
 - Graph health diagnostics: broken links are now surfaced as issues instead of being silently dropped by BFS traversal.
 - Prompt layers document `graph` usage (wiki-maintainer, query, pi skill).
@@ -17,7 +25,8 @@ surface is defined in [README.md](README.md).
 
 ### Changed
 
-- `wiki-engine impact` is now exact for pages with declared `source:` references: such pages match only on their declared paths (prose mentions are ignored). Pages without references keep the basename text-scan fallback.
+- **`wiki-engine impact` is exact by default:** Matches declared `sources`, directory coverage, and exact Markdown repo links with explicit match reasons in JSON; basename prose matching is opt-in via `--fuzzy`.
+- **`wiki-engine upgrade` is fail-closed:** Never silently falls back to `go install` on download, checksum, or provenance failure; streams archives to disk with compressed/expanded size caps and archive path-traversal checks; `go install` requires explicit `--from-source` pinned to the release tag.
 
 ## [1.0.1] - 2026-09-19
 

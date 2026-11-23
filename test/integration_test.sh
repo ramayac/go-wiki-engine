@@ -156,18 +156,18 @@ echo "--- watch --once ---"
 "$BIN" watch --once 2>&1 || true  # may fail if no diff range available
 echo "  ok"
 
-# Test: impact
+# Test: impact (exact default + --fuzzy opt-in)
 echo "--- impact ---"
 echo "package main // changed" > main.go
 git add main.go && git commit -q -m "source change"
-# impact needs changed files as args, test with a known file
-"$BIN" impact main.go | grep -q "main.go" || { echo "FAIL: impact failed"; exit 1; }
+"$BIN" impact --fuzzy main.go | grep -q "main.go" || { echo "FAIL: impact --fuzzy failed"; exit 1; }
+"$BIN" --json impact main.go | grep -q '"changed_file"' || { echo "FAIL: json impact failed"; exit 1; }
 echo "  ok"
 
 # Test: duplicate detection (low threshold)
 echo "--- duplicate detection ---"
-echo -e "---\nstatus: current\ndescription: dup1\n---\n# Duplicate page" > wiki/dup1.md
-echo -e "---\nstatus: current\ndescription: dup2\n---\n# Duplicate page" > wiki/dup2.md
+printf '%s\n' '---' 'id: dup1' 'lifecycle: current' 'description: dup1' '---' '# Duplicate page' '' 'This is a long shared paragraph with many distinct vocabulary words alpha beta gamma delta epsilon zeta eta theta iota kappa lambda.' > wiki/dup1.md
+printf '%s\n' '---' 'id: dup2' 'lifecycle: current' 'description: dup2' '---' '# Duplicate page' '' 'This is a long shared paragraph with many distinct vocabulary words alpha beta gamma delta epsilon zeta eta theta iota kappa lambda.' > wiki/dup2.md
 # Set a very low threshold to trigger it
 echo 'duplicate_threshold = 0.1' >> .wikirc
 out=$("$BIN" lint 2>&1 || true)
@@ -185,11 +185,13 @@ echo -e "---\nstatus: legacy\ndescription: Legacy lint procedure\n---\n# Legacy 
 # Should not show up in context --active
 "$BIN" context --active | grep -q "operations/lint.md" && { echo "FAIL: legacy page in context --active"; exit 1; }
 # Should show the active wiki graph format
-"$BIN" context --active | grep -q "== active wiki graph ==" || { echo "FAIL: active graph header missing"; exit 1; }
-"$BIN" context --active | grep -q "index.md \[current\]" || { echo "FAIL: active node index.md missing in graph"; exit 1; }
-"$BIN" context --active | grep -q "  -> prologue/schema.md" || { echo "FAIL: active edge in graph missing"; exit 1; }
+active_out=$("$BIN" context --active)
+echo "$active_out" | grep -q "== active wiki graph ==" || { echo "FAIL: active graph header missing"; exit 1; }
+echo "$active_out" | grep -q "index.md \[current\]" || { echo "FAIL: active node index.md missing in graph"; exit 1; }
+echo "$active_out" | grep -q "  -> prologue/schema.md" || { echo "FAIL: active edge in graph missing"; exit 1; }
 # Sort topo check
-"$BIN" context --active --sort=topo | grep -q "== active wiki graph ==" || { echo "FAIL: topo sort failed"; exit 1; }
+topo_out=$("$BIN" context --active --sort=topo)
+echo "$topo_out" | grep -q "== active wiki graph ==" || { echo "FAIL: topo sort failed"; exit 1; }
 # Meaningless flag combos must be rejected, not silently ignored
 if "$BIN" context --sort=topo >/dev/null 2>&1; then
   echo "FAIL: --sort without --active should be rejected"
@@ -200,8 +202,9 @@ if "$BIN" context --minimal --active >/dev/null 2>&1; then
   exit 1
 fi
 # JSON graph format check
-"$BIN" --json context --active | grep -q '"nodes"' || { echo "FAIL: json graph output missing nodes"; exit 1; }
-"$BIN" --json context --active | grep -q '"edges"' || { echo "FAIL: json graph output missing edges"; exit 1; }
+active_json=$("$BIN" --json context --active)
+echo "$active_json" | grep -q '"nodes"' || { echo "FAIL: json graph output missing nodes"; exit 1; }
+echo "$active_json" | grep -q '"edges"' || { echo "FAIL: json graph output missing edges"; exit 1; }
 # graph command: navigation tree, neighborhood, stats, strict gate
 # Run in a fresh-init project: earlier sections leave orphan pages (dup1/dup2) around.
 echo "--- graph ---"
@@ -211,12 +214,15 @@ git init -q -b main
 git config user.email "test@test"
 git config user.name "Test"
 "$BIN" init
-"$BIN" graph | grep -q "== wiki graph ==" || { echo "FAIL: graph header missing"; exit 1; }
-"$BIN" graph | grep -q "index.md \[current\]" || { echo "FAIL: graph tree missing root node"; exit 1; }
-"$BIN" graph | grep -q "stats: " || { echo "FAIL: graph stats missing"; exit 1; }
+graph_out=$("$BIN" graph)
+echo "$graph_out" | grep -q "== wiki graph ==" || { echo "FAIL: graph header missing"; exit 1; }
+echo "$graph_out" | grep -q "index.md \[current\]" || { echo "FAIL: graph tree missing root node"; exit 1; }
+echo "$graph_out" | grep -q "stats: " || { echo "FAIL: graph stats missing"; exit 1; }
 "$BIN" graph prologue/schema.md | grep -q "== backlinks ==" || { echo "FAIL: graph neighborhood missing backlinks"; exit 1; }
-"$BIN" graph --dot | grep -q "digraph wiki {" || { echo "FAIL: graph dot output missing digraph header"; exit 1; }
-"$BIN" --json graph | grep -q '"stats"' || { echo "FAIL: json graph output missing stats"; exit 1; }
+dot_out=$("$BIN" graph --dot)
+echo "$dot_out" | grep -q "digraph wiki {" || { echo "FAIL: graph dot output missing digraph header"; exit 1; }
+graph_json=$("$BIN" --json graph)
+echo "$graph_json" | grep -q '"stats"' || { echo "FAIL: json graph output missing stats"; exit 1; }
 "$BIN" graph --strict || { echo "FAIL: graph --strict should pass on a healthy wiki"; exit 1; }
 if "$BIN" graph nope.md >/dev/null 2>&1; then
   echo "FAIL: graph with unknown page should be rejected"
@@ -269,9 +275,9 @@ rm wiki/orphan.md wiki/broken.md
 cd "$TMPDIR"
 # Test: lint --check and --skip flags
 echo "--- lint flags ---"
-# Add a duplicate-content issue (by overriding dup1 and dup2 with same content)
-echo -e "---\nstatus: current\ndescription: same\n---\nSame content" > wiki/dup1.md
-echo -e "---\nstatus: current\ndescription: same\n---\nSame content" > wiki/dup2.md
+# Add a duplicate-content issue (by overriding dup1 and dup2 with same content >10 words)
+printf '%s\n' '---' 'id: dup1' 'lifecycle: current' 'description: same' '---' '# Same' '' 'Shared body text alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu.' > wiki/dup1.md
+printf '%s\n' '---' 'id: dup2' 'lifecycle: current' 'description: same' '---' '# Same' '' 'Shared body text alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu.' > wiki/dup2.md
 # We set threshold low so it flags duplicate
 echo 'duplicate_threshold = 0.1' >> .wikirc
 
@@ -423,6 +429,155 @@ EOF
 git add .
 git commit -q -m "legacy flat wiki"
 "$BIN" lint || { echo "FAIL: legacy flat layout should still lint"; exit 1; }
+cd "$TMPDIR"
+echo "  ok"
+
+# --- Parity scenarios (Test Plan 1-12) ---
+echo "--- parity end-to-end scenarios ---"
+mkdir -p "$TMPDIR/parityproj"
+cd "$TMPDIR/parityproj"
+git init -q -b main
+git config user.email "test@test"
+git config user.name "Test"
+mkdir -p pkg/store
+echo "package store" > pkg/store/db.go
+echo "package main" > main.go
+git add . && git commit -q -m "initial"
+
+# 1. Initialize repository & check schema command
+"$BIN" init
+"$BIN" schema --section lifecycle | grep -q "superseded" || { echo "FAIL: schema --section lifecycle failed"; exit 1; }
+"$BIN" --json schema --type entity | grep -q '"name": "entity"' || { echo "FAIL: json schema --type entity failed"; exit 1; }
+
+# 2. Re-run initialization after prompt edit — repairs prompt, preserves user content
+echo "# Custom user note" > AGENTS.md
+echo "drifted" > .wiki-instructions/ingest.md
+echo "custom-keep" > wiki/custom-keep.md
+"$BIN" init
+grep -q "Custom user note" AGENTS.md || { echo "FAIL: re-init lost user AGENTS.md content"; exit 1; }
+grep -q "wiki/index.md" AGENTS.md || { echo "FAIL: re-init did not append fenced pointer"; exit 1; }
+! grep -qx "drifted" .wiki-instructions/ingest.md || { echo "FAIL: re-init did not repair drifted prompt"; exit 1; }
+grep -q "custom-keep" wiki/custom-keep.md || { echo "FAIL: re-init lost custom wiki page"; exit 1; }
+rm wiki/custom-keep.md
+
+# 3. Reject wiki path outside repo / multi-segment / reserved
+if "$BIN" init ../outside >/dev/null 2>&1; then
+  echo "FAIL: init should reject ../outside"
+  exit 1
+fi
+if "$BIN" init wiki/child >/dev/null 2>&1; then
+  echo "FAIL: init should reject multi-segment wiki/child"
+  exit 1
+fi
+if "$BIN" init .git >/dev/null 2>&1; then
+  echo "FAIL: init should reject .git"
+  exit 1
+fi
+
+# 4. Migrate old frontmatter with lint --fix (and verify idempotency)
+cat > wiki/legacy-doc.md <<'EOF'
+---
+status: legacy
+description: "Old doc"
+references: [source:main.go, external:https://example.com]
+---
+# Old Doc
+
+Unique legacy body phrase only inside historical page.
+
+See [Index](index.md).
+EOF
+printf '%s\n' '- [legacy-doc.md](legacy-doc.md) | Old doc' >> wiki/index.md
+"$BIN" lint --fix
+grep -q "id: legacy-doc" wiki/legacy-doc.md || { echo "FAIL: lint --fix did not add id"; exit 1; }
+grep -q "lifecycle: legacy" wiki/legacy-doc.md || { echo "FAIL: lint --fix did not migrate status to lifecycle"; exit 1; }
+grep -q "sources:" wiki/legacy-doc.md || { echo "FAIL: lint --fix did not convert inline source reference"; exit 1; }
+grep -q '\[legacy\]' wiki/index.md || { echo "FAIL: lint --fix did not add index badge"; exit 1; }
+fix2=$("$BIN" --json lint --fix)
+echo "$fix2" | grep -q '"total_fixes": 0' || { echo "FAIL: second lint --fix was not idempotent: $fix2"; exit 1; }
+
+# 5. Search active vs historical pages
+if "$BIN" search "Unique legacy body" | grep -q "legacy-doc.md"; then
+  echo "FAIL: default search must exclude legacy pages"
+  exit 1
+fi
+"$BIN" search --include-history "Unique legacy body" | grep -q "legacy-doc.md" || { echo "FAIL: search --include-history should find legacy page"; exit 1; }
+
+# 6. Build graph with dependencies and source nodes
+mkdir -p wiki/entities
+cat > wiki/entities/store.md <<'EOF'
+---
+id: store
+title: Store
+type: entity
+lifecycle: current
+description: "Storage engine"
+sources:
+  - file: pkg/store/
+  - file: main.go
+---
+# Store
+
+See [Index](../index.md).
+EOF
+cat > wiki/entities/api.md <<'EOF'
+---
+id: api
+title: API
+type: entity
+lifecycle: current
+description: "API layer"
+depends_on: [store]
+---
+# API
+
+See [Index](../index.md).
+EOF
+printf '%s\n' '- [entities/store.md](entities/store.md) | Storage engine' '- [entities/api.md](entities/api.md) | API layer' >> wiki/index.md
+"$BIN" --json graph --include-sources | grep -q '"schema_version": "2"' || { echo "FAIL: graph JSON missing schema_version 2"; exit 1; }
+"$BIN" --json graph --include-sources | grep -q '"kind": "depends_on"' || { echo "FAIL: graph missing depends_on edge"; exit 1; }
+"$BIN" --json graph --include-sources | grep -q '"kind": "source"' || { echo "FAIL: graph missing opt-in source node"; exit 1; }
+"$BIN" graph store | grep -q "entities/store.md" || { echo "FAIL: graph ID lookup failed"; exit 1; }
+
+git add . && git commit -q -m "commit typed wiki"
+git checkout -q -b feature/parity-check
+
+# 7 & 8 & 10. Change a cited file (working tree) and run check -> exit 0 with pages_to_review
+echo "package store // changed" > pkg/store/db.go
+chk_out=$("$BIN" --json check --base main)
+echo "$chk_out" | grep -q '"ok": true' || { echo "FAIL: check on modified cited file should be ok:true (review only)"; exit 1; }
+echo "$chk_out" | grep -q 'wiki/entities/store.md' || { echo "FAIL: check should recommend reviewing store.md"; exit 1; }
+echo "$chk_out" | grep -q '"directory"' || { echo "FAIL: check should report directory match reason"; exit 1; }
+# Exact impact also reports directory match reason
+imp_out=$("$BIN" --json impact pkg/store/db.go)
+echo "$imp_out" | grep -q '"reason": "directory"' || { echo "FAIL: impact missing directory reason"; exit 1; }
+
+# 9. Delete a cited file and verify check fails with exit 1 and reports breakage
+git rm -q main.go
+git commit -q -m "delete main.go"
+if "$BIN" check --base main >/dev/null 2>&1; then
+  echo "FAIL: check should exit 1 when cited source is deleted"
+  exit 1
+fi
+brk_out=$("$BIN" --json check --base main || true)
+echo "$brk_out" | grep -q '"deleted_source"' || { echo "FAIL: check JSON missing deleted_source finding"; exit 1; }
+
+# Restore main.go so repo is healthy again
+git checkout main -- main.go
+git commit -q -m "restore main.go"
+
+# 11 & 12. Rename wiki directory and re-run setup verifying idempotency
+"$BIN" init --wiki-dir docs
+test -d docs || { echo "FAIL: rename did not create docs/"; exit 1; }
+test ! -d wiki || { echo "FAIL: rename left old wiki/ behind"; exit 1; }
+grep -q 'wiki_dir = "docs"' .wikirc || { echo "FAIL: rename did not update .wikirc"; exit 1; }
+grep -q 'docs/index.md' AGENTS.md || { echo "FAIL: rename did not update AGENTS.md shim"; exit 1; }
+# Re-running init preserves unrelated files and docs/ content
+echo "unrelated" > notes.txt
+"$BIN" init
+grep -qx "unrelated" notes.txt || { echo "FAIL: re-init modified unrelated file"; exit 1; }
+"$BIN" lint || { echo "FAIL: renamed docs/ wiki failed lint"; exit 1; }
+
 cd "$TMPDIR"
 echo "  ok"
 

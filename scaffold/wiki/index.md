@@ -1,7 +1,8 @@
 ---
-status: current
+id: index
+title: Wiki Index
+lifecycle: current
 description: "Catalog of all wiki pages with one-line descriptions."
-superseded_by: ""
 ---
 # Wiki Index
 
@@ -23,5 +24,5 @@ superseded_by: ""
 
 Group related topic pages in subdirectories — see [prologue/schema.md](prologue/schema.md) for the directory convention:
 
-- [decisions/example.md](decisions/example.md) | Example decision record — replace with your own decisions.
-- [architectures/example.md](architectures/example.md) | Example architecture note — replace with your own architecture docs.
+- [decisions/example-decision.md](decisions/example-decision.md) | [planned] Example decision record — replace with your own decisions.
+- [architectures/example-architecture.md](architectures/example-architecture.md) | [planned] Example architecture note — replace with your own architecture docs.

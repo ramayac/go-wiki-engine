@@ -1,267 +1,100 @@
 package engine
 
 import (
-	"fmt"
-	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
 	"strings"
-	"time"
+
+	"github.com/ramayac/go-wiki-engine/internal/model"
+	"github.com/ramayac/go-wiki-engine/internal/paths"
 )
 
 var linkRe = regexp.MustCompile(`\]\(([^)]+)\)`)
 
-// ExtractLinks parses a markdown string and returns all outgoing relative page-to-page links.
-// Each returned link is a clean path relative to the wiki directory, e.g. "operations/ingest.md".
+// ExtractLinks parses a markdown string and returns all outgoing relative
+// page-to-page links that stay strictly contained inside wikiDir.
+// Links attempting to escape wikiDir (via .., absolute paths, percent-encoding,
+// or symlinks) are rejected.
 func ExtractLinks(content string, currentFileDir string, wikiDir string) []string {
 	var links []string
 	seen := make(map[string]bool)
 
 	for _, match := range linkRe.FindAllStringSubmatch(content, -1) {
-		target := match[1]
-		// Skip external links and page anchors
-		if strings.HasPrefix(target, "http://") || strings.HasPrefix(target, "https://") || strings.HasPrefix(target, "#") {
+		target := strings.TrimSpace(match[1])
+		if strings.HasPrefix(target, "http://") || strings.HasPrefix(target, "https://") || strings.HasPrefix(target, "#") || strings.HasPrefix(target, "mailto:") {
 			continue
 		}
-
-		// Strip anchor if present
 		if idx := strings.Index(target, "#"); idx != -1 {
 			target = target[:idx]
 		}
 		if target == "" {
 			continue
 		}
-
-		// Only local markdown links are relevant for page-to-page graph indexing
-		if !strings.HasSuffix(target, ".md") {
+		if !strings.HasSuffix(strings.ToLower(target), ".md") {
 			continue
 		}
-
-		// Resolve path relative to current file's directory
-		absTarget := filepath.Clean(filepath.Join(currentFileDir, target))
-		relToWiki, err := filepath.Rel(wikiDir, absTarget)
+		_, relToWiki, err := paths.ResolvePageRelative(wikiDir, currentFileDir, target)
 		if err != nil {
 			continue
 		}
-
-		// Normalize slash format (use forward slash for compatibility)
-		relToWiki = filepath.ToSlash(relToWiki)
-
-		// Prevent duplicate entries
 		if !seen[relToWiki] {
 			seen[relToWiki] = true
 			links = append(links, relToWiki)
 		}
 	}
-
 	return links
 }
 
-// WikiNode represents a node in the active wiki graph.
-type WikiNode struct {
-	File        string      `json:"file"`
-	Status      string      `json:"status"`
-	Description string      `json:"description"`
-	Created     string      `json:"created,omitempty"`
-	Updated     string      `json:"updated,omitempty"`
-	ModTime     time.Time   `json:"-"`
-	Links       []string    `json:"links"`
-	References  []Reference `json:"references,omitempty"`
-	Depth       int         `json:"depth"`
-}
+// WikiNode aliases model.GraphNode so the CLI and graph views share one model.
+type WikiNode = model.GraphNode
 
-// WikiEdge represents a directed edge between active wiki pages.
-type WikiEdge struct {
-	From string `json:"from"`
-	To   string `json:"to"`
-}
+// WikiEdge aliases model.GraphEdge.
+type WikiEdge = model.GraphEdge
 
-// WikiGraphJSON holds the serializable active wiki graph representation.
-// Unlinked and Issues always serialize as arrays (never null) when the
-// graph is built through BuildGraphView.
-type WikiGraphJSON struct {
-	Nodes    []WikiNode  `json:"nodes"`
-	Edges    []WikiEdge  `json:"edges"`
-	Unlinked []string    `json:"unlinked"`
-	Stats    *GraphStats `json:"stats,omitempty"`
-	Issues   []string    `json:"issues"`
-}
+// WikiGraphJSON aliases model.GraphView (includes schema_version, nodes, edges,
+// unlinked, stats, issues).
+type WikiGraphJSON = model.GraphView
 
-// BuildWikiGraph constructs the active wiki graph starting BFS from index.md.
-// It skips legacy/deprecated pages and halts traversal at their boundaries.
+// GraphOptions aliases model.GraphOptions.
+type GraphOptions = model.GraphOptions
+
+// BuildWikiGraph constructs the active wiki graph from a single WikiSnapshot.
 func (e *Engine) BuildWikiGraph() ([]WikiNode, []WikiEdge, error) {
-	wikiDir := e.WikiPath()
-	startFile := "index.md"
-	absStart := filepath.Join(wikiDir, startFile)
-	if _, err := os.Stat(absStart); os.IsNotExist(err) {
-		return nil, nil, fmt.Errorf("index.md not found at %s", absStart)
+	snap, err := e.LoadSnapshot()
+	if err != nil {
+		return nil, nil, err
 	}
-
-	type queueItem struct {
-		file  string
-		depth int
+	if err := snap.FatalLoadError(); err != nil {
+		return nil, nil, err
 	}
-
-	queue := []queueItem{{file: startFile, depth: 0}}
-	visited := make(map[string]bool)
-	nodesMap := make(map[string]*WikiNode)
-	var rawEdges []WikiEdge
-
-	for len(queue) > 0 {
-		curr := queue[0]
-		queue = queue[1:]
-
-		cleanRel := filepath.ToSlash(filepath.Clean(curr.file))
-		if visited[cleanRel] {
-			continue
-		}
-		visited[cleanRel] = true
-
-		absPath := filepath.Join(wikiDir, cleanRel)
-		data, err := os.ReadFile(absPath)
-		if err != nil {
-			continue
-		}
-
-		info, err := os.Stat(absPath)
-		var mtime time.Time
-		if err == nil {
-			mtime = info.ModTime()
-		}
-
-		content := string(data)
-		fm, _, _ := ParseFrontMatter(content)
-
-		// Traversal cutoff: do not traverse legacy/deprecated pages
-		if fm.Status == "legacy" || fm.Status == "deprecated" {
-			continue
-		}
-
-		links := ExtractLinks(content, filepath.Dir(absPath), wikiDir)
-		if links == nil {
-			links = []string{} // ensure JSON emits [] instead of null
-		}
-
-		nodesMap[cleanRel] = &WikiNode{
-			File:        cleanRel,
-			Status:      fm.Status,
-			Description: fm.Description,
-			Created:     fm.Created,
-			Updated:     fm.Updated,
-			ModTime:     mtime,
-			Links:       links,
-			References:  fm.References,
-			Depth:       curr.depth,
-		}
-
-		for _, dest := range links {
-			rawEdges = append(rawEdges, WikiEdge{From: cleanRel, To: dest})
-			if !visited[dest] {
-				queue = append(queue, queueItem{file: dest, depth: curr.depth + 1})
-			}
-		}
+	view, err := model.BuildGraph(snap, model.GraphOptions{})
+	if err != nil {
+		return nil, nil, err
 	}
-
-	// Filter edges to ensure both From and To are active/reached nodes
-	var edges []WikiEdge
-	for _, edge := range rawEdges {
-		if nodesMap[edge.From] != nil && nodesMap[edge.To] != nil {
-			edges = append(edges, edge)
-		}
-	}
-
-	// Filter node links to only reference active/reached nodes
-	for _, node := range nodesMap {
-		activeLinks := make([]string, 0, len(node.Links))
-		for _, link := range node.Links {
-			if nodesMap[link] != nil {
-				activeLinks = append(activeLinks, link)
-			}
-		}
-		node.Links = activeLinks
-	}
-
-	var nodes []WikiNode
-	for _, node := range nodesMap {
-		nodes = append(nodes, *node)
-	}
-
-	return nodes, edges, nil
+	return view.Nodes, view.Edges, nil
 }
 
-// SortNodes sorts a slice of WikiNodes.
-// Support: "topo" (by depth, parents before children),
-// "chrono" (by updated -> created -> mtime, recently updated first).
+// SortNodes sorts a slice of WikiNodes ("topo" or "chrono").
 func SortNodes(nodes []WikiNode, sortBy string) {
-	if sortBy == "topo" {
-		sort.Slice(nodes, func(i, j int) bool {
-			if nodes[i].Depth != nodes[j].Depth {
-				return nodes[i].Depth < nodes[j].Depth
-			}
-			return nodes[i].File < nodes[j].File
-		})
-	} else {
-		sort.Slice(nodes, func(i, j int) bool {
-			timeI := resolveTime(nodes[i])
-			timeJ := resolveTime(nodes[j])
-			if !timeI.Equal(timeJ) {
-				return timeI.After(timeJ)
-			}
-			return nodes[i].File < nodes[j].File
-		})
-	}
+	model.SortGraphNodes(nodes, sortBy)
 }
 
-func resolveTime(node WikiNode) time.Time {
-	if node.Updated != "" {
-		if t, err := time.Parse("2006-01-02", node.Updated); err == nil {
-			return t
-		}
-	}
-	if node.Created != "" {
-		if t, err := time.Parse("2006-01-02", node.Created); err == nil {
-			return t
-		}
-	}
-	return node.ModTime
-}
-
-// ActiveUnlinkedPages returns active (current/planned) wiki pages that are
-// not reachable from index.md in the active graph. These pages are valid
-// but invisible to `context --active` until they are linked from the index.
+// ActiveUnlinkedPages returns active wiki pages that are not reachable from
+// index.md in the active graph, built from one WikiSnapshot.
 func (e *Engine) ActiveUnlinkedPages() ([]string, error) {
-	nodes, _, err := e.BuildWikiGraph()
+	snap, err := e.LoadSnapshot()
 	if err != nil {
 		return nil, err
 	}
-	reachable := make(map[string]bool, len(nodes))
-	for _, n := range nodes {
-		reachable[n.File] = true
+	if err := snap.FatalLoadError(); err != nil {
+		return nil, err
 	}
-
-	files, err := e.List()
+	view, err := model.BuildGraph(snap, model.GraphOptions{})
 	if err != nil {
 		return nil, err
 	}
-	unlinked := []string{}
-	for _, rel := range files {
-		if !strings.HasSuffix(rel, ".md") {
-			continue
-		}
-		wikiRel, err := filepath.Rel(e.WikiPath(), filepath.Join(e.RootDir, rel))
-		if err != nil {
-			continue
-		}
-		wikiRel = filepath.ToSlash(wikiRel)
-		if reachable[wikiRel] {
-			continue
-		}
-		fm, _ := e.PageFrontMatter(rel)
-		if fm.Status == "current" || fm.Status == "planned" {
-			unlinked = append(unlinked, wikiRel)
-		}
-	}
-	sort.Strings(unlinked)
-	return unlinked, nil
+	return view.Unlinked, nil
 }
+
+// keep filepath import clean if needed
+var _ = filepath.Clean

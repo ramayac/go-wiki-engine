@@ -1,5 +1,5 @@
-// Package scaffold handles the `wiki-engine init` command by copying
-// embedded template files into a target repository.
+// Package scaffold handles `wiki-engine init`, idempotent reconciliation,
+// wiki directory rename, and `wiki-engine sync-prompts`.
 package scaffold
 
 import (
@@ -10,22 +10,26 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/ramayac/go-wiki-engine/internal/paths"
 )
 
 //go:embed all:files
 var files embed.FS
 
-// shimFiles are root-level files created with create-only semantics: written
-// on init and sync-prompts only when they do not already exist. This prevents
-// overwriting user-customised entrypoint files.
+// shimFiles are root-level agent entrypoint files managed via versioned fenced blocks.
 var shimFiles = []string{"AGENTS.md", "CLAUDE.md"}
 
-// Regexes used to rewrite the scaffolded .wikirc for a custom wiki directory
-// name (`wiki-engine init docs`). Deliberately tolerant of whitespace so the
-// scaffold template can be reformatted without silently breaking the rewrite.
+const (
+	shimStartMarker = "<!-- wiki-engine:shim:v2 -->"
+	shimEndMarker   = "<!-- /wiki-engine:shim -->"
+)
+
 var (
 	wikiDirAssignRe   = regexp.MustCompile(`(?m)^wiki_dir\s*=\s*"[^"]*"`)
 	ignoreWikiEntryRe = regexp.MustCompile(`(?m)^\s*"wiki/"`)
+	ignoreBlockRe     = regexp.MustCompile(`(?ms)(ignore\s*=\s*\[)(.*?)(\])`)
+	fencedShimRe      = regexp.MustCompile(`(?ms)<!-- wiki-engine:shim:v\d+ -->.*?<!-- /wiki-engine:shim -->`)
 )
 
 // promptWorkflows are the canonical workflow files in .wiki-instructions/ that
@@ -33,10 +37,7 @@ var (
 var promptWorkflows = []string{"ingest", "lint", "onboard", "query", "refresh", "upgrade", "watch"}
 
 // toolDirLinks maps destination-relative paths to symlink targets relative to
-// the directory containing the link. init and sync-prompts create these as
-// symlinks so that edits to the canonical .wiki-instructions/ files propagate
-// to every tool layer. On platforms where symlink creation fails (e.g.
-// Windows without developer mode), a regular copy is written instead.
+// the directory containing the link.
 var toolDirLinks = buildToolDirLinks()
 
 func buildToolDirLinks() map[string]string {
@@ -51,17 +52,11 @@ func buildToolDirLinks() map[string]string {
 	return links
 }
 
-// writeScaffoldFile writes an embedded scaffold file to dest. Files that have
-// a symlink mapping in toolDirLinks are written as symlinks to the canonical
-// .wiki-instructions/ source, falling back to a regular copy when symlink
-// creation fails.
 func writeScaffoldFile(dest, rel string, data []byte) error {
 	target, isLink := toolDirLinks[rel]
 	if !isLink {
 		return os.WriteFile(dest, data, 0o644)
 	}
-
-	// Replace any existing file (or stale symlink) at the destination.
 	if err := os.Remove(dest); err != nil && !os.IsNotExist(err) {
 		return err
 	}
@@ -71,130 +66,110 @@ func writeScaffoldFile(dest, rel string, data []byte) error {
 	return os.WriteFile(dest, data, 0o644)
 }
 
-// syncShims copies the shim files (AGENTS.md, CLAUDE.md) into destDir only
-// when they do not already exist. Returns the names of files written.
-func syncShims(destDir string) ([]string, error) {
-	var created []string
+func renderShimBlock(name, wikiDir string) string {
+	heading := "# AI Agent Instructions"
+	if name == "CLAUDE.md" {
+		heading = "# Claude Instructions"
+	}
+	return fmt.Sprintf(`%s
+%s
+
+This project uses a structured wiki for all documentation and agent context.
+
+Start here: **[%s/index.md](%s/index.md)**
+
+The wiki covers architecture, conventions, active phases, and the project change log.
+To update or query the wiki, use the tool-specific workflows in
+`+"`.github/prompts/`"+` (GitHub Copilot) or `+"`.claude/commands/`"+` (Claude Code).
+%s`, shimStartMarker, heading, wikiDir, wikiDir, shimEndMarker)
+}
+
+// isPristineLegacyShim reports whether data matches the unedited v1 scaffold shim.
+func isPristineLegacyShim(name string, data []byte) bool {
+	embedded, err := files.ReadFile("files/" + name)
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(string(data)) == strings.TrimSpace(string(embedded))
+}
+
+// reconcileShims ensures AGENTS.md and CLAUDE.md contain a pointer to wikiDir
+// while preserving any user-authored content:
+//   - Absent: write pristine generated shim with versioned marker.
+//   - Pristine v1 shim: refresh to versioned v2 shim.
+//   - Contains versioned marker block: refresh ONLY the fenced block, preserving surrounding user edits.
+//   - Existing user-authored file without marker: append fenced pointer block (unless it already references wikiDir/index.md).
+func reconcileShims(destDir, wikiDir string, appendToUser bool) (updated []string, preserved []string, err error) {
 	for _, name := range shimFiles {
 		dest := filepath.Join(destDir, name)
-		if _, err := os.Stat(dest); err == nil {
-			continue // already exists — never overwrite user content
+		block := renderShimBlock(name, wikiDir)
+
+		existing, rerr := os.ReadFile(dest)
+		if os.IsNotExist(rerr) {
+			if err := os.WriteFile(dest, []byte(block+"\n"), 0o644); err != nil {
+				return updated, preserved, err
+			}
+			updated = append(updated, name)
+			continue
 		}
-		data, err := files.ReadFile("files/" + name)
-		if err != nil {
-			continue // not in embedded FS — skip silently
+		if rerr != nil {
+			return updated, preserved, rerr
 		}
-		if err := os.WriteFile(dest, data, 0o644); err != nil {
-			return created, err
+
+		text := string(existing)
+		switch {
+		case fencedShimRe.MatchString(text):
+			// Update only the fenced wiki-engine block; keep any user content outside untouched.
+			replaced := fencedShimRe.ReplaceAllString(text, block)
+			if replaced != text {
+				if err := os.WriteFile(dest, []byte(replaced), 0o644); err != nil {
+					return updated, preserved, err
+				}
+				updated = append(updated, name)
+			} else {
+				preserved = append(preserved, name)
+			}
+		case isPristineLegacyShim(name, existing):
+			if err := os.WriteFile(dest, []byte(block+"\n"), 0o644); err != nil {
+				return updated, preserved, err
+			}
+			updated = append(updated, name)
+		default:
+			preserved = append(preserved, name)
+			if appendToUser && !strings.Contains(text, wikiDir+"/index.md") {
+				sep := "\n\n"
+				if strings.HasSuffix(text, "\n\n") {
+					sep = ""
+				} else if strings.HasSuffix(text, "\n") {
+					sep = "\n"
+				}
+				appended := text + sep + block + "\n"
+				if err := os.WriteFile(dest, []byte(appended), 0o644); err != nil {
+					return updated, preserved, err
+				}
+				updated = append(updated, name)
+			}
 		}
-		created = append(created, name)
 	}
-	return created, nil
+	return updated, preserved, nil
 }
 
-// validateWikiDir rejects wiki directory names that would escape the target
-// repository (absolute paths, ".." components) or otherwise make no sense.
-func validateWikiDir(name string) error {
-	if name == "" || name == "." || name == ".." {
-		return fmt.Errorf("invalid wiki directory name %q", name)
-	}
-	if filepath.IsAbs(name) {
-		return fmt.Errorf("wiki directory must be relative to the repository: %q", name)
-	}
-	if cleaned := filepath.Clean(name); cleaned == ".." || strings.HasPrefix(cleaned, ".."+string(filepath.Separator)) {
-		return fmt.Errorf("wiki directory must stay inside the repository: %q", name)
-	}
-	return nil
-}
-
-// Init copies the scaffold into destDir. It refuses to overwrite an existing
-// wiki directory.
+// Init scaffolds a new wiki or idempotently reconciles an existing managed wiki
+// in destDir. Existing user pages, index, log, .wikirc values, and user-authored
+// AGENTS.md/CLAUDE.md content are preserved.
 func Init(destDir, wikiDir string) error {
-	if err := validateWikiDir(wikiDir); err != nil {
+	if err := paths.ValidateWikiDir(wikiDir); err != nil {
 		return err
 	}
-	wikiPath := filepath.Join(destDir, wikiDir)
-	if _, err := os.Stat(wikiPath); err == nil {
-		return fmt.Errorf("%s already exists; refusing to overwrite", wikiDir)
-	}
-
-	if err := fs.WalkDir(files, "files", func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-
-		// Strip the "files/" prefix to get the relative destination path.
-		rel, _ := filepath.Rel("files", path)
-		if rel == "." {
-			return nil
-		}
-
-		// Shim files are handled separately with create-only semantics.
-		for _, shim := range shimFiles {
-			if rel == shim {
-				return nil
-			}
-		}
-
-		// Remap scaffold "wiki/" to the requested wikiDir name.
-		if strings.HasPrefix(rel, "wiki/") {
-			rel = wikiDir + rel[len("wiki"):]
-		} else if rel == "wiki" {
-			rel = wikiDir
-		}
-
-		dest := filepath.Join(destDir, rel)
-
-		// .wikirc is user-authored — never overwrite an existing one,
-		// matching the create-only semantics used for AGENTS.md/CLAUDE.md.
-		if rel == ".wikirc" {
-			if _, err := os.Stat(dest); err == nil {
-				return nil
-			}
-		}
-
-		if d.IsDir() {
-			return os.MkdirAll(dest, 0o755)
-		}
-
-		data, err := files.ReadFile(path)
-		if err != nil {
-			return err
-		}
-
-		// Rewrite the scaffold's default wiki_dir and ignore-list wiki/ entry to
-		// the requested name so `init docs` produces a .wikirc that actually
-		// points at docs/.
-		if rel == ".wikirc" {
-			content := wikiDirAssignRe.ReplaceAllString(string(data), `wiki_dir = "`+wikiDir+`"`)
-			content = ignoreWikiEntryRe.ReplaceAllString(content, `  "`+wikiDir+`/"`)
-			data = []byte(content)
-		}
-
-		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
-			return err
-		}
-		return writeScaffoldFile(dest, rel, data)
-	}); err != nil {
-		return err
-	}
-
-	_, err := syncShims(destDir)
+	_, err := Reconcile(destDir, ReconcileOptions{WikiDir: wikiDir})
 	return err
 }
 
 // SyncPrompts overwrites the .wiki-instructions/, .github/prompts/,
 // .github/instructions/, .claude/commands/, and .pi/skills/ files in
 // destDir with the current embedded versions. It does not touch wiki/
-// content or .wikirc. Safe to run after a wiki-engine upgrade to pick
-// up new or changed prompts and instructions for all supported AI tools.
-//
-// Returns the relative paths of files written (updated) and of stale
-// wiki-managed files removed (removed).
+// content or .wikirc.
 func SyncPrompts(destDir string) (updated, removed []string, err error) {
-	// Sync each instruction layer prefix. The embedded FS dereferences
-	// symlinks, so .github/prompts/ and .claude/commands/ contain regular
-	// file copies of the canonical .wiki-instructions/ files.
 	prefixes := []string{
 		"files/.wiki-instructions",
 		"files/.github/prompts",
@@ -209,30 +184,24 @@ func SyncPrompts(destDir string) (updated, removed []string, err error) {
 		}
 	}
 
-	// Remove destination files that no longer exist in the embedded
-	// FS. This cleans up prompts that were removed from the scaffold
-	// (e.g. migrate-shims.md, summarize.md).
 	cleanOrphanedFiles(destDir, prefixes, &removed)
 
-	shims, err := syncShims(destDir)
+	// In sync-prompts, create missing shims and refresh fenced/pristine shims
+	// without appending to custom user-edited shims (preserving exact backward compat).
+	wikiDir := detectWikiDir(destDir, "wiki")
+	shims, _, err := reconcileShims(destDir, wikiDir, false)
 	updated = append(updated, shims...)
 	return updated, removed, err
 }
 
 // retiredWikiFiles are files this tool once shipped in its sync directories
-// and later removed. sync-prompts still cleans them up, but they cannot be
-// matched by the wiki-* naming rule because their old names had no prefix.
+// and later removed.
 var retiredWikiFiles = map[string]bool{
 	"migrate-shims.md": true,
 	"summarize.md":     true,
 }
 
-// isWikiManaged reports whether a destination file inside one of the sync
-// prefixes is owned by wiki-engine and therefore safe to remove when it no
-// longer exists in the embedded FS. User-added files (custom slash commands,
-// extra prompts, unrelated skills) are never managed.
 func isWikiManaged(relRoot, rel string) bool {
-	// The pi.dev integration owns only the wiki/ skill directory.
 	if relRoot == ".pi/skills" {
 		return strings.HasPrefix(rel, "wiki/")
 	}
@@ -243,13 +212,7 @@ func isWikiManaged(relRoot, rel string) bool {
 	return retiredWikiFiles[base]
 }
 
-// cleanOrphanedFiles removes wiki-managed files in the destination sync
-// directories that no longer exist in the embedded FS. Only files within the
-// known sync prefixes are considered — wiki/ and .wikirc are never touched,
-// and files not managed by wiki-engine (e.g. a user's own slash command) are
-// always preserved.
 func cleanOrphanedFiles(destDir string, embedPrefixes []string, cleaned *[]string) {
-	// Build the set of all known embedded paths (relative to destDir).
 	known := make(map[string]bool)
 	for _, prefix := range embedPrefixes {
 		_ = fs.WalkDir(files, prefix, func(path string, d fs.DirEntry, err error) error {
@@ -262,7 +225,6 @@ func cleanOrphanedFiles(destDir string, embedPrefixes []string, cleaned *[]strin
 		})
 	}
 
-	// Walk each destination prefix and remove only wiki-managed files not in known.
 	for _, prefix := range embedPrefixes {
 		relRoot, _ := filepath.Rel("files", prefix)
 		walkRoot := filepath.Join(destDir, relRoot)
@@ -284,10 +246,6 @@ func cleanOrphanedFiles(destDir string, embedPrefixes []string, cleaned *[]strin
 	}
 }
 
-// syncEmbeddedDir walks an embedded directory and writes all files
-// (including those in subdirectories) to the corresponding destination
-// path, overwriting any existing files. Directory structure is created
-// as needed. Updated file rel paths are appended to updated.
 func syncEmbeddedDir(destDir, embedRoot string, updated *[]string) error {
 	return fs.WalkDir(files, embedRoot, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {

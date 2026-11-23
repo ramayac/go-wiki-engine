@@ -6,50 +6,20 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/ramayac/go-wiki-engine/internal/model"
 )
 
-// GraphStats summarizes the graph for navigation: size, depth, roots
-// (no incoming edges) and leaves (no outgoing edges).
-type GraphStats struct {
-	NodeCount int      `json:"node_count"`
-	EdgeCount int      `json:"edge_count"`
-	MaxDepth  int      `json:"max_depth"`
-	Roots     []string `json:"roots"`
-	Leaves    []string `json:"leaves"`
-}
+// GraphStats aliases model.GraphStats.
+type GraphStats = model.GraphStats
 
-// ComputeStats derives navigation statistics from the graph. Nodes are
-// expected to be depth-populated (BuildWikiGraph sets Depth during BFS).
+// ComputeStats derives navigation statistics from the graph.
 func ComputeStats(nodes []WikiNode, edges []WikiEdge) GraphStats {
-	inDeg := make(map[string]int, len(nodes))
-	for _, e := range edges {
-		inDeg[e.To]++
-	}
-	st := GraphStats{
-		NodeCount: len(nodes),
-		EdgeCount: len(edges),
-		Roots:     []string{},
-		Leaves:    []string{},
-	}
-	for _, n := range nodes {
-		if n.Depth > st.MaxDepth {
-			st.MaxDepth = n.Depth
-		}
-		if inDeg[n.File] == 0 {
-			st.Roots = append(st.Roots, n.File)
-		}
-		if len(n.Links) == 0 {
-			st.Leaves = append(st.Leaves, n.File)
-		}
-	}
-	sort.Strings(st.Roots)
-	sort.Strings(st.Leaves)
-	return st
+	return model.ComputeGraphStats(nodes, edges)
 }
 
-// ValidateGraph returns graph-health diagnostics: duplicate edges, self-loops,
-// and edges pointing at files that do not exist on disk. Duplicate nodes are
-// impossible by construction (BFS visited set); the check exists as a guard.
+// ValidateGraph returns graph-health diagnostics: duplicate nodes, self-loops,
+// duplicate edges, and edges pointing at missing files.
 func ValidateGraph(nodes []WikiNode, edges []WikiEdge, wikiDir string) []string {
 	var issues []string
 	seenEdges := make(map[WikiEdge]bool, len(edges))
@@ -69,6 +39,9 @@ func ValidateGraph(nodes []WikiNode, edges []WikiEdge, wikiDir string) []string 
 			issues = append(issues, fmt.Sprintf("duplicate edge: %s -> %s", e.From, e.To))
 		}
 		seenEdges[e] = true
+		if e.Kind == "source" {
+			continue
+		}
 		if _, err := os.Stat(filepath.Join(wikiDir, filepath.FromSlash(e.To))); os.IsNotExist(err) {
 			issues = append(issues, fmt.Sprintf("broken edge: %s -> %s (target file missing)", e.From, e.To))
 		}
@@ -76,10 +49,7 @@ func ValidateGraph(nodes []WikiNode, edges []WikiEdge, wikiDir string) []string 
 	return issues
 }
 
-// RenderTree renders the graph as an ASCII tree from index.md. The first
-// visit wins: diamonds and cycles render later references as "↰ (see above)"
-// markers so the output is a tree, never a loop. Nodes must be topo-sorted
-// (SortNodes(nodes, "topo")) so parents appear before children.
+// RenderTree renders the graph as an ASCII tree from index.md.
 func RenderTree(nodes []WikiNode) string {
 	byFile := make(map[string]WikiNode, len(nodes))
 	for _, n := range nodes {
@@ -126,30 +96,25 @@ func RenderTree(nodes []WikiNode) string {
 	return b.String()
 }
 
-// NodeView is the neighborhood navigation payload: one node with the pages
-// that link to it and the pages it links to.
+// NodeView is the neighborhood navigation payload: one node with its backlinks
+// and outgoing links.
 type NodeView struct {
 	Node      WikiNode `json:"node"`
 	Backlinks []string `json:"backlinks"`
 }
 
-// Neighborhood returns one node with its backlinks (computed by inverting
-// the edge list) and outgoing links.
+// Neighborhood returns one node (looked up by wiki-relative path, repo-relative
+// path, or stable page ID) with its direct backlinks and outgoing links.
 func Neighborhood(nodes []WikiNode, edges []WikiEdge, page string) (*NodeView, error) {
-	page = filepath.ToSlash(filepath.Clean(page))
-	var node *WikiNode
-	for i := range nodes {
-		if nodes[i].File == page {
-			node = &nodes[i]
-			break
-		}
+	node, err := model.LookupGraphNode(nodes, "wiki", page)
+	if err != nil {
+		return nil, err
 	}
-	if node == nil {
-		return nil, fmt.Errorf("page not found in active graph: %s", page)
-	}
+	seenBack := make(map[string]bool)
 	var backlinks []string
 	for _, e := range edges {
-		if e.To == page {
+		if e.To == node.File && !seenBack[e.From] {
+			seenBack[e.From] = true
 			backlinks = append(backlinks, e.From)
 		}
 	}
@@ -157,78 +122,93 @@ func Neighborhood(nodes []WikiNode, edges []WikiEdge, page string) (*NodeView, e
 	return &NodeView{Node: *node, Backlinks: backlinks}, nil
 }
 
-// BrokenLinks returns link targets referenced from active graph pages that
-// do not exist on disk. The BFS silently drops those edges (an unreadable
-// target is never enqueued), so they are re-derived here from the active
-// nodes and surfaced as graph issues instead of vanishing.
+// NeighborhoodForWiki resolves page using the configured wikiDir prefix.
+func NeighborhoodForWiki(nodes []WikiNode, edges []WikiEdge, wikiDir, page string) (*NodeView, error) {
+	node, err := model.LookupGraphNode(nodes, wikiDir, page)
+	if err != nil {
+		return nil, err
+	}
+	seenBack := make(map[string]bool)
+	var backlinks []string
+	for _, e := range edges {
+		if e.To == node.File && !seenBack[e.From] {
+			seenBack[e.From] = true
+			backlinks = append(backlinks, e.From)
+		}
+	}
+	sort.Strings(backlinks)
+	return &NodeView{Node: *node, Backlinks: backlinks}, nil
+}
+
+// BrokenLinks returns link targets referenced from active graph pages that do
+// not exist on disk, computed from a single snapshot.
 func (e *Engine) BrokenLinks(nodes []WikiNode) []string {
-	wikiDir := e.WikiPath()
-	var broken []string
+	snap, err := e.LoadSnapshot()
+	if err != nil {
+		return nil
+	}
+	activeSet := make(map[string]bool, len(nodes))
 	for _, n := range nodes {
-		absPath := filepath.Join(wikiDir, filepath.FromSlash(n.File))
-		data, err := os.ReadFile(absPath)
-		if err != nil {
+		activeSet[n.File] = true
+	}
+	var broken []string
+	for _, p := range snap.Pages {
+		if !activeSet[p.WikiRel] {
 			continue
 		}
-		for _, l := range ExtractLinks(string(data), filepath.Dir(absPath), wikiDir) {
-			target := filepath.Join(wikiDir, filepath.FromSlash(l))
-			if _, err := os.Stat(target); os.IsNotExist(err) {
-				broken = append(broken, fmt.Sprintf("broken edge: %s -> %s (target file missing)", n.File, l))
+		for _, dest := range p.InternalMDLinks() {
+			if _, ok := snap.ByPath[dest]; !ok {
+				broken = append(broken, fmt.Sprintf("broken edge: %s -> %s (target file missing)", p.WikiRel, dest))
 			}
 		}
 	}
 	return broken
 }
 
-// BuildGraphView assembles the navigation payload by reusing the existing
-// graph builder and orphan detection: topo-sorted nodes, edges, orphaned
-// active pages, navigation stats, and graph-health diagnostics.
+// BuildGraphView assembles the full navigation payload from ONE WikiSnapshot.
 func (e *Engine) BuildGraphView() (*WikiGraphJSON, error) {
-	nodes, edges, err := e.BuildWikiGraph()
-	if err != nil {
-		return nil, err
-	}
-	SortNodes(nodes, "topo")
-
-	unlinked, err := e.ActiveUnlinkedPages()
-	if err != nil {
-		return nil, err
-	}
-	issues := ValidateGraph(nodes, edges, e.WikiPath())
-	if broken := e.BrokenLinks(nodes); len(broken) > 0 {
-		issues = append(issues, broken...)
-	}
-	if issues == nil {
-		issues = []string{}
-	}
-	stats := ComputeStats(nodes, edges)
-
-	return &WikiGraphJSON{
-		Nodes:    nodes,
-		Edges:    edges,
-		Unlinked: unlinked,
-		Stats:    &stats,
-		Issues:   issues,
-	}, nil
+	return e.BuildGraphViewWithOptions(GraphOptions{})
 }
 
-// RenderDot renders the graph in Graphviz DOT format for external
-// visualization, e.g. `wiki-engine graph --dot | dot -Tsvg > wiki.svg`.
+// BuildGraphViewWithOptions builds the graph view with optional source nodes
+// and historical inclusion from one WikiSnapshot.
+func (e *Engine) BuildGraphViewWithOptions(opts GraphOptions) (*WikiGraphJSON, error) {
+	snap, err := e.LoadSnapshot()
+	if err != nil {
+		return nil, err
+	}
+	if err := snap.FatalLoadError(); err != nil {
+		return nil, err
+	}
+	return model.BuildGraph(snap, opts)
+}
+
+// RenderDot renders the graph in Graphviz DOT format.
 func RenderDot(nodes []WikiNode, edges []WikiEdge) string {
 	var b strings.Builder
 	b.WriteString("digraph wiki {\n")
 	b.WriteString("  rankdir=LR;\n")
 	for _, n := range nodes {
-		fmt.Fprintf(&b, "  %s [label=%s];\n", dotQuote(n.File), dotQuote(n.File))
+		if n.Kind == "source" {
+			fmt.Fprintf(&b, "  %s [label=%s, shape=box, style=dashed];\n", dotQuote(n.File), dotQuote(n.File))
+		} else {
+			fmt.Fprintf(&b, "  %s [label=%s];\n", dotQuote(n.File), dotQuote(n.File))
+		}
 	}
 	for _, e := range edges {
-		fmt.Fprintf(&b, "  %s -> %s;\n", dotQuote(e.From), dotQuote(e.To))
+		switch e.Kind {
+		case "depends_on":
+			fmt.Fprintf(&b, "  %s -> %s [label=\"depends_on\"];\n", dotQuote(e.From), dotQuote(e.To))
+		case "source":
+			fmt.Fprintf(&b, "  %s -> %s [style=dashed];\n", dotQuote(e.From), dotQuote(e.To))
+		default:
+			fmt.Fprintf(&b, "  %s -> %s;\n", dotQuote(e.From), dotQuote(e.To))
+		}
 	}
 	b.WriteString("}\n")
 	return b.String()
 }
 
-// dotQuote escapes a string for use as a double-quoted DOT identifier.
 func dotQuote(s string) string {
 	s = strings.ReplaceAll(s, `\`, `\\`)
 	s = strings.ReplaceAll(s, `"`, `\"`)

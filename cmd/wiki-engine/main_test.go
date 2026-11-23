@@ -313,7 +313,7 @@ func TestRunEngineCommands(t *testing.T) {
 		{"context active json", "context", []string{"wiki-engine", "context", "--active"}, true, []string{`"nodes"`, `"edges"`}},
 		{"summary", "summary", []string{"wiki-engine", "summary", "schema.md"}, false, []string{"# Schema"}},
 		{"relevant", "relevant", []string{"wiki-engine", "relevant", "schema"}, false, []string{"wiki/schema.md"}},
-		{"impact", "impact", []string{"wiki-engine", "impact", "main.go"}, false, []string{"wiki/schema.md"}},
+		{"impact", "impact", []string{"wiki-engine", "impact", "--fuzzy", "main.go"}, false, []string{"wiki/schema.md"}},
 		{"graph tree", "graph", []string{"wiki-engine", "graph"}, false, []string{"== wiki graph ==", "index.md [current]", "stats:"}},
 		{"graph neighborhood", "graph", []string{"wiki-engine", "graph", "schema.md"}, false, []string{"== backlinks ==", "== links =="}},
 		{"graph dot", "graph", []string{"wiki-engine", "graph", "--dot"}, false, []string{"digraph wiki {"}},
@@ -344,7 +344,7 @@ func TestUsage(t *testing.T) {
 	var buf bytes.Buffer
 	usage(&buf)
 	out := buf.String()
-	for _, want := range []string{"Commands:", "graph [page] [--strict] [--dot]", "context [--minimal]"} {
+	for _, want := range []string{"Commands:", "graph [page-or-id] [--strict] [--dot]", "context [--minimal]", "check [--base=<ref>]", "schema [--type=<t>]"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("usage output missing %q", want)
 		}

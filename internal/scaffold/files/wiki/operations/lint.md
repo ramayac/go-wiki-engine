@@ -1,48 +1,30 @@
 ---
-status: current
+id: lint
+title: Lint Workflow
+type: runbook
+lifecycle: current
 description: "Workflow for running the wiki linter and repairing inconsistencies."
-superseded_by: ""
 ---
 # Lint Workflow
 
 ## Goal
 
-Keep the wiki coherent, linked, and current.
-
-## Checks
-
-- Pages mentioned in the index still exist.
-- Important repo areas have coverage.
-- Stale claims are updated when source files changed.
-- Exclusions still match repo reality.
-- New recurring topics have a page instead of being trapped in chat history.
-- Links are standard relative Markdown format, are not malformed (e.g., no wiki-style links `[[Page]]` or unclosed parentheses), and are correctly mapped to files that exist. Links are strictly page-relative — a page in a subdirectory must use `../` to reach pages in other directories.
-- Active pages are cross-linked: each page links to its related pages; the only intentional leaf is `log.md`.
-- `leaf-pages` surfaces active pages with no outgoing links at info severity — non-failing by default, visible as a reminder.
+Keep the wiki coherent, linked, cited, and current.
 
 ## Shell-First Checks
 
 ```bash
 wiki-engine lint
-wiki-engine list
-wiki-engine context --active
-wiki-engine search "TODO:"
-make audit
+wiki-engine lint --fix
+wiki-engine check
+wiki-engine graph --strict
 ```
 
 ## Repair Order
 
-1. Fix stale or incorrect topic pages.
-2. Fix [index.md](../index.md) links or summaries.
-3. Append a log entry to [log.md](../prologue/log.md) if the lint changed durable content.
-4. If pages moved between directories or wiki files were renamed, run `make audit` and fix strict page-relative links and stale `wiki/<path>.md` prose references.
-
-## Log Format
-
-Use this exact heading pattern:
-
-```md
-## [YYYY-MM-DD] lint | short summary
-```
+1. Run `wiki-engine lint --fix` for deterministic mechanical fixes (legacy frontmatter migration, resolvable wiki links, lifecycle banners, index badges, section ordering, and inline reference migration).
+2. Fix remaining structural, relationship (`related` / `depends_on`), or broken citation issues reported by `wiki-engine lint` and `wiki-engine check`.
+3. Update [index.md](../index.md) and append a dated entry to [log.md](../prologue/log.md) if durable content changed.
+4. Re-run `wiki-engine lint`, `wiki-engine check`, and `wiki-engine graph --strict`.
 
 Pages touched by a lint repair should stay connected — see the [ingest workflow](ingest.md).

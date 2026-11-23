@@ -5,11 +5,15 @@ on:
     types: [published]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
     strategy:
       matrix:
         include:
@@ -34,9 +38,9 @@ jobs:
             ext: ".exe"
             archive: zip
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@f111f3307d8850f501ac008e886eec1fd1932a34 # v5.3.0
         with:
           go-version: "1.24"
 
@@ -55,38 +59,55 @@ jobs:
           DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           BINARY="wiki-engine${{ matrix.ext }}"
           ARCHIVE="wiki-engine_${VERSION}_${{ matrix.goos }}_${{ matrix.goarch }}.${{ matrix.archive }}"
-          go build -ldflags "-s -w -X main.version=${VERSION}-${COMMIT}-${DATE}" \
+          go build -trimpath -ldflags "-s -w -X main.version=${VERSION}-${COMMIT}-${DATE}" \
             -o "${BINARY}" ./cmd/wiki-engine
           if [ "${{ matrix.archive }}" = "tar.gz" ]; then
             tar -czf "${ARCHIVE}" "${BINARY}"
           else
             zip -q "${ARCHIVE}" "${BINARY}"
           fi
+          sha256sum "${ARCHIVE}" > "${ARCHIVE}.sha256"
           echo "archive=${ARCHIVE}" >> "$GITHUB_OUTPUT"
 
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@96ab6a427770e137f37f3797379ee7ffaa4693cb # v2.1.0
+        with:
+          subject-path: ${{ steps.build.outputs.archive }}
+
       - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@b4b15b8c7c6ac21eaeb8fcf11d52d98981df9e9c # v4.4.3
         with:
           name: release-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: ${{ steps.build.outputs.archive }}
+          path: |
+            ${{ steps.build.outputs.archive }}
+            ${{ steps.build.outputs.archive }}.sha256
 
   publish:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372680f5a8b # v4.1.8
         with:
           path: dist
           merge-multiple: true
 
-      - name: Generate checksums
+      - name: Generate aggregate checksums
         run: |
           cd dist
-          sha256sum * > checksums.txt
+          sha256sum wiki-engine_*.tar.gz wiki-engine_*.zip > checksums.txt
           cat checksums.txt
+
+      - name: Attest checksums manifest
+        uses: actions/attest-build-provenance@96ab6a427770e137f37f3797379ee7ffaa4693cb # v2.1.0
+        with:
+          subject-path: dist/checksums.txt
 
       - name: Upload release assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY"
+          gh release upload "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --clobber

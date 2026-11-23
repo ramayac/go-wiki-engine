@@ -1,7 +1,9 @@
 ---
-status: current
+id: repo-map
+title: Repo Map
+type: concept
+lifecycle: current
 description: "Overview of the repository architecture, high-signal areas, and build instructions."
-superseded_by: ""
 ---
 # Repo Map
 
@@ -13,29 +15,14 @@ superseded_by: ""
 ## High-Signal Areas
 
 <!-- List the most important directories and files, with a one-line role for each. -->
-<!-- Hints: run `find . -maxdepth 3 -not -path './.git/*' -type f | head -60` to discover structure. -->
-<!-- Focus on: entry points, core logic, config, data models. Skip test fixtures, caches, and generated files. -->
 
 ## Generated Artifacts
 
 <!-- List build-time generated files: binaries, compiled assets, migration outputs, etc. -->
-<!-- These should usually match the .wikirc ignore list below. -->
 
 ## Build and Run Path
 
 <!-- Exact commands to build, run, and test. Copy from Makefile / README if available. -->
-<!-- Example:
-```bash
-# Build
-make build
-
-# Test
-make test
-
-# Run
-make run
-```
--->
 
 ## Ignored Paths (from .wikirc)
 
@@ -46,4 +33,3 @@ make run
 - [schema.md](schema.md) — the contract this page must satisfy.
 - [operations/ingest.md](../operations/ingest.md) — how this page gets updated.
 - [README.md](../README.md) — wiki rules and navigation.
-

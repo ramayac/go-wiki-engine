@@ -1,7 +1,8 @@
 ---
-status: current
+id: query
+title: Query Workflow
+lifecycle: current
 description: "Workflow for searching and answering questions from the wiki first."
-superseded_by: ""
 ---
 # Query Workflow
 

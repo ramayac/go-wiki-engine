@@ -1,7 +1,8 @@
 ---
-status: current
+id: ingest
+title: Ingest Workflow
+lifecycle: current
 description: "Workflow for incrementally absorbing repository changes into the wiki."
-superseded_by: ""
 ---
 # Ingest Workflow
 

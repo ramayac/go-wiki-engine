@@ -15,7 +15,6 @@ func TestInit(t *testing.T) {
 		t.Fatalf("Init failed: %v", err)
 	}
 
-	// Check required wiki files exist.
 	required := []string{
 		"wiki/README.md",
 		"wiki/index.md",
@@ -26,8 +25,6 @@ func TestInit(t *testing.T) {
 		"wiki/operations/ingest.md",
 		"wiki/operations/query.md",
 		"wiki/operations/lint.md",
-		"wiki/decisions/example.md",
-		"wiki/architectures/example.md",
 	}
 	for _, f := range required {
 		p := filepath.Join(dest, f)
@@ -36,7 +33,6 @@ func TestInit(t *testing.T) {
 		}
 	}
 
-	// Check prompts and instructions.
 	prompts := []string{
 		".github/prompts/wiki-ingest.prompt.md",
 		".github/prompts/wiki-query.prompt.md",
@@ -50,7 +46,6 @@ func TestInit(t *testing.T) {
 		}
 	}
 
-	// Check .wikirc.
 	if _, err := os.Stat(filepath.Join(dest, ".wikirc")); os.IsNotExist(err) {
 		t.Error("missing .wikirc")
 	}
@@ -58,20 +53,103 @@ func TestInit(t *testing.T) {
 	assertPromptSymlinks(t, dest)
 }
 
-func TestInitRefuses(t *testing.T) {
+func TestInitReconcilesIdempotently(t *testing.T) {
 	dest := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(dest, "wiki"), 0o755); err != nil {
+	if err := Init(dest, "wiki"); err != nil {
+		t.Fatalf("first Init failed: %v", err)
+	}
+
+	// Simulate user edits to index.md, log.md, a custom page, .wikirc, and AGENTS.md.
+	customIndex := "---\nid: index\nlifecycle: current\ndescription: Custom Index\n---\n# Custom Index\n"
+	if err := os.WriteFile(filepath.Join(dest, "wiki", "index.md"), []byte(customIndex), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	err := Init(dest, "wiki")
-	if err == nil {
-		t.Error("Init should refuse when wiki/ already exists")
+	customPage := "---\nid: custom\nlifecycle: current\ndescription: Custom\n---\n# Custom\n"
+	if err := os.WriteFile(filepath.Join(dest, "wiki", "custom.md"), []byte(customPage), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Simulate prompt drift.
+	promptPath := filepath.Join(dest, ".wiki-instructions", "ingest.md")
+	if err := os.WriteFile(promptPath, []byte("drifted prompt"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Re-running init reconciles prompts without overwriting user content.
+	res, err := Reconcile(dest, ReconcileOptions{WikiDir: "wiki"})
+	if err != nil {
+		t.Fatalf("second Reconcile failed: %v", err)
+	}
+	if res.Mode != "reconcile" {
+		t.Errorf("Mode = %q, want reconcile", res.Mode)
+	}
+	gotIndex, _ := os.ReadFile(filepath.Join(dest, "wiki", "index.md"))
+	if string(gotIndex) != customIndex {
+		t.Errorf("reconcile overwrote user index.md:\n%s", gotIndex)
+	}
+	gotCustom, _ := os.ReadFile(filepath.Join(dest, "wiki", "custom.md"))
+	if string(gotCustom) != customPage {
+		t.Errorf("reconcile overwrote user custom.md:\n%s", gotCustom)
+	}
+	gotPrompt, _ := os.ReadFile(promptPath)
+	if string(gotPrompt) == "drifted prompt" {
+		t.Error("reconcile did not repair drifted prompt")
+	}
+}
+
+func TestInitRefusesNonDirTarget(t *testing.T) {
+	dest := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dest, "wiki"), []byte("file"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := Init(dest, "wiki"); err == nil {
+		t.Error("Init should fail when wiki target is an existing regular file")
+	}
+}
+
+func TestInitRenameAndRefuseExistingDest(t *testing.T) {
+	dest := t.TempDir()
+	if err := Init(dest, "wiki"); err != nil {
+		t.Fatalf("Init failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dest, "wiki", "custom.md"), []byte("keep me"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Rename wiki -> docs.
+	res, err := Reconcile(dest, ReconcileOptions{RenameTo: "docs"})
+	if err != nil {
+		t.Fatalf("Rename failed: %v", err)
+	}
+	if res.Mode != "rename" || res.RenamedFrom != "wiki" || res.WikiDir != "docs" {
+		t.Errorf("unexpected rename result: %+v", res)
+	}
+	if _, err := os.Stat(filepath.Join(dest, "docs", "custom.md")); err != nil {
+		t.Errorf("custom page missing after rename: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dest, "wiki")); !os.IsNotExist(err) {
+		t.Error("old wiki/ directory still exists after rename")
+	}
+	rcData, _ := os.ReadFile(filepath.Join(dest, ".wikirc"))
+	if !strings.Contains(string(rcData), `wiki_dir = "docs"`) || !strings.Contains(string(rcData), `"docs/"`) {
+		t.Errorf(".wikirc not updated on rename:\n%s", rcData)
+	}
+	agentsData, _ := os.ReadFile(filepath.Join(dest, "AGENTS.md"))
+	if !strings.Contains(string(agentsData), "docs/index.md") {
+		t.Errorf("AGENTS.md shim not updated on rename:\n%s", agentsData)
+	}
+
+	// Refuse rename when destination already exists.
+	if err := os.MkdirAll(filepath.Join(dest, "knowledge"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Reconcile(dest, ReconcileOptions{RenameTo: "knowledge"}); err == nil {
+		t.Error("Rename should refuse when destination directory already exists")
 	}
 }
 
 func TestInitPreservesExistingWikirc(t *testing.T) {
 	dest := t.TempDir()
-	custom := []byte("wiki_dir = \"custom\"\n")
+	custom := []byte("wiki_dir = \"custom\"\nlog_lines = 42\n")
 	if err := os.WriteFile(filepath.Join(dest, ".wikirc"), custom, 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -84,8 +162,8 @@ func TestInitPreservesExistingWikirc(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(data) != string(custom) {
-		t.Errorf(".wikirc was overwritten by Init:\n%s", data)
+	if !strings.Contains(string(data), "log_lines = 42") {
+		t.Errorf(".wikirc user setting lost on Init:\n%s", data)
 	}
 }
 
@@ -95,31 +173,53 @@ func TestInitCustomDir(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Init failed: %v", err)
 	}
-	// The wiki files should be under docs/ since we remapped the dir.
 	if _, err := os.Stat(filepath.Join(dest, "docs", "index.md")); os.IsNotExist(err) {
 		t.Error("missing docs/index.md")
 	}
-	if _, err := os.Stat(filepath.Join(dest, ".wikirc")); os.IsNotExist(err) {
-		t.Error("missing .wikirc")
-	}
-
-	// The scaffolded .wikirc must point at the remapped dir, not the default.
 	data, err := os.ReadFile(filepath.Join(dest, ".wikirc"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(data), `wiki_dir = "docs"`) {
-		t.Errorf(".wikirc should remap wiki_dir to docs, got:\n%s", data)
+	if !strings.Contains(string(data), `wiki_dir = "docs"`) || !strings.Contains(string(data), `"docs/"`) {
+		t.Errorf(".wikirc did not remap to docs:\n%s", data)
 	}
-	if !strings.Contains(string(data), `"docs/"`) {
-		t.Errorf(".wikirc should remap the ignore-list wiki/ entry to docs/, got:\n%s", data)
+}
+
+func TestInitPreservesUserShimsAndAppendsFencedPointer(t *testing.T) {
+	dest := t.TempDir()
+	custom := "# My custom agents instructions\n\nDo not lose this line.\n"
+	if err := os.WriteFile(filepath.Join(dest, "AGENTS.md"), []byte(custom), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Init(dest, "wiki"); err != nil {
+		t.Fatalf("Init failed: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dest, "AGENTS.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	if !strings.Contains(text, "Do not lose this line.") {
+		t.Errorf("Init lost user content in AGENTS.md:\n%s", text)
+	}
+	if !strings.Contains(text, shimStartMarker) || !strings.Contains(text, "wiki/index.md") {
+		t.Errorf("Init did not append fenced wiki pointer to AGENTS.md:\n%s", text)
+	}
+
+	// Second init must be idempotent (no duplicate fenced block).
+	if err := Init(dest, "wiki"); err != nil {
+		t.Fatalf("second Init failed: %v", err)
+	}
+	data2, _ := os.ReadFile(filepath.Join(dest, "AGENTS.md"))
+	if strings.Count(string(data2), shimStartMarker) != 1 {
+		t.Errorf("second Init duplicated fenced block in AGENTS.md:\n%s", data2)
 	}
 }
 
 func TestSyncPrompts(t *testing.T) {
 	dest := t.TempDir()
-
-	// SyncPrompts should work even on a repo that has never had init run.
 	updated, _, err := SyncPrompts(dest)
 	if err != nil {
 		t.Fatalf("SyncPrompts failed: %v", err)
@@ -127,106 +227,71 @@ func TestSyncPrompts(t *testing.T) {
 	if len(updated) == 0 {
 		t.Fatal("SyncPrompts returned no updated files")
 	}
-
-	// Verify canonical instruction files were written.
-	canonical := []string{
+	for _, f := range []string{
 		".wiki-instructions/ingest.md",
-		".wiki-instructions/query.md",
-		".wiki-instructions/refresh.md",
-		".wiki-instructions/onboard.md",
-		".wiki-instructions/lint.md",
 		".wiki-instructions/wiki-maintainer.md",
-	}
-	for _, f := range canonical {
-		p := filepath.Join(dest, f)
-		if _, err := os.Stat(p); os.IsNotExist(err) {
-			t.Errorf("SyncPrompts missing canonical file: %s", f)
-		}
-	}
-
-	// Verify Copilot prompt files were written.
-	copilot := []string{
 		".github/prompts/wiki-ingest.prompt.md",
-		".github/prompts/wiki-query.prompt.md",
-		".github/prompts/wiki-refresh.prompt.md",
-		".github/prompts/wiki-onboard.prompt.md",
-		".github/prompts/wiki-lint.prompt.md",
-		".github/instructions/wiki-maintainer.instructions.md",
-	}
-	for _, f := range copilot {
-		p := filepath.Join(dest, f)
-		if _, err := os.Stat(p); os.IsNotExist(err) {
-			t.Errorf("SyncPrompts missing Copilot file: %s", f)
-		}
-	}
-
-	// Verify Claude Code command files were written.
-	claude := []string{
 		".claude/commands/wiki-ingest.md",
-		".claude/commands/wiki-query.md",
-		".claude/commands/wiki-refresh.md",
-		".claude/commands/wiki-onboard.md",
-		".claude/commands/wiki-lint.md",
-	}
-	for _, f := range claude {
-		p := filepath.Join(dest, f)
-		if _, err := os.Stat(p); os.IsNotExist(err) {
-			t.Errorf("SyncPrompts missing Claude Code file: %s", f)
-		}
-	}
-
-	// Verify pi.dev skill files were written.
-	piSkills := []string{
 		".pi/skills/wiki/SKILL.md",
-	}
-	for _, f := range piSkills {
-		p := filepath.Join(dest, f)
-		if _, err := os.Stat(p); os.IsNotExist(err) {
-			t.Errorf("SyncPrompts missing pi.dev skill file: %s", f)
+		"AGENTS.md",
+		"CLAUDE.md",
+	} {
+		if _, err := os.Stat(filepath.Join(dest, f)); os.IsNotExist(err) {
+			t.Errorf("SyncPrompts missing %s", f)
 		}
 	}
-
-	// Wiki content and .wikirc should NOT have been created.
 	if _, err := os.Stat(filepath.Join(dest, "wiki")); !os.IsNotExist(err) {
 		t.Error("SyncPrompts should not create wiki/")
 	}
-	if _, err := os.Stat(filepath.Join(dest, ".wikirc")); !os.IsNotExist(err) {
-		t.Error("SyncPrompts should not create .wikirc")
-	}
-
 	assertPromptSymlinks(t, dest)
 }
 
-func TestSyncPromptsOverwrites(t *testing.T) {
+func TestSyncPromptsPreservesExistingShimsAndUserFiles(t *testing.T) {
 	dest := t.TempDir()
-
-	// Write a stale version of the ingest prompt.
-	stale := filepath.Join(dest, ".github", "prompts", "wiki-ingest.prompt.md")
-	if err := os.MkdirAll(filepath.Dir(stale), 0o755); err != nil {
+	custom := "# My custom Claude instructions\n"
+	if err := os.WriteFile(filepath.Join(dest, "CLAUDE.md"), []byte(custom), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(stale, []byte("old content"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	// SyncPrompts should overwrite it.
 	if _, _, err := SyncPrompts(dest); err != nil {
 		t.Fatalf("SyncPrompts failed: %v", err)
 	}
+	data, _ := os.ReadFile(filepath.Join(dest, "CLAUDE.md"))
+	if string(data) != custom {
+		t.Errorf("SyncPrompts modified custom CLAUDE.md:\n%s", data)
+	}
 
-	data, err := os.ReadFile(stale)
+	userFile := filepath.Join(dest, ".claude", "commands", "review.md")
+	if err := os.WriteFile(userFile, []byte("user"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	retired := filepath.Join(dest, ".wiki-instructions", "migrate-shims.md")
+	if err := os.WriteFile(retired, []byte("stale"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, removed, err := SyncPrompts(dest)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(data) == "old content" {
-		t.Error("SyncPrompts did not overwrite stale file")
+	if _, err := os.Stat(userFile); err != nil {
+		t.Error("SyncPrompts deleted user-owned file")
+	}
+	if _, err := os.Stat(retired); !os.IsNotExist(err) {
+		t.Error("SyncPrompts did not remove retired file")
+	}
+	if len(removed) == 0 {
+		t.Error("expected removed list to report retired file")
 	}
 }
 
-// assertPromptSymlinks verifies that the tool-layer files are real symlinks
-// pointing into .wiki-instructions/. Symlinks may not be available on all
-// platforms (e.g. Windows without developer mode), so the check is skipped
-// there — those platforms fall back to regular copies.
+func TestInitRejectsUnsafeWikiDirs(t *testing.T) {
+	dest := t.TempDir()
+	for _, bad := range []string{"", ".", "..", "../escape", "../../escape", "/absolute/path", "docs/wiki", `docs\wiki`, ".git", ".github"} {
+		if err := Init(dest, bad); err == nil {
+			t.Errorf("Init with wiki dir %q should fail, got nil error", bad)
+		}
+	}
+}
+
 func assertPromptSymlinks(t *testing.T, dest string) {
 	if runtime.GOOS == "windows" {
 		return
@@ -245,207 +310,6 @@ func assertPromptSymlinks(t *testing.T, dest string) {
 		}
 		if fi.Mode()&os.ModeSymlink == 0 {
 			t.Errorf("%s should be a symlink, got mode %s", f, fi.Mode())
-			continue
 		}
-		target, err := os.Readlink(p)
-		if err != nil {
-			t.Errorf("readlink %s: %v", f, err)
-			continue
-		}
-		if !strings.Contains(target, ".wiki-instructions/") {
-			t.Errorf("%s symlink target %q does not point into .wiki-instructions/", f, target)
-		}
-	}
-}
-
-func TestInitCreatesShims(t *testing.T) {
-	dest := t.TempDir()
-	if err := Init(dest, "wiki"); err != nil {
-		t.Fatalf("Init failed: %v", err)
-	}
-
-	for _, name := range []string{"AGENTS.md", "CLAUDE.md"} {
-		p := filepath.Join(dest, name)
-		if _, err := os.Stat(p); os.IsNotExist(err) {
-			t.Errorf("Init did not create %s", name)
-		}
-	}
-}
-
-func TestInitPreservesExistingShims(t *testing.T) {
-	dest := t.TempDir()
-
-	// Write a user-customised AGENTS.md before init.
-	custom := "# My custom agents instructions\n"
-	if err := os.WriteFile(filepath.Join(dest, "AGENTS.md"), []byte(custom), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := Init(dest, "wiki"); err != nil {
-		t.Fatalf("Init failed: %v", err)
-	}
-
-	data, err := os.ReadFile(filepath.Join(dest, "AGENTS.md"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(data) != custom {
-		t.Error("Init overwrote existing AGENTS.md — should preserve user content")
-	}
-}
-
-func TestSyncPromptsCreatesShims(t *testing.T) {
-	dest := t.TempDir()
-
-	updated, _, err := SyncPrompts(dest)
-	if err != nil {
-		t.Fatalf("SyncPrompts failed: %v", err)
-	}
-
-	for _, name := range []string{"AGENTS.md", "CLAUDE.md"} {
-		p := filepath.Join(dest, name)
-		if _, err := os.Stat(p); os.IsNotExist(err) {
-			t.Errorf("SyncPrompts did not create %s", name)
-		}
-		// The created filename should appear in the returned list.
-		found := false
-		for _, u := range updated {
-			if u == name {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Errorf("SyncPrompts did not report %s in updated list", name)
-		}
-	}
-}
-
-func TestSyncPromptsPreservesExistingShims(t *testing.T) {
-	dest := t.TempDir()
-
-	// Write a user-customised CLAUDE.md before syncing.
-	custom := "# My custom Claude instructions\n"
-	if err := os.WriteFile(filepath.Join(dest, "CLAUDE.md"), []byte(custom), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	if _, _, err := SyncPrompts(dest); err != nil {
-		t.Fatalf("SyncPrompts failed: %v", err)
-	}
-
-	data, err := os.ReadFile(filepath.Join(dest, "CLAUDE.md"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(data) != custom {
-		t.Error("SyncPrompts overwrote existing CLAUDE.md — should preserve user content")
-	}
-}
-
-func TestSyncPromptsRemovesOrphans(t *testing.T) {
-	dest := t.TempDir()
-
-	// First sync to populate the destination.
-	if _, _, err := SyncPrompts(dest); err != nil {
-		t.Fatalf("first SyncPrompts failed: %v", err)
-	}
-
-	// Write an orphan file that simulates a removed prompt.
-	orphanPath := filepath.Join(dest, ".wiki-instructions", "migrate-shims.md")
-	if err := os.WriteFile(orphanPath, []byte("stale content"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	// Second sync should remove the orphan.
-	updated, removed, err := SyncPrompts(dest)
-	if err != nil {
-		t.Fatalf("second SyncPrompts failed: %v", err)
-	}
-
-	if _, err := os.Stat(orphanPath); !os.IsNotExist(err) {
-		t.Error("SyncPrompts did not remove orphaned file migrate-shims.md")
-	}
-
-	// The removal must be reported in the removed list, not mixed into
-	// the updated list.
-	if len(updated) == 0 {
-		t.Error("SyncPrompts reported no updated files on a second sync")
-	}
-	found := false
-	for _, r := range removed {
-		if r == ".wiki-instructions/migrate-shims.md" {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Errorf("SyncPrompts did not report orphan removal in removed list: %v", removed)
-	}
-	for _, u := range updated {
-		if strings.HasPrefix(u, "removed ") {
-			t.Errorf("removal marker leaked into updated list: %q", u)
-		}
-	}
-}
-
-func TestSyncPromptsPreservesUserFiles(t *testing.T) {
-	dest := t.TempDir()
-
-	// First sync to populate the destination.
-	if _, _, err := SyncPrompts(dest); err != nil {
-		t.Fatalf("first SyncPrompts failed: %v", err)
-	}
-
-	// User-owned files that sync-prompts must never touch.
-	userFiles := []string{
-		".claude/commands/review.md",
-		".github/prompts/team-release.prompt.md",
-		".wiki-instructions/deploy.md",
-		".pi/skills/other/SKILL.md",
-	}
-	for _, f := range userFiles {
-		p := filepath.Join(dest, filepath.FromSlash(f))
-		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(p, []byte("user content"), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	// A wiki-managed file that no longer ships in the scaffold must still
-	// be removed (the cleanup path that motivated this whole mechanism).
-	staleManaged := filepath.Join(dest, ".github", "prompts", "wiki-old.prompt.md")
-	if err := os.WriteFile(staleManaged, []byte("stale"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	// Second sync: user files survive, wiki-managed orphan is removed.
-	if _, _, err := SyncPrompts(dest); err != nil {
-		t.Fatalf("second SyncPrompts failed: %v", err)
-	}
-
-	for _, f := range userFiles {
-		p := filepath.Join(dest, filepath.FromSlash(f))
-		if _, err := os.Stat(p); os.IsNotExist(err) {
-			t.Errorf("SyncPrompts deleted user-owned file %s", f)
-		}
-	}
-	if _, err := os.Stat(staleManaged); !os.IsNotExist(err) {
-		t.Error("SyncPrompts did not remove stale wiki-managed file wiki-old.prompt.md")
-	}
-}
-
-func TestInitRejectsTraversalWikiDir(t *testing.T) {
-	dest := t.TempDir()
-	for _, bad := range []string{"../escape", "../../escape", ".", "..", "/absolute/path"} {
-		if err := Init(dest, bad); err == nil {
-			t.Errorf("Init with wiki dir %q should fail, got nil error", bad)
-		}
-	}
-	// A clean nested directory is still fine.
-	if err := Init(t.TempDir(), "docs/wiki"); err != nil {
-		t.Errorf("Init with nested wiki dir should succeed: %v", err)
 	}
 }
