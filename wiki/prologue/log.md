@@ -8,6 +8,12 @@ description: "Append-only timeline of wiki maintenance activity."
 
 Append-only timeline of wiki maintenance activity.
 
+## [2026-11-23] ingest | governance parity: health command, why and stop-condition templates, markers
+
+- Added `wiki-engine health`: advisory maintenance signals that exit `0` and never fail CI. See [repo-map.md](repo-map.md).
+- Added `## Why` and `## Stops applying when` to the page templates, and `schema --section conventions` for the rationale marker, contradiction flag, writing language, data protection, and log rotation. See [schema.md](schema.md).
+- The `markers` lint check now skips the open rationale marker and contradiction flag. See [lint.md](../operations/lint.md).
+
 ## [2026-11-23] ingest | controlled tag vocabulary
 
 - Added the optional `<wiki_dir>/vocabulary.yaml` and the `vocabulary` lint check (`schema` group). `init` creates the file and never overwrites it. See [lint.md](../operations/lint.md).

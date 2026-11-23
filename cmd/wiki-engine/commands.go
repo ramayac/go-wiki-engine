@@ -83,6 +83,7 @@ var commandArgSpecs = map[string]argSpec{
 	},
 	"refresh": {maxPos: 1},
 	"stats":   {maxPos: 0},
+	"health":  {maxPos: 0},
 	"context": {
 		flags: map[string]bool{
 			"--minimal": true, "--summarize": true, "--active": true,
@@ -670,6 +671,17 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 		if st.LastUpdated != "" {
 			fmt.Printf("last_updated: %s\n", st.LastUpdated)
 		}
+
+	case "health":
+		res, err := eng.Health()
+		if err != nil {
+			fatal(err)
+		}
+		if useJSON {
+			writeJSON(res)
+			return
+		}
+		fmt.Print(res.Text())
 
 	case "context":
 		minimal := false

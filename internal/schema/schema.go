@@ -248,8 +248,20 @@ var Sections = []string{
 	"vocabulary",
 	"graph",
 	"templates",
+	"conventions",
 	"exit-codes",
 	"json",
+}
+
+// Conventions lists the writing rules for wiki pages. The marker lines appear
+// here, and not in a page template, so that a page does not copy one by default.
+var Conventions = []string{
+	"Rationale marker: record why, not what. When no source (the session, the commit messages, or the PR) states why something works the way it does, write `> Rationale: not recorded.` on its own line. Do not guess a reason. Do not stop to ask. When a source later states the reason, replace the marker line with it. `wiki-engine health` lists the live pages that still carry the marker.",
+	"Contradiction flag: when new information contradicts existing content, flag it on its own line with `> ⚠️ CONTRADICTION: <what conflicts and where>`. Replace the flag when the conflict is resolved. `wiki-engine health` lists the live pages that still carry a flag.",
+	"Open markers are advisory. A rationale marker or a contradiction flag is a valid state, so `wiki-engine lint` does not report it and `wiki-engine health` never fails a build. A marker in a code block or code span is an example, so `health` does not count it.",
+	"Documentation language: write wiki pages in ASD-STE100 Simplified Technical English. Use short, direct sentences. Use active voice. Put one instruction in each sentence. Use the same term for the same thing. Do not use idioms.",
+	"Data protection: never persist secrets, credentials, tokens, session IDs, personal or health identifiers, free-text personal data, or whole request or response payloads in wiki pages or in the log. Redact the value and keep only the technical fact.",
+	"Log rotation: when `wiki-engine health` reports `log_needs_rotation` (the log is 128 KiB or larger), move the oldest complete entries of `log.md` into `log-archive/<YYYY>.log` next to it, until the log is below 96 KiB. Archive files keep the entry format, are append-only, and use the `.log` extension so search, graph, and lint do not read them as pages.",
 }
 
 // Get returns the canonical embedded schema document.
@@ -294,6 +306,14 @@ sources:
 # My Concept
 
 Explain the stable system concept here.
+
+## Why
+
+Why it works this way, and which options the team rejected. Take the reason from the session, the commit messages, or the PR. If no source states the reason, write the rationale marker (run wiki-engine schema --section conventions).
+
+## Stops applying when
+
+A condition that someone can check: a version, a config value, a metric, or a process. If you do not know the condition, write "Not known."
 `,
 			},
 			{
@@ -319,6 +339,14 @@ sources:
 # My Entity
 
 Describe responsibilities, interfaces, and dependencies.
+
+## Why
+
+Why it works this way, and which options the team rejected. Take the reason from the session, the commit messages, or the PR. If no source states the reason, write the rationale marker (run wiki-engine schema --section conventions).
+
+## Stops applying when
+
+A condition that someone can check: a version, a config value, a metric, or a process. If you do not know the condition, write "Not known."
 `,
 			},
 			{
@@ -347,7 +375,15 @@ sources: []
 
 ## Root Cause
 
+Technical explanation.
+
 ## Remediation & Lessons
+
+What was done, and why this fix over the alternatives. Link to the PR.
+
+## Stops applying when
+
+A condition that someone can check: a version, a config value, a metric, or a process. If you do not know the condition, write "Not known."
 `,
 			},
 			{
@@ -376,6 +412,12 @@ sources: []
 ## Alternatives Considered
 
 ## Decision & Consequences
+
+What was chosen and why, and what this means going forward.
+
+## Stops applying when
+
+A condition that someone can check: a version, a config value, a metric, or a process. If you do not know the condition, write "Not known."
 `,
 			},
 			{
@@ -524,6 +566,11 @@ func renderSection(doc Document, section string) (string, error) {
 	case "templates":
 		b.WriteString("## Templates\n\n")
 		b.WriteString("Run `wiki-engine schema --type <type>` to print a ready-to-use page template.\n")
+	case "conventions":
+		b.WriteString("## Conventions\n\n")
+		for _, c := range Conventions {
+			fmt.Fprintf(&b, "- %s\n", c)
+		}
 	case "exit-codes":
 		b.WriteString("## Exit Codes\n\n")
 		b.WriteString("- `0`: Success (including `check` with review recommendations only)\n")

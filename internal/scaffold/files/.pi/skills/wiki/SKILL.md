@@ -35,6 +35,7 @@ wiki-engine impact [--fuzzy] <file...>          # Exact source impact (or --fuzz
 wiki-engine lint [--check=<a,b>] [--skip=<a,b>] [--fix]
 wiki-engine refresh [diff-range]                # Combined maintenance snapshot
 wiki-engine stats                               # Aggregate wiki statistics
+wiki-engine health                              # Advisory maintenance signals (never fails CI)
 wiki-engine diff <from> <to>                    # Wiki changes between two git refs
 wiki-engine watch [--once]                      # Poll for changes + lint issues
 wiki-engine init [--wiki-dir=<name>]            # Idempotent bootstrap/reconcile or rename

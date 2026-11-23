@@ -24,6 +24,7 @@ Keep the wiki coherent, linked, and current.
 - Links follow the standard in [schema.md](../prologue/schema.md): relative Markdown, no wiki-style `[[Page]]` links, no unclosed parentheses, and every target exists. Links are strictly page-relative — a page in a subdirectory must use `../` to reach pages in other directories.
 - `vocabulary` (part of the `schema` group) rejects page tags that are not listed in `<wiki_dir>/vocabulary.yaml`. Tags stay free-form while that file lists none. Run `wiki-engine schema --section vocabulary` for the format.
 - Active pages are cross-linked per [schema.md](../prologue/schema.md): each page links to its related pages; the only intentional leaf is [log.md](../prologue/log.md).
+- `markers` warns on placeholder text: a to-do, to-be-decided, or unknown label followed by a colon. It skips the open `> Rationale: not recorded.` marker and the `> ⚠️ CONTRADICTION:` flag; `wiki-engine health` reports those and lint never fails on them. Run `wiki-engine schema --section conventions` for the rules.
 - `leaf-pages` surfaces active pages with no outgoing links at info severity — non-failing by default, visible as a reminder.
 - `orphans` surfaces active pages not reachable from the index; `legacy` and `deprecated` pages live outside the graph and are exempt (same lifecycle rule as `leaf-pages`).
 

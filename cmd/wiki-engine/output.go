@@ -106,6 +106,7 @@ Commands:
   check [--base=<ref>] [--no-working-tree]
                            Branch-aware citation and drift check (exit 0 ok/review, 1 broken, 2 setup)
   stats                    Show aggregate wiki statistics
+  health                   Show advisory maintenance signals (superset of stats; never a lint failure)
   context [--minimal] [--summarize] [--active] [--sort=topo|chrono] [--max-pages=<n>] [--max-bytes=<n>]
                            Condensed wiki snapshot / active graph for agent context loading
   graph [page-or-id] [--strict] [--dot] [--include-sources]

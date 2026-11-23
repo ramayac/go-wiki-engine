@@ -39,6 +39,11 @@ func (c *markersChecker) Check(snap *model.WikiSnapshot, _ *config.Config) ([]Is
 			if inCodeBlock {
 				continue
 			}
+			// An open CONTRADICTION flag or rationale marker is a defined
+			// convention, not a placeholder. `health` reports it; lint does not.
+			if model.IsOpenMarkerLine(line) {
+				continue
+			}
 			if markerRe.MatchString(line) {
 				issues = append(issues, Issue{
 					Severity: SevWarn,
