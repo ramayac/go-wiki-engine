@@ -634,8 +634,8 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 
 	case "refresh":
 		diff := cfg.DefaultDiff
-		if len(args) > 2 {
-			diff = args[2]
+		if pos := positionalArgs(args[2:]); len(pos) > 0 {
+			diff = pos[0]
 		}
 		out, err := eng.Refresh(diff)
 		if err != nil {
@@ -1130,9 +1130,14 @@ func parseChangeArgs(args []string, defaultDiff string) engine.ChangeOptions {
 		DiffRange:          defaultDiff,
 		IncludeWorkingTree: true,
 	}
+	afterTerminator := false
 	for i := 0; i < len(args); i++ {
 		a := args[i]
 		switch {
+		case afterTerminator:
+			opts.DiffRange = a
+		case a == "--":
+			afterTerminator = true
 		case a == "--no-working-tree":
 			opts.IncludeWorkingTree = false
 		case strings.HasPrefix(a, "--base="):

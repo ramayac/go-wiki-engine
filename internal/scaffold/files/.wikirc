@@ -1,5 +1,7 @@
 wiki_dir = "wiki"
-# Match this to the repository's default branch (main or master).
+# Git range for changed/candidates/refresh/watch. If this is "main...HEAD" and
+# there is no `main` branch, the engine detects the base branch (master, etc.).
+# Set an explicit range (for example "develop...HEAD") to override.
 default_diff = "main...HEAD"
 log_lines = 10
 

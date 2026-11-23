@@ -25,7 +25,7 @@ type CheckOptions struct {
 type CheckFinding struct {
 	Page    string `json:"page"`
 	ID      string `json:"id,omitempty"`
-	Kind    string `json:"kind"` // "missing_source", "deleted_source", "renamed_source", "invalid_commit", "containment", "frontmatter"
+	Kind    string `json:"kind"` // "missing_source", "deleted_source", "renamed_source", "invalid_commit", "unverifiable_commit", "containment", "frontmatter"
 	Target  string `json:"target,omitempty"`
 	Message string `json:"message"`
 }
@@ -116,6 +116,9 @@ func (e *Engine) Check(opts CheckOptions) (*CheckResult, error) {
 
 	nonWikiChanged := cs.NonWikiChanged(e.Cfg.WikiDir)
 
+	// A shallow clone lacks older commits, so a missing commit is not proof of a bad citation.
+	shallow := git.IsShallow(e.RootDir)
+
 	// 1. Validate changed live pages: sources, repo links, frontmatter, and commit citations.
 	for _, p := range snap.Pages {
 		if !changedWikiSet[p.Path] {
@@ -161,6 +164,16 @@ func (e *Engine) Check(opts CheckOptions) (*CheckResult, error) {
 		for _, m := range commitRefRe.FindAllStringSubmatch(p.Body, -1) {
 			sha := m[1]
 			if !git.CommitExists(e.RootDir, sha) {
+				if shallow {
+					res.Warnings = append(res.Warnings, CheckFinding{
+						Page:    p.Path,
+						ID:      p.ID,
+						Kind:    "unverifiable_commit",
+						Target:  sha,
+						Message: fmt.Sprintf("cited commit %s cannot be verified (shallow clone)", sha),
+					})
+					continue
+				}
 				res.Broken = append(res.Broken, CheckFinding{
 					Page:    p.Path,
 					ID:      p.ID,

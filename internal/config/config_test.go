@@ -363,3 +363,14 @@ func TestStrictNumericParsing(t *testing.T) {
 		}
 	}
 }
+
+func TestLoadRejectsOptionLikeDefaultDiff(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, ".wikirc"), []byte("default_diff = \"--output=../victim.txt\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Load(dir)
+	if err == nil || !strings.Contains(err.Error(), "invalid default_diff") {
+		t.Errorf("Load error = %v, want invalid default_diff", err)
+	}
+}
