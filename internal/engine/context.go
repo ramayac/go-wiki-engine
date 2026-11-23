@@ -64,7 +64,7 @@ func (e *Engine) ContextWithOptions(opts ContextOptions) (*ContextResult, error)
 		return nil, err
 	}
 
-	cr := &ContextResult{}
+	cr := &ContextResult{Catalog: []ContextEntry{}, RecentLog: []string{}}
 	var rawCatalog []ContextEntry
 	if snap.Index != nil {
 		rawCatalog = parseIndexCatalog(snap.Index.RawContent)

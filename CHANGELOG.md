@@ -25,6 +25,10 @@ surface is defined in [README.md](README.md).
 
 ### Fixed
 
+- **JSON `null` for empty results:** Empty results (`changed`, `candidates`, `search`, `relevant`, `log-tail`, `headings`, `diff`, `impact`, `watch --once`, `context`, graph neighborhood, `sync-prompts`) now encode as `[]`, not `null`.
+- **`--` terminator:** `summary`, `diff`, and `log-tail` now treat `--` as the end of flags, like the other commands.
+- **Unknown command with a broken `.wikirc`:** The command name is checked before `.wikirc` loads, so the error says "unknown command".
+- **Continuous `watch` repeated output:** It now prints a tick only when the changed files, candidates, or lint issues differ from the last printed tick.
 - **Git option injection:** `changed`, `candidates`, `refresh`, `watch --once`, and the `stale-content` check passed the diff range to `git diff` unchecked, so `--output=<path>` could overwrite a file. Ranges now must be revisions or `a..b` / `a...b` of existing revisions, `default_diff` may not start with `-`, and git calls pass `--end-of-options` and `--` where a user or config value reaches them. A `wiki_dir` that starts with `-` is now rejected (see below). Git 2.24 or newer is required.
 - **Symlink write-through in `init` and `sync-prompts`:** The commands wrote through a symlinked managed directory (`.wiki-instructions`, `.claude/commands`, `.github/prompts`, `.github/instructions`, `.pi/skills/wiki`) or a symlinked `AGENTS.md`, `CLAUDE.md`, or `.wikirc` and changed files outside the repo. Every write, mkdir, remove, and symlink now checks that the real destination stays inside the repo and fails with an error naming the path. A symlinked file inside a managed directory is still replaced, not followed.
 - **`sync-prompts` deleted user files:** It removed any `wiki-*` file in the sync directories and anything under `.pi/skills/wiki/` and `.wiki-instructions/` that the engine did not ship. It now removes only symlinks that point into `.wiki-instructions/` and files named in `retiredManagedFiles`.
@@ -37,6 +41,9 @@ surface is defined in [README.md](README.md).
 
 ### Changed
 
+- **Exit codes now separate usage errors from runtime failures:** Usage errors (unknown command or flag, missing or extra argument, invalid flag value, conflicting flags) exit `2`; they exited `1` before. Runtime and finding failures stay at `1`. `check` keeps `0`/`1`/`2`. See the exit-code table in [README.md](README.md).
+- **`--json` `ok` now matches the exit code:** `graph --strict` and `watch --once` emit `"ok": false` with an `error` summary (and the same `data`) when they exit `1`.
+- **`refresh --json` emits one JSON object** (`diff_range`, `needed`, `wiki_files`, `recent_log`, `changed`, `candidates`, `lint`). `refresh` now exits `1` when its lint section fails, using the same `fail_severity` gate as `lint`.
 - **`wiki-engine impact` is exact by default:** Matches declared `sources`, directory coverage, and exact Markdown repo links with explicit match reasons in JSON; basename prose matching is opt-in via `--fuzzy`.
 - **`wiki-engine upgrade` is fail-closed:** Never silently falls back to `go install` on download, checksum, or provenance failure; streams archives to disk with compressed/expanded size caps and archive path-traversal checks; `go install` requires explicit `--from-source` pinned to the release tag.
 

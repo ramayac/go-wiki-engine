@@ -59,6 +59,9 @@ func (e *Engine) List() ([]string, error) {
 	if err := snap.FatalLoadError(); err != nil {
 		return nil, err
 	}
+	if snap.AllFiles == nil {
+		return []string{}, nil
+	}
 	return snap.AllFiles, nil
 }
 
@@ -80,7 +83,7 @@ func (e *Engine) Headings() ([]HeadingEntry, error) {
 	if err := snap.FatalLoadError(); err != nil {
 		return nil, err
 	}
-	var entries []HeadingEntry
+	entries := []HeadingEntry{}
 	for _, p := range snap.Pages {
 		for _, h := range p.Headings {
 			entries = append(entries, HeadingEntry{
@@ -114,7 +117,7 @@ func logTailFromSnapshot(snap *model.WikiSnapshot, n int) ([]string, error) {
 	if snap.Log == nil {
 		return nil, fmt.Errorf("log.md not found in %s", snap.WikiDir)
 	}
-	var headings []string
+	headings := []string{}
 	for _, line := range snap.Log.Lines {
 		if logHeadingRe.MatchString(line) {
 			headings = append(headings, line)
@@ -159,7 +162,11 @@ func (e *Engine) ChangedWithOptions(opts ChangeOptions) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return cs.NonWikiChanged(e.Cfg.WikiDir), nil
+	changed := cs.NonWikiChanged(e.Cfg.WikiDir)
+	if changed == nil {
+		changed = []string{}
+	}
+	return changed, nil
 }
 
 // Candidates filters Changed output through the ignore patterns in .wikirc.
@@ -182,7 +189,7 @@ func (e *Engine) CandidatesWithOptions(opts ChangeOptions) ([]string, error) {
 // candidateFiles returns the live, non-wiki changed files that no ignore
 // pattern matches. Deleted files and the old side of renames are not candidates.
 func (e *Engine) candidateFiles(cs *git.ChangeSet) []string {
-	var filtered []string
+	filtered := []string{}
 	for _, f := range cs.LiveNonWikiChanged(e.Cfg.WikiDir) {
 		if !e.isIgnored(f) {
 			filtered = append(filtered, f)
@@ -321,7 +328,7 @@ func (e *Engine) Diff(from, to string) (*DiffResult, error) {
 	if _, err := e.ResolveWikiPath(); err != nil {
 		return nil, err
 	}
-	dr := &DiffResult{From: from, To: to}
+	dr := &DiffResult{From: from, To: to, Added: []string{}, Removed: []string{}, Changed: []string{}}
 
 	fromFiles, err := e.filesAtRef(from)
 	if err != nil {
@@ -360,7 +367,9 @@ func (e *Engine) Diff(from, to string) (*DiffResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("computing changed wiki files between %q and %q: %w", from, to, err)
 	}
-	dr.Changed = changedOut
+	if changedOut != nil {
+		dr.Changed = changedOut
+	}
 
 	return dr, nil
 }
@@ -405,71 +414,120 @@ func (e *Engine) changedWikiFiles(diffRange string) ([]string, error) {
 	return splitNUL(out), nil
 }
 
-// Refresh runs the full maintenance snapshot and returns a formatted report.
-func (e *Engine) Refresh(diffRange string) (string, error) {
+// RefreshLint is the lint section of a RefreshResult.
+type RefreshLint struct {
+	OK       bool     `json:"ok"`
+	Messages []string `json:"messages"`
+	Issues   []Issue  `json:"issues"`
+}
+
+// RefreshResult is the structured maintenance snapshot behind Refresh.
+// Needed is false when no ingest candidates exist; the other sections are
+// then empty and Message says why.
+type RefreshResult struct {
+	DiffRange  string      `json:"diff_range"`
+	Needed     bool        `json:"needed"`
+	Message    string      `json:"message,omitempty"`
+	WikiFiles  []string    `json:"wiki_files"`
+	RecentLog  []string    `json:"recent_log"`
+	Changed    []string    `json:"changed"`
+	Candidates []string    `json:"candidates"`
+	Lint       RefreshLint `json:"lint"`
+}
+
+// RefreshSnapshot runs the full maintenance snapshot and returns its sections.
+// Lint.OK follows the same fail_severity gate as lint.
+func (e *Engine) RefreshSnapshot(diffRange string) (*RefreshResult, error) {
 	opts := ChangeOptions{DiffRange: diffRange, IncludeWorkingTree: true}
 	cs, err := e.DiscoverChanges(opts)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	changed := cs.NonWikiChanged(e.Cfg.WikiDir)
+	if changed == nil {
+		changed = []string{}
+	}
 	candidates := e.candidateFiles(cs)
+	res := &RefreshResult{
+		DiffRange:  diffRange,
+		WikiFiles:  []string{},
+		RecentLog:  []string{},
+		Changed:    changed,
+		Candidates: candidates,
+		Lint:       RefreshLint{OK: true, Messages: []string{}, Issues: []Issue{}},
+	}
 	if len(candidates) == 0 {
 		label := diffRange
 		if label == "" {
 			label = cs.Base
 		}
-		return fmt.Sprintf("no wiki refresh needed: no ingest candidates for diff range %s", label), nil
+		res.DiffRange = label
+		res.Message = fmt.Sprintf("no wiki refresh needed: no ingest candidates for diff range %s", label)
+		return res, nil
 	}
+	res.Needed = true
 
 	snap, err := e.LoadSnapshot()
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	if err := snap.FatalLoadError(); err != nil {
-		return "", err
+		return nil, err
 	}
 
-	var b strings.Builder
-
-	b.WriteString("== wiki files ==\n")
-	for _, f := range snap.AllFiles {
-		b.WriteString(f)
-		b.WriteString("\n")
-	}
-
-	b.WriteString("\n== recent log ==\n")
+	res.WikiFiles = append(res.WikiFiles, snap.AllFiles...)
 	tail, err := logTailFromSnapshot(snap, e.Cfg.LogLines)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	for _, h := range tail {
-		b.WriteString(h)
-		b.WriteString("\n")
-	}
+	res.RecentLog = tail
 
-	b.WriteString("\n== changed files ==\n")
-	for _, f := range changed {
-		b.WriteString(f)
-		b.WriteString("\n")
-	}
-
-	b.WriteString("\n== ingest candidates ==\n")
-	for _, f := range candidates {
-		b.WriteString(f)
-		b.WriteString("\n")
-	}
-
-	b.WriteString("\n== lint ==\n")
 	lintRes := e.lintSnapshot(snap, nil, nil)
-	if lintRes.OK {
-		b.WriteString("wiki lint OK\n")
-	} else {
-		for _, m := range lintRes.Messages {
-			b.WriteString(m)
+	res.Lint.OK = lintRes.OK
+	if lintRes.Messages != nil {
+		res.Lint.Messages = lintRes.Messages
+	}
+	if lintRes.Issues != nil {
+		res.Lint.Issues = lintRes.Issues
+	}
+	return res, nil
+}
+
+// Text renders the report in the plain-text layout printed by refresh.
+func (r *RefreshResult) Text() string {
+	if !r.Needed {
+		return r.Message
+	}
+	var b strings.Builder
+	section := func(title string, lines []string) {
+		b.WriteString(title)
+		b.WriteString("\n")
+		for _, l := range lines {
+			b.WriteString(l)
 			b.WriteString("\n")
 		}
 	}
+	section("== wiki files ==", r.WikiFiles)
+	b.WriteString("\n")
+	section("== recent log ==", r.RecentLog)
+	b.WriteString("\n")
+	section("== changed files ==", r.Changed)
+	b.WriteString("\n")
+	section("== ingest candidates ==", r.Candidates)
+	b.WriteString("\n")
+	if r.Lint.OK {
+		section("== lint ==", []string{"wiki lint OK"})
+	} else {
+		section("== lint ==", r.Lint.Messages)
+	}
+	return b.String()
+}
 
-	return b.String(), nil
+// Refresh runs the full maintenance snapshot and returns a formatted report.
+func (e *Engine) Refresh(diffRange string) (string, error) {
+	res, err := e.RefreshSnapshot(diffRange)
+	if err != nil {
+		return "", err
+	}
+	return res.Text(), nil
 }

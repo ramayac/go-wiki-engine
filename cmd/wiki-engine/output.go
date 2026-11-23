@@ -30,8 +30,39 @@ func writeJSONResultTo(w io.Writer, data interface{}, ok bool, errMsg string) {
 	}
 }
 
+// Exit codes: 0 success, 1 runtime or finding failure, 2 usage error
+// (check also uses 2 for git and setup errors).
+const (
+	exitFailure = 1
+	exitUsage   = 2
+)
+
+// nonNil returns s, or an empty slice when s is nil, so JSON encodes [] and not null.
+func nonNil[T any](s []T) []T {
+	if s == nil {
+		return []T{}
+	}
+	return s
+}
+
 func fatal(err error) {
-	fatalWithCode(err, 1)
+	fatalWithCode(err, exitFailure)
+}
+
+// usageFatal reports an invalid invocation (bad flag, value, or argument).
+func usageFatal(err error) {
+	fatalWithCode(err, exitUsage)
+}
+
+// unknownCommand reports an unknown command and exits with the usage code.
+func unknownCommand(cmd string) {
+	if useJSONMode {
+		writeJSONResult(nil, false, fmt.Sprintf("unknown command: %s", cmd))
+	} else {
+		fmt.Fprintf(os.Stderr, "unknown command: %s\n", cmd)
+		usage(os.Stderr)
+	}
+	os.Exit(exitUsage)
 }
 
 func fatalWithCode(err error, code int) {
@@ -49,7 +80,7 @@ func usageError(usageLine string) {
 	} else {
 		fmt.Fprintln(os.Stderr, usageLine)
 	}
-	os.Exit(1)
+	os.Exit(exitUsage)
 }
 
 func usage(out io.Writer) {

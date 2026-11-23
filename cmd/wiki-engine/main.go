@@ -30,7 +30,7 @@ func main() {
 		} else {
 			usage(os.Stderr)
 		}
-		os.Exit(1)
+		os.Exit(exitUsage)
 	}
 
 	cmd := args[1]
@@ -51,22 +51,22 @@ func main() {
 	switch cmd {
 	case "init":
 		if err := validateCommandArgs("init", args[2:]); err != nil {
-			fatal(err)
+			usageFatal(err)
 		}
 		runInit(args, useJSON)
 	case "sync-prompts":
 		if err := validateCommandArgs("sync-prompts", args[2:]); err != nil {
-			fatal(err)
+			usageFatal(err)
 		}
 		runSyncPrompts(useJSON)
 	case "schema":
 		if err := validateCommandArgs("schema", args[2:]); err != nil {
-			fatal(err)
+			usageFatal(err)
 		}
 		runSchema(args, useJSON)
 	case "version":
 		if err := validateCommandArgs("version", args[2:]); err != nil {
-			fatal(err)
+			usageFatal(err)
 		}
 		if useJSON {
 			writeJSON(getVersion())
@@ -75,12 +75,15 @@ func main() {
 		}
 	case "upgrade":
 		if err := validateCommandArgs("upgrade", args[2:]); err != nil {
-			fatal(err)
+			usageFatal(err)
 		}
 		runUpgrade(args, useJSON)
 	case "help", "-h", "--help":
 		usage(os.Stdout)
 	default:
+		if _, known := commandArgSpecs[cmd]; !known {
+			unknownCommand(cmd)
+		}
 		cfg, eng := loadEngine()
 		runEngine(cmd, cfg, eng, args, useJSON)
 	}
