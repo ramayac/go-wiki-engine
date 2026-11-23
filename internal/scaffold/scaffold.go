@@ -57,6 +57,27 @@ func buildToolDirLinks() map[string]string {
 	return links
 }
 
+// skillDir is the engine-managed benchmark skill. Its files are refreshed by
+// sync-prompts, except the user-owned ones.
+const skillDir = ".claude/skills/wiki-benchmark"
+
+// userOwnedFiles are files inside a managed directory that the engine creates
+// when missing and never touches again. Paths are relative to the repo root.
+var userOwnedFiles = map[string]bool{
+	skillDir + "/questions.md": true,
+}
+
+// syncPrefixes are the embedded directories that init and sync-prompts keep in
+// step with the engine. The instruction layers come first.
+var syncPrefixes = []string{
+	"files/.wiki-instructions",
+	"files/.github/prompts",
+	"files/.github/instructions",
+	"files/.claude/commands",
+	"files/.pi/skills",
+	"files/" + skillDir,
+}
+
 // warnOut receives one-line notices such as backups. Tests replace it.
 var warnOut io.Writer = os.Stderr
 
@@ -120,20 +141,15 @@ func writeScaffoldFile(root, dest, rel string, data []byte) error {
 	}
 	target, isLink := toolDirLinks[rel]
 	if !isLink {
-		return os.WriteFile(dest, data, 0o644)
-	}
-	if lerr == nil && info.Mode().IsRegular() {
-		existing, err := os.ReadFile(dest)
-		if err != nil {
-			return err
-		}
-		if !bytes.Equal(existing, data) {
-			bak, err := backupFile(dest, existing)
-			if err != nil {
+		if strings.HasPrefix(rel, skillDir+"/") {
+			if err := backupIfEdited(dest, rel, data); err != nil {
 				return err
 			}
-			_, _ = fmt.Fprintf(warnOut, "backed up edited %s to %s\n", rel, filepath.ToSlash(filepath.Base(bak)))
 		}
+		return writeManagedFile(dest, rel, data)
+	}
+	if err := backupIfEdited(dest, rel, data); err != nil {
+		return err
 	}
 	if err := os.Remove(dest); err != nil && !os.IsNotExist(err) {
 		return err
@@ -141,7 +157,46 @@ func writeScaffoldFile(root, dest, rel string, data []byte) error {
 	if err := os.Symlink(target, dest); err == nil {
 		return nil
 	}
-	return os.WriteFile(dest, data, 0o644)
+	return writeManagedFile(dest, rel, data)
+}
+
+// backupIfEdited copies a regular file at dest to a .bak file when its bytes
+// differ from data. A missing file or a symlink needs no backup.
+func backupIfEdited(dest, rel string, data []byte) error {
+	info, err := os.Lstat(dest)
+	if err != nil || !info.Mode().IsRegular() {
+		return nil
+	}
+	existing, err := os.ReadFile(dest)
+	if err != nil {
+		return err
+	}
+	if bytes.Equal(existing, data) {
+		return nil
+	}
+	bak, err := backupFile(dest, existing)
+	if err != nil {
+		return err
+	}
+	_, _ = fmt.Fprintf(warnOut, "backed up edited %s to %s\n", rel, filepath.ToSlash(filepath.Base(bak)))
+	return nil
+}
+
+// writeManagedFile writes data to dest. Shell scripts get mode 0755, because
+// the embedded files keep no mode bits. os.WriteFile keeps the mode of an
+// existing file, so the chmod also repairs a script that lost its executable bit.
+func writeManagedFile(dest, rel string, data []byte) error {
+	mode := os.FileMode(0o644)
+	if strings.HasSuffix(rel, ".sh") {
+		mode = 0o755
+	}
+	if err := os.WriteFile(dest, data, mode); err != nil {
+		return err
+	}
+	if mode != 0o644 {
+		return os.Chmod(dest, mode)
+	}
+	return nil
 }
 
 func renderShimBlock(name, wikiDir string) string {
@@ -247,17 +302,12 @@ func Init(destDir, wikiDir string) error {
 }
 
 // SyncPrompts overwrites the .wiki-instructions/, .github/prompts/,
-// .github/instructions/, .claude/commands/, and .pi/skills/ files in
-// destDir with the current embedded versions. It does not touch wiki/
-// content or .wikirc.
+// .github/instructions/, .claude/commands/, .pi/skills/, and
+// .claude/skills/wiki-benchmark/ files in destDir with the current embedded
+// versions. It creates the user-owned questions.md when missing and never
+// overwrites it. It does not touch wiki/ content or .wikirc.
 func SyncPrompts(destDir string) (updated, removed []string, err error) {
-	prefixes := []string{
-		"files/.wiki-instructions",
-		"files/.github/prompts",
-		"files/.github/instructions",
-		"files/.claude/commands",
-		"files/.pi/skills",
-	}
+	prefixes := syncPrefixes
 	for _, prefix := range prefixes {
 		err := syncEmbeddedDir(destDir, prefix, &updated)
 		if err != nil {
@@ -421,6 +471,11 @@ func syncEmbeddedDir(destDir, embedRoot string, updated *[]string) error {
 		}
 		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
 			return err
+		}
+		if userOwnedFiles[rel] {
+			if _, err := os.Lstat(dest); err == nil {
+				return nil
+			}
 		}
 		if err := writeScaffoldFile(destDir, dest, rel, data); err != nil {
 			return err

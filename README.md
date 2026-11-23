@@ -53,6 +53,12 @@ The primary interface is slash commands in your AI tool, all sharing canonical d
 
 **Cold start:** run `wiki-engine init`, then `/wiki-seed` to write the first pages. Lint, refresh, and watch are CLI commands, not slash commands: run `wiki-engine lint`, `wiki-engine refresh`, and `wiki-engine watch --once`. The multi-tool integration model is documented in [wiki/prologue/repo-map.md](wiki/prologue/repo-map.md).
 
+## Benchmark skill
+
+`wiki-engine init` installs the `wiki-benchmark` skill in `.claude/skills/wiki-benchmark/`. It measures whether the wiki makes an agent answer your questions better. It runs 7 questions through 3 arms (no wiki, wiki available, wiki first), grades the answers blind, and reports accuracy, wrong claims, tokens, tool calls, and time per arm. It works only in Claude Code, because it spawns agents. A headless runner (`headless/bench.py`, Python 3 standard library) runs the same questions as real `claude -p` sessions.
+
+`questions.md` is a template. Replace its 3 example questions with 7 real ones before you run the skill. The skill stops while the template marker is in the file. `init` and `sync-prompts` never overwrite `questions.md`. They refresh the other skill files and copy an edited file to `<name>.bak` first. Seven questions are a pilot: read the result as a direction, not as proof.
+
 ## Commands
 
 Run `wiki-engine help` for the full list, `wiki-engine schema` for the embedded v2 schema and page templates, or `wiki-engine --json <command>` for structured output. Command-by-command details: [wiki/prologue/repo-map.md](wiki/prologue/repo-map.md).

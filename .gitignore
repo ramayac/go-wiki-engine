@@ -13,6 +13,7 @@ bin/
 Thumbs.db
 
 # Test artifacts
+__pycache__/
 *.test
 *.out
 

@@ -8,7 +8,7 @@ LDFLAGS   := -s -w -X main.version=$(VERSION)-$(BUILD_DATE)
 
 .DEFAULT_GOAL := help
 
-.PHONY: help build install test lint vet clean sync-scaffold wiki-lint integration audit golangci-lint govulncheck
+.PHONY: help build install test lint vet clean sync-scaffold wiki-lint integration audit golangci-lint govulncheck bench-test
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-18s %s\n", $$1, $$2}'
@@ -45,6 +45,7 @@ clean: ## Remove build artifacts
 sync-scaffold: ## Copy scaffold/ into internal/scaffold/files/ for embedding (follows symlinks)
 	rm -rf internal/scaffold/files
 	cp -rL scaffold internal/scaffold/files
+	find internal/scaffold/files -name __pycache__ -type d -prune -exec rm -rf {} +
 	@echo "synced scaffold → internal/scaffold/files"
 
 integration: build ## Run the end-to-end integration test suite
@@ -52,3 +53,10 @@ integration: build ## Run the end-to-end integration test suite
 
 audit: ## Run the repo-wide wiki reference audit (links, references, graph, instruction layers)
 	go test -count=1 ./internal/audit
+
+bench-test: ## Run the benchmark skill's Python tests (skipped without python3)
+	@if command -v python3 >/dev/null 2>&1; then \
+		PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scaffold/.claude/skills/wiki-benchmark/headless; \
+	else \
+		echo "python3 not found; skipping bench-test"; \
+	fi
