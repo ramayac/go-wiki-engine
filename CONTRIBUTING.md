@@ -9,6 +9,7 @@ live in the [wiki](wiki/index.md) — read it before broad changes.
 - **git** — required by the diff-driven commands (`changed`, `candidates`,
   `check`, `refresh`, `watch`, `diff`, `impact`) and by the test suite
 - **make** — optional; `make help` lists all targets
+- **Python 3** — optional; only `make bench-test` needs it (it skips when `python3` is absent)
 
 ## Development Loop
 
@@ -18,6 +19,7 @@ make test             # unit tests
 make lint             # go vet + wiki-engine lint on this repo's own wiki
 make audit            # repo-wide wiki reference, action-pin, and schema parity audit
 make integration      # end-to-end CLI suite (test/integration_test.sh)
+make bench-test       # Python tests of the benchmark skill's headless runner
 make golangci-lint    # golangci-lint v2 with .golangci-lint.yml
 make govulncheck      # vulnerability scan with pinned govulncheck
 go test -race ./...   # race detector

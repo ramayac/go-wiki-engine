@@ -21,6 +21,7 @@ description: "Catalog of all wiki pages with one-line descriptions."
 - [decisions/todo.md](decisions/todo.md) | Open improvement backlog ranked by difficulty.
 - [decisions/parity-improvement-plan.md](decisions/parity-improvement-plan.md) | Phased engineering parity plan covering containment, YAML typed model, single-read lint, citation checks, fail-closed upgrade, and CI hardening.
 - [decisions/audit-v2-fixes.md](decisions/audit-v2-fixes.md) | Intentional contract changes from the second audit fix PR, and the limits left in place.
+- [decisions/governance-parity.md](decisions/governance-parity.md) | Decision to port the governance features of a sibling project: tag vocabulary, `health`, six prompts, benchmark skill, additive JSON. Known limits and upgrade notes.
 - [decisions/improvement-plan.md](decisions/improvement-plan.md) | [superseded] Deprecated — completed hardening roadmap; design decisions archived in lessons.md.
 
 ## Operations

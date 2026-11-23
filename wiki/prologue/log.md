@@ -8,6 +8,12 @@ description: "Append-only timeline of wiki maintenance activity."
 
 Append-only timeline of wiki maintenance activity.
 
+## [2026-11-23] ingest | governance parity: benchmark skill, additive JSON, decision page
+
+- `init` installs the `wiki-benchmark` skill in `.claude/skills/wiki-benchmark/`. `make bench-test` runs its Python tests. See [repo-map.md](repo-map.md).
+- Every `--json` response carries `meta`, and a failure carries `error_code`. The richer fields are additive. See [schema.md](schema.md).
+- The decision page [governance-parity](../decisions/governance-parity.md) records what was ported, the known limits, and the upgrade commands.
+
 ## [2026-11-23] refactor | prompt set aligned with sibling; four prompts retired
 
 - The shipped prompts are now `seed`, `ingest`, `query`, `plan`, `save`, and `upgrade`. The prompts `onboard`, `lint`, `refresh`, and `watch` are retired. Their CLI commands stay. See [index.md](../index.md).
