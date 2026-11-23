@@ -154,7 +154,7 @@ func TestInitPreservesExistingWikirc(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := Init(dest, "wiki"); err != nil {
+	if err := Init(dest, "custom"); err != nil {
 		t.Fatalf("Init failed: %v", err)
 	}
 

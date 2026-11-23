@@ -117,27 +117,11 @@ func TestCandidatesSubdirectoryProject(t *testing.T) {
 	}
 }
 
-func TestDiffWithDashPrefixedWikiDir(t *testing.T) {
+func TestDiffRejectsDashPrefixedWikiDir(t *testing.T) {
 	root := t.TempDir()
-	gitIn(t, root, "init", "-q", "-b", "main")
-	gitIn(t, root, "config", "user.email", "test@test")
-	gitIn(t, root, "config", "user.name", "Test")
-	if err := os.MkdirAll(filepath.Join(root, "-x"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(root, "-x", "p.md"), []byte("p\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	gitIn(t, root, "add", ".")
-	gitIn(t, root, "commit", "-q", "-m", "init")
-
 	eng := New(&config.Config{WikiDir: "-x"}, root)
-	res, err := eng.Diff("HEAD", "HEAD")
-	if err != nil {
-		t.Fatalf("Diff with dash-prefixed wiki_dir: %v", err)
-	}
-	if len(res.Added)+len(res.Removed)+len(res.Changed) != 0 {
-		t.Errorf("unexpected diff: %+v", res)
+	if _, err := eng.Diff("HEAD", "HEAD"); err == nil {
+		t.Fatal("Diff with a dash-prefixed wiki_dir should fail validation")
 	}
 }
 

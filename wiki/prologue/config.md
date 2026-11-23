@@ -11,7 +11,7 @@ All settings live in `.wikirc` at the repo root. If the file is absent, sensible
 ## Paths
 
 ### `wiki_dir`
-Single safe directory segment for the wiki, relative to repo root. Empty values, `.`, `..`, absolute paths, path separators, and repository metadata names (`.git`, `.github`, etc.) are rejected at load time.
+Single safe directory segment for the wiki, relative to repo root. Empty values, `.`, `..`, absolute paths, path separators, names that start with `-`, and repository metadata names (`.git`, `.github`, etc.) are rejected at load time.
 ```
 wiki_dir = "wiki"
 ```

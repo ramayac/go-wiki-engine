@@ -39,6 +39,11 @@ func TestValidateWikiDir(t *testing.T) {
 		"wiki\x00bad",
 		"%2e%2e",
 		"wiki%2fchild",
+		"-x",
+		"--output=x",
+		`my"wiki`,
+		"my\nwiki",
+		"my\twiki",
 	}
 	for _, bad := range invalid {
 		err := ValidateWikiDir(bad)
