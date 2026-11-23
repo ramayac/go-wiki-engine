@@ -1,6 +1,6 @@
 # go-wiki-engine
 
-A global CLI tool for managing repo-local wikis. Provides the plumbing layer (inspection, validation, change detection) while **slash commands** in your AI tool of choice handle the intelligence layer — reading, deciding, and writing wiki content.
+A global CLI tool for managing repo-local wikis. Provides the deterministic plumbing layer (inspection, single-read validation, branch-aware citation checks, graph navigation, and idempotent scaffolding) while **slash commands** in your AI tool of choice handle the intelligence layer — reading, deciding, and writing wiki content.
 
 Works with **GitHub Copilot**, **Claude Code**, and **pi.dev**.
 
@@ -24,8 +24,8 @@ make build
 ### Prerequisites
 
 - **Go 1.24+** — to build from source or install via `go install`.
-- **git** — required by the diff-driven commands: `changed`, `candidates`, `refresh`, `watch`, `diff`, and `impact`.
-- **Prebuilt binaries** — linux amd64/arm64, darwin amd64/arm64, and windows amd64 on [GitHub Releases](https://github.com/ramayac/go-wiki-engine/releases).
+- **git** — required by the diff-driven commands: `changed`, `candidates`, `check`, `refresh`, `watch`, `diff`, and `impact`.
+- **Prebuilt binaries** — linux amd64/arm64, darwin amd64/arm64, and windows amd64 on [GitHub Releases](https://github.com/ramayac/go-wiki-engine/releases) with SHA-256 checksums and build-provenance attestations.
 
 ```bash
 cd your-repo
@@ -33,11 +33,10 @@ wiki-engine init
 # Edit .wikirc to set your ignore patterns
 # Edit wiki/prologue/repo-map.md with your project's architecture
 wiki-engine lint
+wiki-engine check
 ```
 
-The two files to customize after `init` are [`.wikirc`](wiki/prologue/config.md) — full reference in the wiki — and `wiki/prologue/repo-map.md`.
-
-It scaffolds the [wiki structure](#wiki-contract), the canonical `.wiki-instructions/` workflows, and tool-specific layers for Copilot, Claude Code, and pi.dev — see [How It Works](#how-it-works).
+Re-running `wiki-engine init` is idempotent: it reconciles prompts, symlinks, ignore entries, and versioned root shims while preserving user-authored pages, `.wikirc`, and `AGENTS.md`/`CLAUDE.md` content. Pass `wiki-engine init --wiki-dir <name>` to rename an existing wiki directory safely.
 
 ## Slash Commands
 
@@ -45,49 +44,28 @@ The primary interface is slash commands in your AI tool, all sharing canonical d
 
 ## Commands
 
-Run `wiki-engine help` for the full list, or `wiki-engine --json <command>` for structured output. Command-by-command details: [wiki/prologue/repo-map.md](wiki/prologue/repo-map.md).
+Run `wiki-engine help` for the full list, `wiki-engine schema` for the embedded v2 schema and page templates, or `wiki-engine --json <command>` for structured output. Command-by-command details: [wiki/prologue/repo-map.md](wiki/prologue/repo-map.md).
 
-Core commands: `init`, `list`, `search`, `context --active`, `graph`, `summary`, `log-tail`, `changed`, `candidates`, `lint`, `watch --once`, `diff`, `refresh`, `sync-prompts`, `upgrade`.
+Core commands: `init`, `sync-prompts`, `schema`, `list`, `headings`, `search`, `relevant`, `context`, `graph`, `summary`, `log-tail`, `changed`, `candidates`, `check`, `impact`, `lint` (`--fix`), `watch --once`, `diff`, `refresh`, `stats`, `upgrade`.
 
 ## Configuration (`.wikirc`)
 
 Config lives in a `.wikirc` file at the repo root (sensible defaults apply when absent). Full reference: [wiki/prologue/config.md](wiki/prologue/config.md).
 
-## How It Works
+## Contracts & Compatibility Policy
 
-The wiki engine is a **read-only inspection and validation tool**. It never modifies wiki content — that's the agent's job.
+Releases use clean `vX.Y.Z` semantic versions. The compatibility surface covered by semver is:
 
-`wiki-engine init` scaffolds tool layers for GitHub Copilot, Claude Code, and pi.dev — one canonical source in `.wiki-instructions/` with symlinks in each tool directory (regular-copy fallback where symlinks fail). The full multi-tool integration model: [wiki/prologue/repo-map.md](wiki/prologue/repo-map.md).
-
-**Typical workflow:**
-
-1. You run `wiki-engine init` once, then customize [`.wikirc`](wiki/prologue/config.md) and [wiki/prologue/repo-map.md](wiki/prologue/repo-map.md).
-2. You type `/wiki-ingest`, `/wiki-query`, or `/wiki-refresh` in your AI tool.
-3. The agent runs `wiki-engine context` to get a lightweight snapshot, then `wiki-engine changed` + `wiki-engine candidates` to see what changed.
-4. The agent reads affected source files, writes durable facts into `wiki/`, and appends to `wiki/prologue/log.md`.
-5. The agent runs `wiki-engine lint` to validate before finishing.
-
-## Wiki Contract
-
-Every wiki managed by this tool has at least:
-
-```
-wiki/
-├── README.md
-├── index.md              # Catalog of all wiki pages
-├── prologue/
-│   ├── log.md            # Append-only maintenance timeline
-│   ├── schema.md         # Required structure and rules
-│   ├── phases.md         # Rollout tracking
-│   └── repo-map.md       # Architecture and exclusions
-├── decisions/            # Topic pages grouped by domain
-└── operations/
-    ├── ingest.md         # How to absorb repo changes
-    ├── query.md          # How to answer questions wiki-first
-    └── lint.md           # How to health-check the wiki
-```
-
-Category directories such as `decisions/` and `architectures/` are conventions, not requirements — the scaffold ships placeholder examples in both. The full contract and directory convention: [wiki/prologue/schema.md](wiki/prologue/schema.md).
+- **CLI commands, flags, and exit codes:**
+  - `0`: Success (including `wiki-engine check` with review recommendations only)
+  - `1`: Content/lint/check breakage or usage error
+  - `2`: Git, config, or setup error (e.g., `check` outside a Git repo or invalid base ref)
+- **Global JSON envelope (version `1`):** `{"ok": bool, "data": ..., "error": "..."}`
+- **Graph JSON schema (version `2`):** `{"schema_version": "2", "nodes": [], "edges": [], "unlinked": [], "stats": {}, "issues": []}`
+- **Frontmatter schema (version `2`):** Real YAML (`gopkg.in/yaml.v3`) with `id`, `title`, `type`, `lifecycle`, workflow `status`/`severity`, `related`, `depends_on`, structured `sources`, and structured `references`.
+  - **Migration policy:** v1 frontmatter (`status: planned|current|legacy|deprecated` and inline `references: [source:...]`) remains readable for one major release; `wiki-engine lint --fix` migrates pages deterministically. Missing lifecycle metadata never becomes active by default.
+  - **Major-version policy:** Additive JSON fields, flags, and config keys ship in minor releases; breaking removals (such as retiring v1 frontmatter fallbacks or the `relevant` alias) require a major release.
+- **`.wikirc` configuration keys:** [wiki/prologue/config.md](wiki/prologue/config.md).
 
 ## Development
 
@@ -96,32 +74,21 @@ make help             # Show all targets
 make build            # Build to bin/wiki-engine
 make test             # Run all unit tests
 make lint             # Run go vet + wiki-engine lint
-make audit            # Repo-wide wiki reference integrity audit
+make audit            # Repo-wide wiki integrity, action-pin, and schema parity audit
 make golangci-lint    # Static analysis with the repo config (golangci-lint v2)
+make govulncheck      # Vulnerability scan (pinned govulncheck)
 make sync-scaffold    # Sync scaffold/ → internal/scaffold/files/ for embedding
 make integration      # End-to-end integration test suite
 make install          # go install globally
 ```
 
-When editing scaffold templates in `scaffold/`, run `make sync-scaffold` before building so the embedded copies are updated.
-
 ## Self-Upgrade
 
 ```bash
-wiki-engine upgrade
-wiki-engine sync-prompts   # Update prompts in each repo after upgrading
+wiki-engine upgrade                 # Fail-closed checksum + provenance verified binary upgrade
+wiki-engine upgrade --from-source   # Explicit pinned `go install` from release tag
+wiki-engine init                    # Reconcile prompts, symlinks, and shims in each repo
 ```
-
-## Versioning & Compatibility
-
-Releases use clean `vX.Y.Z` semantic versions. The compatibility surface covered by semver is:
-
-- CLI command names, flags, and exit-code semantics
-- The `--json` output envelope (`{ok, data, error}`)
-- `.wikirc` configuration keys
-- The wiki file contract in [wiki/prologue/schema.md](wiki/prologue/schema.md)
-
-JSON fields and config keys may be added in minor releases; renames or removals require a major release. See the [release runbook](wiki/operations/release.md).
 
 ## Project Links
 

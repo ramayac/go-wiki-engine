@@ -1,7 +1,8 @@
 ---
-status: current
+id: lessons
+title: Lessons
+lifecycle: current
 description: "Lessons learned during design, testing, and implementation."
-superseded_by: ""
 ---
 # Lessons
 

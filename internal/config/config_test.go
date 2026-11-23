@@ -300,18 +300,46 @@ func TestLoadIgnoreBracketOnEntryLine(t *testing.T) {
 
 func TestLoadEmptyWikiDir(t *testing.T) {
 	dir := t.TempDir()
-	for _, val := range []string{`""`, `"."`} {
+	for _, val := range []string{`""`, `"."`, `".."`, `"../wiki"`, `"/tmp/wiki"`, `"wiki/child"`, `"wiki\\child"`, `".git"`} {
 		if err := os.WriteFile(filepath.Join(dir, ".wikirc"),
 			[]byte("wiki_dir = "+val+"\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		cfg, err := Load(dir)
-		if err != nil {
-			t.Fatalf("Load failed: %v", err)
+		if _, err := Load(dir); err == nil {
+			t.Errorf("wiki_dir %s should be rejected by Load, got nil error", val)
 		}
-		if cfg.WikiDir != "wiki" {
-			t.Errorf("wiki_dir %s should fall back to %q, got %q", val, "wiki", cfg.WikiDir)
-		}
+	}
+}
+
+func TestLoadExtendedKeys(t *testing.T) {
+	dir := t.TempDir()
+	content := `wiki_dir = "docs"
+base_ref = "origin/main"
+issue_pattern = "^GH-[0-9]+$"
+schema_version = "2"
+context_max_pages = 25
+context_max_bytes = 8192
+`
+	if err := os.WriteFile(filepath.Join(dir, ".wikirc"), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(dir)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	if cfg.BaseRef != "origin/main" || cfg.IssuePattern != "^GH-[0-9]+$" || cfg.SchemaVersion != "2" {
+		t.Errorf("extended keys mismatch: %+v", cfg)
+	}
+	if cfg.ContextMaxPages != 25 || cfg.ContextMaxBytes != 8192 {
+		t.Errorf("context bounds mismatch: pages=%d bytes=%d", cfg.ContextMaxPages, cfg.ContextMaxBytes)
+	}
+
+	// Invalid issue_pattern regex must be rejected.
+	if err := os.WriteFile(filepath.Join(dir, ".wikirc"), []byte("issue_pattern = \"[invalid\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load(dir); err == nil {
+		t.Error("invalid issue_pattern regex should fail Load")
 	}
 }
 

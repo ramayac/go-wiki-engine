@@ -1,7 +1,9 @@
 ---
-status: current
+id: ingest
+title: Ingest Workflow
+type: runbook
+lifecycle: current
 description: "Workflow for incrementally absorbing repository changes into the wiki."
-superseded_by: ""
 ---
 # Ingest Workflow
 
@@ -11,43 +13,27 @@ Absorb a repo change into the wiki without rediscovering the entire codebase.
 
 ## Procedure
 
-1. Read [index.md](../index.md) and the latest entries in [log.md](../prologue/log.md).
-2. If `wiki-engine changed` returns no output **and** `wiki/prologue/log.md` has no prior ingest entries, this is a cold start — run the full onboarding survey instead of an incremental ingest (see Wiki Onboard prompt).
-3. Inspect the changed files first.
-4. Check for external knowledge files that belong in the wiki: `docs/`, `AGENTS.md`, `CONTRIBUTING.md`, `ARCHITECTURE.md`. If found and not yet migrated, add a migration step to this ingest.
-5. Ignore repo-specific excluded paths from `.wikirc`.
-6. Decide whether the change updates an existing page or needs a new page.
-7. Update the relevant wiki page with the durable facts only — and cross-link it to its related pages per [schema.md](../prologue/schema.md).
-8. Update [index.md](../index.md) if page coverage changed.
-9. Advance `wiki/prologue/phases.md` if phases were completed during this ingest.
-10. Append an entry to [log.md](../prologue/log.md).
+1. Run `wiki-engine context --active` and read the latest entries in [log.md](../prologue/log.md).
+2. If `wiki-engine changed` returns no output **and** `wiki/prologue/log.md` has no prior ingest entries, this is a cold start — run the full onboarding survey instead of an incremental ingest.
+3. Inspect the changed files (`wiki-engine changed`, `wiki-engine candidates`, and `wiki-engine impact`).
+4. Ignore repo-specific excluded paths from `.wikirc`.
+5. Update or create topic pages with typed frontmatter (`id`, `title`, `type`, `lifecycle`, `description`, exact `sources:`) and cross-link related pages per [schema.md](../prologue/schema.md).
+6. Update [index.md](../index.md) if page coverage or lifecycle changed.
+7. Advance [phases.md](../prologue/phases.md) if phases were completed during this ingest.
+8. Append a dated entry to [log.md](../prologue/log.md).
+9. Run `wiki-engine lint` and `wiki-engine check` to verify structure and citations.
 
 ## Shell-First Inputs
 
 ```bash
 wiki-engine changed
 wiki-engine candidates
+wiki-engine check
 wiki-engine refresh
 ```
 
-## Page Decision Rule
-
-- Update an existing page when the change fits an existing concern.
-- Create a new page when the change introduces a new subsystem, workflow, or recurring question.
-- Cross-link the updated page: add outgoing links to its related pages and link back from them where useful.
-
-## External Docs Migration Rule
-
-If a project has existing documentation outside `wiki/` (e.g., `docs/bigPlan.md`, root `AGENTS.md`):
-- Move durable content into a wiki page with a stable filename.
-- Replace the original with a one-line stub redirecting to `wiki/<page>.md`, or delete it if fully superseded.
-- Log the migration in `wiki/prologue/log.md`.
-
 ## Log Format
-
-Use this exact heading pattern:
 
 ```md
 ## [YYYY-MM-DD] ingest | short summary
 ```
-

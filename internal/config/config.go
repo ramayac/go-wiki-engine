@@ -1,4 +1,4 @@
-// Package config loads and parses the .wikirc configuration file.
+// Package config loads, parses, and validates the .wikirc configuration file.
 package config
 
 import (
@@ -8,19 +8,26 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/ramayac/go-wiki-engine/internal/schema"
 )
 
 // Config holds the parsed .wikirc settings.
 type Config struct {
 	WikiDir            string
 	DefaultDiff        string
+	BaseRef            string // optional base ref fallback for branch-aware checks
 	LogLines           int
 	Ignore             []string
 	DuplicateThreshold float64 // 0.0-1.0, similarity above which pages are flagged as duplicates
 	StaleDays          int     // days after which an unchanged wiki page is flagged as stale
 	ContextSummarize   bool    // enable --summarize on wiki-engine context
+	ContextMaxPages    int     // max catalog pages in bounded context output (0 = unlimited)
+	ContextMaxBytes    int     // max byte budget in bounded context output (0 = unlimited)
 	WatchInterval      int     // seconds between watch polls (0 = disabled)
 	FailSeverity       string  // severity above/equal to which lint fails: error, warn, info
+	IssuePattern       string  // optional regex for validating issue reference keys
+	SchemaVersion      string  // optional schema version override (default "2")
 }
 
 // DefaultConfig returns a Config with sensible defaults.
@@ -32,8 +39,12 @@ func DefaultConfig() *Config {
 		DuplicateThreshold: 0.7,
 		StaleDays:          30,
 		ContextSummarize:   false,
+		ContextMaxPages:    100,
+		ContextMaxBytes:    65536,
 		WatchInterval:      0, // disabled by default
 		FailSeverity:       "warn",
+		IssuePattern:       schema.DefaultIssuePattern,
+		SchemaVersion:      schema.SchemaVersion,
 		Ignore: []string{
 			"wiki/",
 			"bin/",
@@ -43,8 +54,10 @@ func DefaultConfig() *Config {
 	}
 }
 
-// Load reads a .wikirc file from the given directory. If the file does not
-// exist, it returns DefaultConfig with no error.
+// Load reads and validates a .wikirc file from the given directory. If the file
+// does not exist, it returns DefaultConfig with no error. Invalid path settings
+// such as an escaping wiki_dir return an error instead of silently accepting
+// an unsafe value.
 func Load(dir string) (*Config, error) {
 	path := filepath.Join(dir, ".wikirc")
 	f, err := os.Open(path)
@@ -58,7 +71,7 @@ func Load(dir string) (*Config, error) {
 
 	cfg := DefaultConfig()
 	var inIgnore bool
-	cfg.Ignore = nil // reset to collect from file
+	hasIgnore := false
 
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
@@ -89,6 +102,10 @@ func Load(dir string) (*Config, error) {
 
 		// Start of ignore array.
 		if strings.HasPrefix(line, "ignore") && strings.Contains(line, "[") {
+			if !hasIgnore {
+				cfg.Ignore = nil
+				hasIgnore = true
+			}
 			// Single-line form: ignore = ["wiki/", "bin/"]
 			open := strings.Index(line, "[")
 			closeIdx := strings.Index(line, "]")
@@ -112,17 +129,21 @@ func Load(dir string) (*Config, error) {
 		}
 		key := strings.TrimSpace(parts[0])
 		val := strings.TrimSpace(parts[1])
+		// Strip inline comments outside quotes.
+		if !strings.HasPrefix(val, `"`) && !strings.HasPrefix(val, `'`) {
+			if idx := strings.Index(val, "#"); idx != -1 && (idx == 0 || val[idx-1] == ' ' || val[idx-1] == '\t') {
+				val = strings.TrimSpace(val[:idx])
+			}
+		}
 		val = strings.Trim(val, `"`)
 
 		switch key {
 		case "wiki_dir":
-			if val == "" || val == "." {
-				fmt.Fprintf(os.Stderr, "warning: invalid wiki_dir %q; using %q\n", val, cfg.WikiDir)
-				continue
-			}
 			cfg.WikiDir = val
 		case "default_diff":
 			cfg.DefaultDiff = val
+		case "base_ref":
+			cfg.BaseRef = val
 		case "log_lines":
 			cfg.LogLines = parseLogLines(val)
 		case "duplicate_threshold":
@@ -131,6 +152,10 @@ func Load(dir string) (*Config, error) {
 			cfg.StaleDays = parseInt(val, 30)
 		case "context_summarize":
 			cfg.ContextSummarize = parseBool(val, false)
+		case "context_max_pages":
+			cfg.ContextMaxPages = parseNonNegativeInt(val, 100)
+		case "context_max_bytes":
+			cfg.ContextMaxBytes = parseNonNegativeInt(val, 65536)
 		case "watch_interval":
 			cfg.WatchInterval = ParsePositiveInt(val, 0)
 		case "fail_severity":
@@ -141,11 +166,25 @@ func Load(dir string) (*Config, error) {
 			default:
 				fmt.Fprintf(os.Stderr, "warning: invalid fail_severity %q (expected error, warn, or info); using %q\n", val, cfg.FailSeverity)
 			}
+		case "issue_pattern":
+			if val != "" {
+				cfg.IssuePattern = val
+			}
+		case "schema_version":
+			if val != "" {
+				cfg.SchemaVersion = val
+			}
 		default:
 			fmt.Fprintf(os.Stderr, "warning: unknown .wikirc key %q ignored\n", key)
 		}
 	}
-	return cfg, scanner.Err()
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+	if err := cfg.Validate(dir); err != nil {
+		return nil, err
+	}
+	return cfg, nil
 }
 
 func parseLogLines(s string) int {
@@ -162,6 +201,17 @@ func ParsePositiveInt(s string, fallback int) int {
 	}
 	n := parseInt(s, fallback)
 	if n <= 0 {
+		return fallback
+	}
+	return n
+}
+
+func parseNonNegativeInt(s string, fallback int) int {
+	if strings.HasPrefix(strings.TrimSpace(s), "-") {
+		return fallback
+	}
+	n := parseInt(s, fallback)
+	if n < 0 {
 		return fallback
 	}
 	return n

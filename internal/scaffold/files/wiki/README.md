@@ -1,7 +1,9 @@
 ---
-status: current
+id: README
+title: Wiki
+type: concept
+lifecycle: current
 description: "Overview of the wiki structure, rules, and navigation."
-superseded_by: ""
 ---
 # Wiki
 
@@ -11,11 +13,11 @@ The wiki is the working memory for repo analysis, architectural summaries, opera
 
 ## Rules
 
-- Read the wiki before doing broad repo analysis.
-- Keep files plain Markdown with stable filenames and grep-friendly headings.
-- Update the wiki when the repo meaningfully changes.
+- Start from active context (`wiki-engine context --active`) before doing broad repo analysis.
+- Check each page's `lifecycle` before relying on it; do not treat `planned`, `legacy`, or `superseded` pages as current fact.
+- Keep files plain Markdown with stable filenames, unique `id` fields, and grep-friendly headings.
+- Cite exact source files or directories in frontmatter `sources:` whenever documenting code.
 - Append dated entries to [prologue/log.md](prologue/log.md) for ingest, query, and lint activity.
-- Treat repo source files as the underlying evidence.
 
 ## Required Files
 
@@ -29,17 +31,19 @@ The wiki is the working memory for repo analysis, architectural summaries, opera
 ## Shell-First Navigation
 
 ```bash
-wiki-engine list
-wiki-engine headings
-wiki-engine log-tail
+wiki-engine context --active
+wiki-engine graph
 wiki-engine search <term>
+wiki-engine relevant <query>
+wiki-engine check
+wiki-engine lint
 ```
 
 ## Update Loop
 
-1. Read [index.md](index.md).
+1. Read [index.md](index.md) or run `wiki-engine context --active`.
 2. Read the last few entries in [prologue/log.md](prologue/log.md).
 3. Read the relevant page under [operations/](operations/ingest.md).
 4. Read only the topic pages needed for the task.
 5. Read source files when the wiki lacks detail or needs verification.
-6. Write durable findings back into the wiki.
+6. Write durable findings back into the wiki, then run `wiki-engine lint` and `wiki-engine check`.

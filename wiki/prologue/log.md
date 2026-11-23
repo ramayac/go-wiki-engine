@@ -1,11 +1,19 @@
 ---
-status: current
+id: log
+title: Wiki Log
+lifecycle: current
 description: "Append-only timeline of wiki maintenance activity."
-superseded_by: ""
 ---
 # Wiki Log
 
 Append-only timeline of wiki maintenance activity.
+
+## [2026-11-23] ingest | parity improvement plan implementation (Phases 0–9)
+
+- Implemented strict path containment (`internal/paths`) across `.wikirc`, `init`, `sync-prompts`, `summary`, graph traversal, and source resolution.
+- Replaced hand-written frontmatter parser with `gopkg.in/yaml.v3` in `internal/model`; added typed page IDs, page types (`concept`, `entity`, `incident`, `decision`, `runbook`), separate authority `lifecycle` vs workflow `status`, `related`/`depends_on`, structured `sources`/`references`, and single-read `WikiSnapshot`.
+- Rebuilt linting into single-read `internal/lint` with grouped selectors (`schema`, `links`, `graph`, `freshness`, `security`) and idempotent `wiki-engine lint --fix`; migrated repo wiki pages to v2 frontmatter.
+- Unified Git change discovery (`internal/git`) with merge-base, renames, deletions, working-tree, and untracked files; added `wiki-engine check` (exit 0/1/2), exact-by-default `impact` with match reasons (`--fuzzy` opt-in), field-weighted search ranker (`search --ranked` / `relevant`), graph `schema_version: "2"` with `--include-sources`, bounded `context`, embedded `wiki-engine schema`, idempotent `init` reconciliation + `--wiki-dir` rename, fail-closed `upgrade` (`--from-source`, provenance, size/path caps), and SHA-pinned CI + attested releases.
 
 ## [2026-09-20] test | coverage pass — cmd 14.3%→65.0%, engine 81.2%→86.5%, upgrade 69.9%→70.5%
 

@@ -217,7 +217,9 @@ func TestLintReferencesChecker(t *testing.T) {
 		"main.go":       "package main\n",
 	})
 	eng := newTestEngine(root)
-	checker := &referencesChecker{}
+	runCheck := func(name string) []Issue {
+		return eng.LintWithOptions([]string{name}, nil).Issues
+	}
 
 	// Valid references produce no issues.
 	valid := `---
@@ -230,20 +232,14 @@ references: [source:main.go, external:https://example.com/docs, issue:JIRA-42]
 	if err := os.WriteFile(p, []byte(valid), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	issues, err := checker.Check(eng)
-	if err != nil {
-		t.Fatalf("referencesChecker failed: %v", err)
-	}
+	issues := runCheck("references")
 	if len(issues) != 0 {
 		t.Errorf("valid references produced issues: %+v", issues)
 	}
 
 	// The bare-urls checker must ignore front matter declarations —
 	// `external:https://...` is a declared reference, not prose.
-	bareIssues, err := (&bareUrlChecker{}).Check(eng)
-	if err != nil {
-		t.Fatalf("bareUrlChecker failed: %v", err)
-	}
+	bareIssues := runCheck("bare-urls")
 	if len(bareIssues) != 0 {
 		t.Errorf("bare-urls flagged a front matter reference: %+v", bareIssues)
 	}
@@ -258,10 +254,7 @@ references: [source:nope.go, external:github.com/no-scheme, issue:not-a-key, bog
 	if err := os.WriteFile(p, []byte(invalid), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	issues, err = checker.Check(eng)
-	if err != nil {
-		t.Fatalf("referencesChecker failed: %v", err)
-	}
+	issues = runCheck("references")
 	wantFrags := []string{"not found", "missing scheme", "malformed", "unknown type"}
 	if len(issues) != len(wantFrags) {
 		t.Fatalf("issues = %+v, want %d (one per invalid kind)", issues, len(wantFrags))
@@ -289,10 +282,7 @@ references: [source:long-gone.go, issue:OLD-1]
 	if err := os.WriteFile(p, []byte(deprecated), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	issues, err = checker.Check(eng)
-	if err != nil {
-		t.Fatalf("referencesChecker failed: %v", err)
-	}
+	issues = runCheck("references")
 	if len(issues) != 0 {
 		t.Errorf("deprecated page references produced issues (must be skipped): %+v", issues)
 	}
@@ -344,9 +334,24 @@ This page discusses graph.go in prose.
 	if contains(got["cmd/wiki-engine/main.go"], "wiki/declared.md") {
 		t.Errorf("main.go pages = %v, prose mention must not count for a page with declared references", got["cmd/wiki-engine/main.go"])
 	}
-	// prose.md has no declared refs: the basename text scan still applies.
-	if !contains(got["internal/engine/graph.go"], "wiki/prose.md") {
-		t.Errorf("graph.go pages = %v, want wiki/prose.md via text fallback", got["internal/engine/graph.go"])
+	// prose.md has no declared refs: ignored in default exact mode...
+	if contains(got["internal/engine/graph.go"], "wiki/prose.md") {
+		t.Errorf("graph.go pages = %v, default exact mode must not match prose-only mentions", got["internal/engine/graph.go"])
+	}
+	// ...and matched only when explicit --fuzzy is enabled.
+	fuzzyRes, err := eng.ImpactWithOptions([]string{"internal/engine/graph.go", "cmd/wiki-engine/main.go"}, ImpactOptions{Fuzzy: true})
+	if err != nil {
+		t.Fatalf("ImpactWithOptions(fuzzy) failed: %v", err)
+	}
+	gotFuzzy := make(map[string][]string)
+	for _, r := range fuzzyRes {
+		gotFuzzy[r.ChangedFile] = r.WikiPages
+	}
+	if !contains(gotFuzzy["internal/engine/graph.go"], "wiki/prose.md") {
+		t.Errorf("fuzzy graph.go pages = %v, want wiki/prose.md via fuzzy fallback", gotFuzzy["internal/engine/graph.go"])
+	}
+	if contains(gotFuzzy["cmd/wiki-engine/main.go"], "wiki/declared.md") {
+		t.Errorf("fuzzy main.go pages = %v, pages with declared sources must still ignore prose mentions", gotFuzzy["cmd/wiki-engine/main.go"])
 	}
 }
 
@@ -805,13 +810,13 @@ func TestImpact(t *testing.T) {
 	root := setupWiki(t)
 	eng := newTestEngine(root)
 
-	// Add a wiki page that mentions a source file.
+	// Add a wiki page that mentions a source file (tested with --fuzzy).
 	if err := os.WriteFile(filepath.Join(root, "wiki", "architecture.md"),
-		[]byte("# Architecture\n\nThe main entry point is cmd/main.go.\n"), 0o644); err != nil {
+		[]byte("---\nlifecycle: current\ndescription: Arch\n---\n# Architecture\n\nThe main entry point is cmd/main.go.\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	results, err := eng.Impact([]string{"cmd/main.go", "pkg/unknown.go"})
+	results, err := eng.ImpactWithOptions([]string{"cmd/main.go", "pkg/unknown.go"}, ImpactOptions{Fuzzy: true})
 	if err != nil {
 		t.Fatalf("Impact failed: %v", err)
 	}
@@ -899,22 +904,20 @@ func TestContextMinimalSummarize(t *testing.T) {
 func TestFrontMatterChecker(t *testing.T) {
 	root := setupWiki(t)
 	eng := newTestEngine(root)
-
-	// Verify standard setup passes front matter check
-	fmc := &frontMatterChecker{}
-	issues, err := fmc.Check(eng)
-	if err != nil {
-		t.Fatalf("frontMatterChecker failed: %v", err)
+	runFM := func() []Issue {
+		return eng.LintWithOptions([]string{"front-matter"}, nil).Issues
 	}
-	if len(issues) != 0 {
-		t.Errorf("expected 0 issues on clean setup, got %d: %v", len(issues), issues)
+
+	// Verify standard setup passes front matter gate (legacy status emits info-only advisory).
+	if res := eng.LintWithOptions([]string{"front-matter"}, nil); !res.OK {
+		t.Errorf("expected lint OK on clean setup, got: %v", res.Messages)
 	}
 
 	// 1. Missing front matter block
 	if err := os.WriteFile(filepath.Join(root, "wiki", "schema.md"), []byte("# Schema\nNo front matter"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	issues, _ = fmc.Check(eng)
+	issues := runFM()
 	foundMissing := false
 	for _, iss := range issues {
 		if iss.File == "wiki/schema.md" && strings.Contains(iss.Message, "missing front matter block") {
@@ -937,7 +940,7 @@ func TestFrontMatterChecker(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "wiki", "schema.md"), []byte("---\nstatus: invalid_status\ndescription: Schema\n---\n# Schema\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	issues, _ = fmc.Check(eng)
+	issues = runFM()
 	foundInvalidStatus := false
 	for _, iss := range issues {
 		if iss.File == "wiki/schema.md" && strings.Contains(iss.Message, "invalid status value") {
@@ -960,7 +963,7 @@ func TestFrontMatterChecker(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "wiki", "schema.md"), []byte("---\nstatus: deprecated\ndescription: Schema\n---\n# Schema\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	issues, _ = fmc.Check(eng)
+	issues = runFM()
 	foundMissingSuperseded := false
 	for _, iss := range issues {
 		if iss.File == "wiki/schema.md" && strings.Contains(iss.Message, "superseded_by is required") {
@@ -978,7 +981,7 @@ func TestFrontMatterChecker(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "wiki", "schema.md"), []byte("---\nstatus: deprecated\ndescription: Schema\nsuperseded_by: non-existent.md\n---\n# Schema\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	issues, _ = fmc.Check(eng)
+	issues = runFM()
 	foundNonExistentTarget := false
 	for _, iss := range issues {
 		if iss.File == "wiki/schema.md" && strings.Contains(iss.Message, "superseded_by target does not exist") {
@@ -996,7 +999,7 @@ func TestFrontMatterChecker(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "wiki", "schema.md"), []byte("---\nstatus: deprecated\ndescription: Schema\nsuperseded_by: phases.md\n---\n# Schema\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	issues, _ = fmc.Check(eng)
+	issues = runFM()
 	foundNotActiveTarget := false
 	for _, iss := range issues {
 		if strings.Contains(iss.Message, "is not active") {
@@ -1047,13 +1050,12 @@ func TestContextLifecycleFiltering(t *testing.T) {
 func TestIndexFormatChecker(t *testing.T) {
 	root := setupWiki(t)
 	eng := newTestEngine(root)
+	runIndexFormat := func() []Issue {
+		return eng.LintWithOptions([]string{"index-format"}, nil).Issues
+	}
 
 	// Clean setup should have zero index-format issues
-	ifc := &indexFormatChecker{}
-	issues, err := ifc.Check(eng)
-	if err != nil {
-		t.Fatalf("indexFormatChecker failed: %v", err)
-	}
+	issues := runIndexFormat()
 	if len(issues) != 0 {
 		t.Errorf("expected 0 issues on clean setup, got %d: %v", len(issues), issues)
 	}
@@ -1063,7 +1065,7 @@ func TestIndexFormatChecker(t *testing.T) {
 	if err := os.WriteFile(indexPath, []byte("---\nstatus: current\ndescription: Index\n---\n# Index\n- [schema.md](schema.md)\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	issues, _ = ifc.Check(eng)
+	issues = runIndexFormat()
 	foundMissingDesc := false
 	for _, iss := range issues {
 		if strings.Contains(iss.Message, "missing pipe-separated description") {
@@ -1078,7 +1080,7 @@ func TestIndexFormatChecker(t *testing.T) {
 	if err := os.WriteFile(indexPath, []byte("---\nstatus: current\ndescription: Index\n---\n# Index\n- [/schema.md](/schema.md) | Schema description\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	issues, _ = ifc.Check(eng)
+	issues = runIndexFormat()
 	foundNonRelative := false
 	for _, iss := range issues {
 		if strings.Contains(iss.Message, "must use a relative path") {
@@ -1093,7 +1095,7 @@ func TestIndexFormatChecker(t *testing.T) {
 	if err := os.WriteFile(indexPath, []byte("---\nstatus: current\ndescription: Index\n---\n# Index\n- [schema.md](https://google.com/schema.md) | Schema description\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	issues, _ = ifc.Check(eng)
+	issues = runIndexFormat()
 	foundProtocol := false
 	for _, iss := range issues {
 		if strings.Contains(iss.Message, "must use a relative path") {
@@ -1108,13 +1110,12 @@ func TestIndexFormatChecker(t *testing.T) {
 func TestBareUrlChecker(t *testing.T) {
 	root := setupWiki(t)
 	eng := newTestEngine(root)
+	runBareURL := func() []Issue {
+		return eng.LintWithOptions([]string{"bare-urls"}, nil).Issues
+	}
 
 	// Clean setup should have zero bare-url issues
-	buc := &bareUrlChecker{}
-	issues, err := buc.Check(eng)
-	if err != nil {
-		t.Fatalf("bareUrlChecker failed: %v", err)
-	}
+	issues := runBareURL()
 	if len(issues) != 0 {
 		t.Errorf("expected 0 issues on clean setup, got %d: %v", len(issues), issues)
 	}
@@ -1124,7 +1125,7 @@ func TestBareUrlChecker(t *testing.T) {
 	if err := os.WriteFile(readmePath, []byte("---\nstatus: current\ndescription: README\n---\n# README\nVisit https://google.com for more info.\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	issues, _ = buc.Check(eng)
+	issues = runBareURL()
 	foundBareUrl := false
 	for _, iss := range issues {
 		if strings.Contains(iss.Message, "bare URL outside link") {
@@ -1142,7 +1143,7 @@ func TestBareUrlChecker(t *testing.T) {
 	if err := os.WriteFile(readmePath, []byte("---\nstatus: current\ndescription: README\n---\n# README\nVisit <a href=\"https://google.com\">Google</a>.\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	issues, _ = buc.Check(eng)
+	issues = runBareURL()
 	foundHtmlLink := false
 	for _, iss := range issues {
 		if strings.Contains(iss.Message, "use markdown links, not HTML") {
@@ -1160,7 +1161,7 @@ func TestBareUrlChecker(t *testing.T) {
 	if err := os.WriteFile(readmePath, []byte("---\nstatus: current\ndescription: README\n---\n# README\n```\nhttps://google.com\n```\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	issues, _ = buc.Check(eng)
+	issues = runBareURL()
 	if len(issues) != 0 {
 		t.Errorf("expected no issues for URL inside code block, got: %v", issues)
 	}
@@ -1169,7 +1170,7 @@ func TestBareUrlChecker(t *testing.T) {
 	if err := os.WriteFile(readmePath, []byte("---\nstatus: current\ndescription: README\n---\n# README\n`https://google.com` is a URL.\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	issues, _ = buc.Check(eng)
+	issues = runBareURL()
 	if len(issues) != 0 {
 		t.Errorf("expected no issues for URL inside inline code, got: %v", issues)
 	}

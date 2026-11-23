@@ -1,7 +1,8 @@
 ---
-status: current
+id: index
+title: Wiki Index
+lifecycle: current
 description: "Catalog of all wiki pages with one-line descriptions."
-superseded_by: ""
 ---
 # Wiki Index
 
@@ -18,7 +19,8 @@ superseded_by: ""
 
 - [decisions/lessons.md](decisions/lessons.md) | Design insights and gap post-mortems from real usage sessions.
 - [decisions/todo.md](decisions/todo.md) | Open improvement backlog ranked by difficulty.
-- [decisions/improvement-plan.md](decisions/improvement-plan.md) | Deprecated — completed hardening roadmap; design decisions archived in lessons.md.
+- [decisions/parity-improvement-plan.md](decisions/parity-improvement-plan.md) | Phased engineering parity plan covering containment, YAML typed model, single-read lint, citation checks, fail-closed upgrade, and CI hardening.
+- [decisions/improvement-plan.md](decisions/improvement-plan.md) | [superseded] Deprecated — completed hardening roadmap; design decisions archived in lessons.md.
 
 ## Operations
 

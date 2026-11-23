@@ -1,28 +1,27 @@
 ---
-description: "Upgrade the wiki-engine CLI binary, sync all prompt layers, and verify wiki integrity."
+description: "Upgrade the wiki-engine CLI binary, reconcile all prompt layers, and verify wiki integrity."
 name: "Wiki Upgrade"
 argument-hint: "none"
 agent: "agent"
 ---
 
-Upgrade the wiki-engine CLI and synchronize all instructions, then verify wiki integrity and lint health.
+Upgrade the wiki-engine CLI and reconcile all instructions, then verify wiki integrity, lint health, and citations.
 
 ## Required context
 
-- Run `wiki-engine context --active` to get the current snapshot of active pages.
+- Start from active context: run `wiki-engine context --active`.
+- Respect each page's `lifecycle` (ignore `planned` as current fact; follow `superseded_by` links).
 
 ## Execution steps
 
-1. Run `wiki-engine upgrade`.
-2. Run `wiki-engine sync-prompts` in the repository root to synchronize all local prompt files and symlinks.
-3. Verify that the linter passes cleanly:
+1. Run `wiki-engine upgrade` (fail-closed checksum and provenance verification; pass `--from-source` only if explicitly building from the release tag via Go).
+2. Run `wiki-engine init` (or `wiki-engine sync-prompts`) in the repository root to idempotently reconcile prompt files, symlinks, and root shims without overwriting user content.
+3. Verify structure and citations:
    ```bash
    wiki-engine lint --json
+   wiki-engine check --json
    ```
-4. If the linter reports any issues (such as missing front matter or invalid formatting on newly synced templates/files), fix them or run the `/wiki-lint` workflow.
-5. Confirm that the active wiki graph is healthy:
-   ```bash
-   wiki-engine context --active
-   ```
+4. If `lint` reports legacy frontmatter or mechanical issues, run `wiki-engine lint --fix` (or `/wiki-lint`) and ensure changed pages include exact `sources:`.
+5. Confirm the active wiki graph is healthy: `wiki-engine graph --strict` and `wiki-engine context --active`.
 
-Finish by summarizing that the upgrade is complete, confirming the new version, and confirming that the linter and active graph are healthy.
+Finish by summarizing the new version, verification status, reconciled prompts, and confirming lint, check, and graph are healthy.

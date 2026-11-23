@@ -1,10 +1,5 @@
-// Package audit verifies repo-wide wiki reference integrity as Go tests.
-// Running `go test ./...` (and `make audit`) fails when wiki links, prose
-// references, instruction layers, or the embedded scaffold drift. It exists
-// because `wiki-engine lint` only checks markdown links inside the wiki
-// directory — the gaps this package closes are wrong page-relative links,
-// stale `wiki/<path>.md` references in README/prompt/scaffold files, and
-// scaffold ↔ live instruction divergence.
+// Package audit verifies repo-wide wiki reference integrity, supply-chain
+// pinning, schema/docs parity, and prompt/scaffold synchronization as Go tests.
 package audit
 
 import (
@@ -16,12 +11,14 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/ramayac/go-wiki-engine/internal/model"
+	"github.com/ramayac/go-wiki-engine/internal/schema"
 )
 
-// repoRoot returns the repository root (two levels up from internal/audit).
 func repoRoot(t *testing.T) string {
 	t.Helper()
-	wd, err := os.Getwd() // go test runs with the package dir as cwd
+	wd, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,17 +29,12 @@ func repoRoot(t *testing.T) string {
 	return root
 }
 
-// markdown link target matcher. Group 1 is the target without anchor.
-var linkTargetRe = regexp.MustCompile(`\]\(([^)#]+)(?:#[^)]*)?\)`)
+var (
+	linkTargetRe = regexp.MustCompile(`\]\(([^)#]+)(?:#[^)]*)?\)`)
+	linkSpanRe   = regexp.MustCompile(`\[[^\]]*\]\([^)]*\)`)
+	legacyPathRe = regexp.MustCompile(`wiki/(log|phases|schema|repo-map|todo|lessons|config|improvement-plan)\.md`)
+)
 
-// full link span matcher, used to strip links before prose scanning.
-var linkSpanRe = regexp.MustCompile(`\[[^\]]*\]\([^)]*\)`)
-
-// legacy flat-path references that the organized layout replaced.
-var legacyPathRe = regexp.MustCompile(`wiki/(log|phases|schema|repo-map|todo|lessons|config|improvement-plan)\.md`)
-
-// collectFiles walks root and returns regular files (paths relative to
-// root), skipping directories whose first path element matches skipTop.
 func collectFiles(root string, skipTop map[string]bool) ([]string, error) {
 	var files []string
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
@@ -67,8 +59,6 @@ func collectFiles(root string, skipTop map[string]bool) ([]string, error) {
 	return files, err
 }
 
-// collectMDFiles walks root and returns .md files (paths relative to root),
-// skipping directories whose first path element matches skipTop.
 func collectMDFiles(root string, skipTop map[string]bool) ([]string, error) {
 	all, err := collectFiles(root, skipTop)
 	if err != nil {
@@ -83,7 +73,6 @@ func collectMDFiles(root string, skipTop map[string]bool) ([]string, error) {
 	return md, nil
 }
 
-// wikiFileSet maps wiki-relative slash paths of every .md file in root/wiki.
 func wikiFileSet(t *testing.T, root string) map[string]bool {
 	t.Helper()
 	set := make(map[string]bool)
@@ -105,24 +94,6 @@ func wikiFileSet(t *testing.T, root string) map[string]bool {
 	return set
 }
 
-// statusOf reads the front matter status of a wiki page; unknown defaults to "".
-func statusOf(t *testing.T, path string) string {
-	t.Helper()
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, line := range strings.Split(string(data), "\n") {
-		m := regexp.MustCompile(`^\s*status:\s*(\S+)`).FindStringSubmatch(line)
-		if m != nil {
-			return m[1]
-		}
-	}
-	return ""
-}
-
-// strictMDLinkTargets returns markdown link targets (without anchors) that
-// point at other .md files. http/https/mailto/anchor-only links are skipped.
 func strictMDLinkTargets(text string) []string {
 	var targets []string
 	for _, m := range linkTargetRe.FindAllStringSubmatch(text, -1) {
@@ -162,7 +133,7 @@ func TestWikiLinksResolveStrictly(t *testing.T) {
 			resolved := filepath.Clean(filepath.Join(pageDir, filepath.FromSlash(target)))
 			wikiRel, rerr := filepath.Rel(wikiRoot, resolved)
 			if rerr != nil || strings.HasPrefix(wikiRel, "..") {
-				continue // link to a file outside the wiki — external-links checker domain
+				continue
 			}
 			if !set[filepath.ToSlash(wikiRel)] {
 				problems = append(problems, fmt.Sprintf("wiki/%s -> %s", rel, target))
@@ -174,8 +145,7 @@ func TestWikiLinksResolveStrictly(t *testing.T) {
 	}
 }
 
-// TestScaffoldWikiLinksResolveStrictly applies the same strict resolution to
-// the scaffold templates.
+// TestScaffoldWikiLinksResolveStrictly applies strict resolution to scaffold templates.
 func TestScaffoldWikiLinksResolveStrictly(t *testing.T) {
 	root := repoRoot(t)
 	scaffoldWiki := filepath.Join(root, "scaffold", "wiki")
@@ -203,52 +173,45 @@ func TestScaffoldWikiLinksResolveStrictly(t *testing.T) {
 	}
 }
 
-// TestWikiFrontMatter checks front matter, statuses, and superseded_by
-// targets across all wiki pages.
+// TestWikiFrontMatter checks YAML frontmatter, lifecycle, and superseded_by
+// targets across all wiki pages using the real YAML parser.
 func TestWikiFrontMatter(t *testing.T) {
 	root := repoRoot(t)
-	wikiRoot := filepath.Join(root, "wiki")
-	set := wikiFileSet(t, root)
-
-	files, err := collectMDFiles(wikiRoot, nil)
+	snap, err := model.LoadSnapshot(root, "wiki")
 	if err != nil {
 		t.Fatal(err)
 	}
-	valid := map[string]bool{"planned": true, "current": true, "legacy": true, "deprecated": true}
 	var problems []string
-	for _, rel := range files {
-		abs := filepath.Join(wikiRoot, filepath.FromSlash(rel))
-		data, err := os.ReadFile(abs)
-		if err != nil {
-			t.Fatal(err)
-		}
-		text := string(data)
-		if !strings.HasPrefix(strings.TrimSpace(text), "---") {
-			problems = append(problems, fmt.Sprintf("wiki/%s: missing front matter", rel))
+	for _, p := range snap.Pages {
+		if p.FMErr != nil {
+			problems = append(problems, fmt.Sprintf("%s: malformed front matter: %v", p.Path, p.FMErr))
 			continue
 		}
-		status := statusOf(t, abs)
-		if !valid[status] {
-			problems = append(problems, fmt.Sprintf("wiki/%s: invalid or missing status %q", rel, status))
+		if p.FMState != model.FrontMatterPresent {
+			problems = append(problems, fmt.Sprintf("%s: missing front matter", p.Path))
+			continue
 		}
-		var superseded string
-		for _, line := range strings.Split(text, "\n") {
-			if m := regexp.MustCompile(`^\s*superseded_by:\s*"([^"]*)"`).FindStringSubmatch(line); m != nil {
-				superseded = m[1]
-				break // first occurrence — later examples in the body are irrelevant
+		lc := p.EffectiveLifecycle()
+		if !schema.IsValidLifecycle(lc) {
+			problems = append(problems, fmt.Sprintf("%s: invalid or missing lifecycle %q", p.Path, lc))
+		}
+		if lc == "superseded" && p.Metadata.SupersededBy == "" {
+			problems = append(problems, fmt.Sprintf("%s: superseded without superseded_by", p.Path))
+		}
+		if p.Metadata.SupersededBy != "" {
+			pageDir := filepath.ToSlash(filepath.Dir(p.WikiRel))
+			if pageDir == "." {
+				pageDir = ""
 			}
-		}
-		if status == "deprecated" && superseded == "" {
-			problems = append(problems, fmt.Sprintf("wiki/%s: deprecated without superseded_by", rel))
-		}
-		if superseded != "" {
-			target := filepath.Clean(filepath.Join(filepath.Dir(abs), filepath.FromSlash(superseded)))
-			targetRel, rerr := filepath.Rel(wikiRoot, target)
-			targetKey := filepath.ToSlash(targetRel)
-			if rerr != nil || strings.HasPrefix(targetRel, "..") || !set[targetKey] {
-				problems = append(problems, fmt.Sprintf("wiki/%s: superseded_by target missing: %s", rel, superseded))
-			} else if st := statusOf(t, target); st != "current" && st != "planned" {
-				problems = append(problems, fmt.Sprintf("wiki/%s: superseded_by target %s is not active (status %s)", rel, superseded, st))
+			cand := filepath.ToSlash(filepath.Clean(filepath.Join(pageDir, p.Metadata.SupersededBy)))
+			target := snap.ByPath[cand]
+			if target == nil {
+				target, _ = snap.Lookup(p.Metadata.SupersededBy)
+			}
+			if target == nil {
+				problems = append(problems, fmt.Sprintf("%s: superseded_by target missing: %s", p.Path, p.Metadata.SupersededBy))
+			} else if !target.IsActive() {
+				problems = append(problems, fmt.Sprintf("%s: superseded_by target %s is not active (lifecycle %s)", p.Path, p.Metadata.SupersededBy, target.EffectiveLifecycle()))
 			}
 		}
 	}
@@ -257,69 +220,37 @@ func TestWikiFrontMatter(t *testing.T) {
 	}
 }
 
-// TestWikiGraphConnectivity checks reachability from index.md, duplicate
-// basenames, and active leaves.
+// TestWikiGraphConnectivity checks reachability from index.md, duplicate IDs,
+// and active leaves.
 func TestWikiGraphConnectivity(t *testing.T) {
 	root := repoRoot(t)
-	wikiRoot := filepath.Join(root, "wiki")
-	set := wikiFileSet(t, root)
-
-	files, err := collectMDFiles(wikiRoot, nil)
+	snap, err := model.LoadSnapshot(root, "wiki")
 	if err != nil {
 		t.Fatal(err)
 	}
-	graph := make(map[string][]string)
-	for _, rel := range files {
-		abs := filepath.Join(wikiRoot, filepath.FromSlash(rel))
-		data, err := os.ReadFile(abs)
-		if err != nil {
-			t.Fatal(err)
-		}
-		pageDir := filepath.Dir(abs)
-		for _, target := range strictMDLinkTargets(string(data)) {
-			resolved := filepath.Clean(filepath.Join(pageDir, filepath.FromSlash(target)))
-			rel2, rerr := filepath.Rel(wikiRoot, resolved)
-			if rerr != nil || strings.HasPrefix(rel2, "..") {
-				continue
-			}
-			graph[rel] = append(graph[rel], filepath.ToSlash(rel2))
-		}
+	view, err := model.BuildGraph(snap, model.GraphOptions{})
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	// BFS from index.md.
-	visited := map[string]bool{"index.md": true}
-	queue := []string{"index.md"}
-	for len(queue) > 0 {
-		cur := queue[0]
-		queue = queue[1:]
-		for _, nxt := range graph[cur] {
-			if !visited[nxt] && set[nxt] {
-				visited[nxt] = true
-				queue = append(queue, nxt)
-			}
-		}
-	}
-
-	canonicalLog := map[string]bool{"prologue/log.md": true, "log.md": true}
-	basenames := map[string]int{}
 	var problems []string
-	for _, rel := range files {
-		abs := filepath.Join(wikiRoot, filepath.FromSlash(rel))
-		basenames[filepath.Base(rel)]++
-		status := statusOf(t, abs)
-		if status != "current" && status != "planned" {
+	for _, u := range view.Unlinked {
+		problems = append(problems, fmt.Sprintf("unreachable active page: %s", u))
+	}
+	for _, iss := range view.Issues {
+		problems = append(problems, fmt.Sprintf("graph issue: %s", iss))
+	}
+	for id, pages := range snap.ByIDMulti {
+		if len(pages) > 1 {
+			problems = append(problems, fmt.Sprintf("duplicate page id %q (%d files)", id, len(pages)))
+		}
+	}
+	for _, p := range snap.Pages {
+		if !p.IsActive() || model.IsCanonicalFile("log.md", p.WikiRel) {
 			continue
 		}
-		if !visited[rel] {
-			problems = append(problems, fmt.Sprintf("unreachable active page: %s", rel))
-		}
-		if len(graph[rel]) == 0 && !canonicalLog[rel] {
-			problems = append(problems, fmt.Sprintf("active leaf page: %s", rel))
-		}
-	}
-	for name, n := range basenames {
-		if n > 1 {
-			problems = append(problems, fmt.Sprintf("duplicate page basename %q (%d files)", name, n))
+		if len(p.InternalMDLinks()) == 0 && len(p.Metadata.Related) == 0 && len(p.Metadata.DependsOn) == 0 {
+			problems = append(problems, fmt.Sprintf("active leaf page: %s", p.WikiRel))
 		}
 	}
 	if len(problems) > 0 {
@@ -327,8 +258,6 @@ func TestWikiGraphConnectivity(t *testing.T) {
 	}
 }
 
-// nonWikiMDFiles returns repo .md files outside wiki/, the embedded mirror,
-// and test fixtures.
 func nonWikiMDFiles(t *testing.T, root string) []string {
 	t.Helper()
 	files, err := collectMDFiles(root, map[string]bool{
@@ -340,8 +269,6 @@ func nonWikiMDFiles(t *testing.T, root string) []string {
 	return files
 }
 
-// TestExternalMarkdownReferencesExist verifies every markdown link target in
-// non-wiki .md files that points into wiki/ references a real wiki file.
 func TestExternalMarkdownReferencesExist(t *testing.T) {
 	root := repoRoot(t)
 	set := wikiFileSet(t, root)
@@ -358,8 +285,6 @@ func TestExternalMarkdownReferencesExist(t *testing.T) {
 				continue
 			}
 			wikiPath := strings.TrimPrefix(filepath.ToSlash(filepath.Clean(target[idx:])), "wiki/")
-			// Placeholder used by the external-docs migration template in
-			// wiki-maintainer.md — not a concrete reference.
 			if wikiPath == "<name>.md" {
 				continue
 			}
@@ -373,11 +298,8 @@ func TestExternalMarkdownReferencesExist(t *testing.T) {
 	}
 }
 
-// TestLegacyFlatPathReferencesAbsent scans prose in non-wiki .md files (link
-// spans stripped) for references to the legacy flat canonical paths.
 func TestLegacyFlatPathReferencesAbsent(t *testing.T) {
 	root := repoRoot(t)
-
 	var problems []string
 	for _, rel := range nonWikiMDFiles(t, root) {
 		data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
@@ -394,17 +316,15 @@ func TestLegacyFlatPathReferencesAbsent(t *testing.T) {
 	}
 }
 
-// TestInstructionLayersIdentical ensures the live instruction files and the
-// pi.dev skill stay identical to their scaffold copies (we edit both).
 func TestInstructionLayersIdentical(t *testing.T) {
 	root := repoRoot(t)
 	files := []string{"ingest.md", "lint.md", "onboard.md", "query.md", "refresh.md", "upgrade.md", "watch.md", "wiki-maintainer.md"}
 	var problems []string
 	for _, f := range files {
 		live := filepath.Join(root, ".wiki-instructions", f)
-		scaffold := filepath.Join(root, "scaffold", ".wiki-instructions", f)
+		scaf := filepath.Join(root, "scaffold", ".wiki-instructions", f)
 		a, err1 := os.ReadFile(live)
-		b, err2 := os.ReadFile(scaffold)
+		b, err2 := os.ReadFile(scaf)
 		if err1 != nil || err2 != nil || string(a) != string(b) {
 			problems = append(problems, ".wiki-instructions/"+f+" differs from scaffold copy")
 		}
@@ -419,11 +339,8 @@ func TestInstructionLayersIdentical(t *testing.T) {
 	}
 }
 
-// TestEmbeddedScaffoldSynced ensures internal/scaffold/files matches scaffold/
-// (equivalent to the CI make sync-scaffold drift guard, but runs in go test).
 func TestEmbeddedScaffoldSynced(t *testing.T) {
 	root := repoRoot(t)
-
 	read := func(base, rel string) (string, error) {
 		data, err := os.ReadFile(filepath.Join(base, filepath.FromSlash(rel)))
 		if err != nil {
@@ -458,6 +375,143 @@ func TestEmbeddedScaffoldSynced(t *testing.T) {
 		}
 		if a != b {
 			t.Errorf("content drift for %s — run make sync-scaffold", rel)
+		}
+	}
+}
+
+// TestGitHubActionsPinnedBySHA enforces the Phase 7.1 supply-chain policy:
+// every external GitHub Action in .github/workflows/*.yml must be pinned to a
+// 40-character commit SHA with a `# v...` version comment, and every workflow
+// must declare minimal permissions.
+func TestGitHubActionsPinnedBySHA(t *testing.T) {
+	root := repoRoot(t)
+	wfDir := filepath.Join(root, ".github", "workflows")
+	entries, err := os.ReadDir(wfDir)
+	if err != nil {
+		t.Fatalf("read workflows dir: %v", err)
+	}
+	usesRe := regexp.MustCompile(`uses:\s*([^\s#]+)(.*)$`)
+	shaPinnedRe := regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*@[0-9a-f]{40}$`)
+	commentVersionRe := regexp.MustCompile(`#\s*v\d+`)
+
+	for _, e := range entries {
+		if e.IsDir() || (!strings.HasSuffix(e.Name(), ".yml") && !strings.HasSuffix(e.Name(), ".yaml")) {
+			continue
+		}
+		path := filepath.Join(wfDir, e.Name())
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		text := string(data)
+		if !strings.Contains(text, "permissions:") {
+			t.Errorf("%s: missing explicit minimal permissions block", e.Name())
+		}
+		for i, line := range strings.Split(text, "\n") {
+			trimmed := strings.TrimSpace(line)
+			if strings.HasPrefix(trimmed, "#") {
+				continue
+			}
+			m := usesRe.FindStringSubmatch(trimmed)
+			if m == nil {
+				continue
+			}
+			ref := m[1]
+			comment := m[2]
+			if strings.HasPrefix(ref, "./") {
+				continue // local composite action
+			}
+			if !shaPinnedRe.MatchString(ref) {
+				t.Errorf("%s:%d: action %q must be pinned to a 40-character immutable commit SHA", e.Name(), i+1, ref)
+			}
+			if !commentVersionRe.MatchString(comment) {
+				t.Errorf("%s:%d: pinned action %q should keep a '# vX' version comment", e.Name(), i+1, ref)
+			}
+		}
+	}
+}
+
+// TestSchemaParityWithDocs enforces Phase 8.3: the Go schema vocabulary equals
+// the documented schema in both wiki/prologue/schema.md and scaffold/wiki/prologue/schema.md.
+func TestSchemaParityWithDocs(t *testing.T) {
+	root := repoRoot(t)
+	doc := schema.Get()
+	targets := []string{
+		filepath.Join(root, "wiki", "prologue", "schema.md"),
+		filepath.Join(root, "scaffold", "wiki", "prologue", "schema.md"),
+	}
+	for _, path := range targets {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		text := string(data)
+		for _, typ := range schema.ValidPageTypes {
+			if !strings.Contains(text, "`"+typ+"`") {
+				t.Errorf("%s missing page type %q", path, typ)
+			}
+		}
+		for _, lc := range schema.ValidLifecycles {
+			if !strings.Contains(text, "`"+lc+"`") {
+				t.Errorf("%s missing lifecycle value %q", path, lc)
+			}
+		}
+		for _, st := range doc.DecisionStatuses {
+			if !strings.Contains(text, st) {
+				t.Errorf("%s missing decision status %q", path, st)
+			}
+		}
+		for _, st := range doc.IncidentStatuses {
+			if !strings.Contains(text, st) {
+				t.Errorf("%s missing incident status %q", path, st)
+			}
+		}
+	}
+}
+
+// TestWikiCommandDocsParity verifies that wiki/prologue/repo-map.md documents
+// every public CLI subcommand.
+func TestWikiCommandDocsParity(t *testing.T) {
+	root := repoRoot(t)
+	data, err := os.ReadFile(filepath.Join(root, "wiki", "prologue", "repo-map.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	commands := []string{
+		"init", "sync-prompts", "schema", "list", "headings", "search",
+		"log-tail", "changed", "candidates", "check", "lint", "stats",
+		"context", "graph", "summary", "relevant", "impact", "diff",
+		"watch", "refresh", "upgrade", "version",
+	}
+	for _, cmd := range commands {
+		if !strings.Contains(text, "`"+cmd) {
+			t.Errorf("wiki/prologue/repo-map.md missing command documentation for %q", cmd)
+		}
+	}
+}
+
+// TestPromptLifecycleRulesParity ensures canonical agent workflows teach the
+// Phase 8.2 lifecycle, source citation, lint, and check rules.
+func TestPromptLifecycleRulesParity(t *testing.T) {
+	root := repoRoot(t)
+	checks := map[string][]string{
+		".wiki-instructions/wiki-maintainer.md": {"lifecycle", "planned", "superseded_by", "sources:", "wiki-engine lint", "wiki-engine check"},
+		".wiki-instructions/ingest.md":          {"context --active", "lifecycle", "superseded_by", "sources:", "wiki-engine lint", "wiki-engine check"},
+		".wiki-instructions/query.md":           {"lifecycle", "planned", "superseded_by", "wiki-engine check"},
+		".wiki-instructions/lint.md":            {"wiki-engine lint --fix", "wiki-engine check", "lifecycle"},
+		".pi/skills/wiki/SKILL.md":              {"lifecycle", "superseded_by", "sources:", "wiki-engine check", "wiki-engine schema"},
+	}
+	for rel, wants := range checks {
+		data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+		if err != nil {
+			t.Fatalf("read %s: %v", rel, err)
+		}
+		text := string(data)
+		for _, want := range wants {
+			if !strings.Contains(text, want) {
+				t.Errorf("%s missing required lifecycle/workflow guidance %q", rel, want)
+			}
 		}
 	}
 }

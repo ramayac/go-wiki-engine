@@ -1,183 +1,101 @@
 ---
-status: current
-description: "Overview of the repository architecture, high-signal areas, and build instructions."
-superseded_by: ""
-references: [source:cmd/wiki-engine/main.go, source:internal/engine/engine.go, source:internal/engine/graph_view.go]
+id: repo-map
+title: Repo Map
+type: concept
+lifecycle: current
+description: "Overview of the repository architecture, high-signal areas, CLI commands, and build instructions."
+sources:
+  - file: cmd/wiki-engine/
+  - file: internal/paths/
+  - file: internal/config/
+  - file: internal/model/
+  - file: internal/git/
+  - file: internal/engine/
+  - file: internal/lint/
+  - file: internal/scaffold/
+  - file: internal/schema/
+  - file: internal/upgrade/
 ---
 # Repo Map
 
 ## Purpose
 
-go-wiki-engine is a global CLI tool for managing repo-local wikis. It provides the plumbing layer (file listing, search, diff-driven change detection, structure linting, and scaffolding) while AI agent slash commands handle the intelligence layer (reading context, deciding what to update, writing wiki content). Supports GitHub Copilot and Claude Code out of the box.
-
-It ships as a single statically-compiled Go binary with no external dependencies, distributed via `go install`.
+go-wiki-engine is a deterministic Go CLI tool for managing repo-local wikis. It provides the plumbing layer (path-contained inspection, real YAML frontmatter parsing, single-read linting, branch-aware citation checks, graph navigation, and idempotent scaffolding) while AI agent slash commands handle the intelligence layer for GitHub Copilot, Claude Code, and pi.dev.
 
 ## Architecture
 
+```text
+cmd/wiki-engine/        CLI entrypoint split into main.go, commands.go, output.go
+internal/paths/         Single strict path containment API (single-segment wiki_dir, symlink checks)
+internal/config/        .wikirc parser & validator (config.go, validate.go)
+internal/schema/        Authoritative embedded schema v2 vocabulary & page templates
+internal/model/         Typed page, YAML frontmatter (gopkg.in/yaml.v3), structured sources,
+                        single-read WikiSnapshot, and unified Graph model
+internal/git/           Unified Git change pipeline (merge-base, renames, working tree, untracked,
+                        batched history, commit lookup)
+internal/engine/        Focused operations: context, search, summary, impact, check, graph, watch,
+                        diff, stats, refresh
+internal/lint/          Single-read snapshot lint engine, grouped checkers, and idempotent lint --fix
+internal/scaffold/      Idempotent init/reconciliation, wiki rename, versioned root shims, sync-prompts
+  files/                go:embed mirror of scaffold/
+internal/upgrade/       Fail-closed self-upgrade (streamed size-capped downloads, SHA-256 checksums,
+                        provenance attestation verification, safe archive extraction, --from-source)
+internal/audit/         Repo-wide reference, action-pin SHA, schema, prompt, and scaffold parity tests
 ```
-cmd/wiki-engine/        CLI entry point — dispatches all subcommands
-internal/config/        .wikirc parser — DefaultConfig(), Load(dir)
-internal/engine/        Core operations: List, Headings, Search, LogTail,
-                        Changed, Candidates, Lint, Refresh, Stats,
-                        Context, Summary, Relevant, Impact, Diff, Watch,
-                        BuildWikiGraph
-internal/engine/engine_lint.go   Composable Checker interface + 17 implementations
-internal/scaffold/      Init command — copies go:embed scaffold into a target repo
-  files/                go:embed source (mirror of scaffold/)
-internal/upgrade/       Self-upgrade — GitHub release binary with SHA-256
-                        checksum verification; `go install` fallback
-scaffold/               Human-readable reference copy of embedded templates
-  wiki/                 Wiki pages: README, index, log, schema, phases, repo-map, operations/
-  .wiki-instructions/   Canonical workflow definitions (single source of truth for all tools)
-  .github/prompts/      GitHub Copilot slash commands → symlinks to .wiki-instructions/
-  .github/instructions/ Copilot instructions → symlink to .wiki-instructions/
-  .claude/commands/     Claude Code custom slash commands → symlinks to .wiki-instructions/
-  .wikirc               Default config template
-  AGENTS.md             Shim — redirects AI agent tools to wiki/index.md (create-only)
-  CLAUDE.md             Shim — redirects Claude Code to wiki/index.md (create-only)
-```
-
-## High-Signal Areas
-
-- `cmd/wiki-engine/main.go` — CLI dispatcher; version injected via `-ldflags`; `--json` flag support on all commands
-- `internal/engine/engine.go` — all read-only wiki operations plus Diff, Watch, Impact; `Lint` delegates to composable checkers
-- `internal/engine/engine_lint.go` — `Checker` interface + 17 implementations: required-files, front-matter, index-format, bare-urls, index-links, cross-page-links, markdown-format, orphans, leaf-pages, heading-hierarchy, log-headings, log-chronology, markers, phase-consistency, external-links, duplicate-content, stale-content
-- `internal/engine/paths.go` — canonical file resolution: `log.md`, `phases.md`, `schema.md`, `repo-map.md` resolve at `prologue/<name>` first with legacy root-level fallback; `required-files` accepts either layout
-- `internal/scaffold/scaffold.go` — `Init()` walks the embedded FS, remaps `wiki/` to the user-specified dir name, and rewrites the scaffolded `.wikirc` `wiki_dir` to match; `SyncPrompts()` overwrites `.wiki-instructions/`, `.github/`, `.claude/commands/`, and `.pi/skills/` via `syncEmbeddedDir()` helper; tool-layer files are written as symlinks to `.wiki-instructions/` with a regular-copy fallback on platforms without symlink support; `syncShims()` creates `AGENTS.md`/`CLAUDE.md` only when absent (never overwrites user content); `Init()` preserves an existing `.wikirc`
-- `internal/audit/` — repo-wide reference integrity tests (strict page-relative wiki links, stale `wiki/<path>.md` references outside the wiki, graph reachability, instruction-layer identity, embedded scaffold sync); run via `make audit` and as part of `go test ./...` in CI
-- `internal/config/config.go` — parses `.wikirc` (key=value + array format, no external deps); returns defaults when file is absent
-- `scaffold/` — source of truth for scaffold templates; `make sync-scaffold` copies it to `internal/scaffold/files/`
 
 ## Subcommands
 
 | Command | What it does |
 |---|---|
-| `init [wiki-dir]` | Scaffold wiki, .wikirc, prompts for all tools, instructions, and AGENTS.md/CLAUDE.md shims into the current repo |
-| `sync-prompts` | Overwrite `.wiki-instructions/`, `.github/`, `.claude/commands/`, and `.pi/skills/` with current embedded versions; removes only retired wiki-managed files, never user files (safe to run after upgrade) |
-| `list` | List all files under `wiki_dir` |
+| `init [wiki-dir] [--wiki-dir=<name>]` | Scaffold a new wiki, idempotently reconcile an existing managed wiki, or safely rename with `--wiki-dir` |
+| `sync-prompts` | Compatibility command to update `.wiki-instructions/`, `.github/`, `.claude/commands/`, and `.pi/skills/` |
+| `schema [--type=<t>] [--section=<s>]` | Print the embedded v2 wiki schema, lifecycle rules, or page templates |
+| `list [--active]` | List all contained wiki files (or active pages only) |
 | `headings` | List all Markdown headings across wiki files |
-| `search <query>` | Case-insensitive full-text search across wiki files |
+| `search <query> [--tag=<t>] [--type=<t>] [--lifecycle=<l>] [--include-history] [--limit=<n>] [--keyword] [--ranked]` | Search wiki pages (excludes historical pages by default; `--ranked` enables field-weighted ranker) |
 | `log-tail [n]` | Show the most recent N log headings from `log.md` |
-| `changed [diff]` | `git diff --name-only` filtered to non-wiki files |
-| `candidates [diff]` | Same as changed, further filtered by `.wikirc` ignore rules (see [config.md](config.md)) |
-| `lint [--check=<a,b>] [--skip=<a,b>]` | Check required files, front matter, index format, bare URLs, broken links (index + cross-page), log heading format and chronology, open markers, orphans, leaf pages, heading hierarchy, phase consistency, external links to source files, front matter references, duplicate content, stale content — repair guide: [operations/lint.md](../operations/lint.md) |
+| `changed [diff-range] [--base=<ref>] [--no-working-tree]` | Branch-aware non-wiki changed files (merge-base + working tree + untracked unless disabled) |
+| `candidates [diff-range] [--base=<ref>] [--no-working-tree]` | Changed files filtered by `.wikirc` ignore patterns |
+| `check [--base=<ref>] [--no-working-tree]` | Branch-aware citation and drift check (exit 0 ok/review, 1 breakage, 2 Git/setup error) |
+| `lint [--check=<a,b>] [--skip=<a,b>] [--fix]` | Single-read wiki lint with individual or grouped selectors (`schema`, `links`, `graph`, `freshness`, `security`) and idempotent `--fix` |
 | `stats` | Aggregate statistics: file count, heading count, total lines, last-updated date |
-| `context [--minimal] [--active] [--sort=topo\|chrono] [--summarize]` | Condensed wiki snapshot, or the active-page graph from `index.md` with `--active` (`--sort=topo` by depth, default chronological). `--sort` requires `--active`; `--minimal`/`--summarize` are catalog-view flags and reject combination with `--active` |
-| `graph [page] [--strict] [--dot]` | Navigation map of the active wiki graph: ASCII tree from `index.md` (diamonds/cycles as `↰` markers), `graph <page>` for one page's backlinks + outgoing links + declared references, `--json` for structured nodes/edges/unlinked/stats/issues (with `<page>`: neighborhood JSON), `--dot` for Graphviz export, `--strict` exits 1 on orphaned pages or graph issues (duplicate edges, self-loops, broken links) — in every mode |
-| `summary <page>` | First heading + first paragraph preview of a page |
-| `relevant <query> [n]` | Rank wiki pages by relevance to a query |
-| `impact <file...>` | Show which wiki pages are affected by changed source files (or pipe from `changed`). Pages with declared front matter `source:` references match only on those exact paths; pages without references fall back to basename text scan |
-| `diff <from> <to>` | Show wiki files added/removed/changed between two git refs |
-| `watch [--once]` | Poll for changes + lint issues at interval from `.wikirc`; exits with guidance when `watch_interval` is 0; `--once` runs a single cycle and exits 1 when the lint gate (`fail_severity`) fails |
-| `refresh [diff]` | Run list + log-tail + changed + candidates + lint as a maintenance snapshot |
-| `upgrade` | Downloads the latest GitHub release binary and verifies its SHA-256 checksum against `checksums.txt`; falls back to `go install github.com/ramayac/go-wiki-engine/cmd/wiki-engine@latest` |
-| `version` | Print the version set by -ldflags at build time |
+| `context [--minimal] [--summarize] [--active] [--sort=topo\|chrono] [--max-pages=<n>] [--max-bytes=<n>]` | Bounded wiki snapshot or active graph for agent context loading |
+| `graph [page-or-id] [--strict] [--dot] [--include-sources]` | Active wiki graph (ASCII tree, ID/path neighborhood, DOT export, opt-in source nodes, `schema_version: "2"`) |
+| `summary <page-or-id>` | First heading, first paragraph, and bounded preview of a page |
+| `relevant <query> [n] [--tag=<t>] [--type=<t>] [--lifecycle=<l>] [--include-history] [--limit=<n>]` | Compatibility alias for field-weighted ranked search |
+| `impact [--fuzzy] <file...>` | Exact source/directory/link impact with match reasons in JSON (`--fuzzy` opts in to basename prose scan) |
+| `diff <from> <to>` | Show wiki files added/removed/changed between two Git refs |
+| `watch [--once]` | Poll for changes + lint issues (`--once` exits 1 when lint fails) |
+| `refresh [diff-range]` | Full maintenance snapshot: files, log, changed, candidates, lint |
+| `upgrade [--from-source] [--require-attestation]` | Fail-closed self-upgrade with SHA-256 checksum & provenance verification (explicit `--from-source` for pinned `go install`) |
+| `version` | Print build version |
 
-## How the Multi-Tool Integration Works
+## JSON & Exit-Code Contracts
 
-The CLI is **read-only plumbing**. It never writes wiki content.
-
-Workflows are defined once in `.wiki-instructions/` (canonical). Tool-specific directories contain symlinks:
-
-| Canonical source | Copilot path | Claude Code path | pi.dev path |
-|---|---|---|---|
-| `.wiki-instructions/ingest.md` | `.github/prompts/wiki-ingest.prompt.md` | `.claude/commands/wiki-ingest.md` | (included in wiki skill) |
-| `.wiki-instructions/query.md` | `.github/prompts/wiki-query.prompt.md` | `.claude/commands/wiki-query.md` | (included in wiki skill) |
-| `.wiki-instructions/refresh.md` | `.github/prompts/wiki-refresh.prompt.md` | `.claude/commands/wiki-refresh.md` | (included in wiki skill) |
-| `.wiki-instructions/onboard.md` | `.github/prompts/wiki-onboard.prompt.md` | `.claude/commands/wiki-onboard.md` | (included in wiki skill) |
-| `.wiki-instructions/lint.md` | `.github/prompts/wiki-lint.prompt.md` | `.claude/commands/wiki-lint.md` | (included in wiki skill) |
-| `.wiki-instructions/upgrade.md` | `.github/prompts/wiki-upgrade.prompt.md` | `.claude/commands/wiki-upgrade.md` | (included in wiki skill) |
-| `.wiki-instructions/watch.md` | `.github/prompts/wiki-watch.prompt.md` | `.claude/commands/wiki-watch.md` | (included in wiki skill) |
-| `.wiki-instructions/wiki-maintainer.md` | `.github/instructions/wiki-maintainer.instructions.md` | — | — |
-
-In user repos, `wiki-engine init` and `wiki-engine sync-prompts` write these as real symlinks so edits to `.wiki-instructions/` propagate to every tool. On platforms where symlink creation fails (e.g. Windows without developer mode), regular copies are written instead — re-run `sync-prompts` after editing canonical files there.
-
-The pi.dev integration uses an Agent Skills standard `SKILL.md` at `.pi/skills/wiki/SKILL.md` — a self-contained skill file that bundles all workflows into one entrypoint invoked via `/skill:wiki`.
-
-Frontmatter is compatible: both tools use `description`. Copilot-specific fields (`name`, `argument-hint`, `agent`) are ignored by Claude Code.
-
-The workflow is:
-1. `wiki-engine init` — run once to scaffold
-2. Developer customizes `wiki/prologue/repo-map.md` and `.wikirc`
-3. Agent (via `/wiki-ingest`, `/wiki-refresh`, or `/wiki-onboard`) calls `wiki-engine changed` + `wiki-engine candidates` to discover what changed, then reads and writes wiki content itself
-4. Agent calls `wiki-engine lint` to validate hygiene before finishing
-5. After a binary upgrade, run `wiki-engine sync-prompts` in each repo to pull in new or updated prompts and instructions for all tools
-
-`go:embed` follows symlinks at build time, so the embedded FS contains regular files. `make sync-scaffold` uses `cp -rL` to dereference symlinks when copying the scaffold into `internal/scaffold/files/`.
-
-## JSON Output Contract
-
-All commands accept `--json` (anywhere in the argument list) and emit one JSON
-envelope per invocation on stdout:
-
-```json
-{ "ok": true, "data": { } }
-```
-
-- `ok` reflects command success; on failure `error` carries the reason and `data` is omitted.
-- `data` and `error` are omitted when empty; when a command has no result (e.g. a
-  search with no matches) the envelope contains only `ok`.
-- Fatal errors also honor the contract when `--json` is present: the command
-  emits `{ "ok": false, "error": "..." }` and exits 1 (plain-text errors are
-  reserved for non-JSON invocations).
-- `lint --json` emits the issues array as `data` with `ok:false` when the `fail_severity` gate fails, and still exits 1 (matching plain-text lint).
-- `context --active --json` emits `{nodes, edges, unlinked, issues}` — the machine-readable active graph for agent navigation; nodes carry per-page `references` from front matter.
-- `watch --once --json` emits one `WatchResult` (`changed`, `candidates`, `lint_ok`, `lint_issues`) and exits 1 when `lint_ok` is false.
-- `sync-prompts --json` emits `{updated, removed, shims_preserved}` — written files, retired wiki-managed files cleaned up, and pre-existing root shims.
-
-## Configuration — .wikirc
-
-Full key reference: [config.md](config.md).
-
-| Key | Default | Purpose |
-|---|---|---|
-| `wiki_dir` | `wiki` | Directory name for the wiki |
-| `default_diff` | `main...HEAD` | Git diff range for changed/candidates/refresh |
-| `log_lines` | `10` | Number of log entries shown by log-tail |
-| `duplicate_threshold` | `0.7` | Similarity above which pages are flagged as duplicates (0.0-1.0, 0 disables) |
-| `stale_days` | `30` | Days since a page's last git commit before it is flagged as stale (0 disables; falls back to file mtime outside git) |
-| `fail_severity` | `warn` | Minimum severity that fails `wiki-engine lint` with exit 1 (`error`, `warn`, or `info`) |
-| `watch_interval` | `0` | Seconds between watch polls (0 disables continuous watch; `--once` still works) |
-| `context_summarize` | `false` | Default `wiki-engine context` to `--summarize` mode |
-| `ignore` | `["wiki/", "bin/", "*.log", "*.tmp"]` | Paths excluded from candidate filtering |
-
-## Generated Artifacts
-
-- `bin/wiki-engine` — compiled binary (gitignored)
-- `internal/scaffold/files/` — synced from `scaffold/` via `make sync-scaffold`; embedded into the binary
-- `test/integration_test.sh` — end-to-end test suite (run via `make integration`, also executed in CI)
+- Global JSON envelope (version `1`): `{"ok": bool, "data": ..., "error": "..."}`
+- Graph JSON schema version: `2`
+- Frontmatter schema version: `2`
+- Exit codes: `0` success (including `check` review recommendations), `1` content/lint/check breakage or usage error, `2` Git/config/setup error.
 
 ## Build and Release Path
 
 ```bash
-make build           # Compile to bin/wiki-engine (version=dev)
-make test            # Run all tests
+make build           # Compile to bin/wiki-engine
+make test            # Run all unit tests
 make lint            # go vet + wiki-engine lint
-make golangci-lint   # golangci-lint v2 with the repo config
+make audit           # Repo-wide reference, action-pin, and schema parity audit
+make golangci-lint   # golangci-lint v2
+make govulncheck     # Pinned govulncheck vulnerability scan
 make sync-scaffold   # Copy scaffold/ → internal/scaffold/files/
-make audit           # Repo-wide wiki reference integrity audit
-make install         # go install globally
+make integration     # End-to-end integration test suite
 ```
 
-Releases are cross-compiled by `.github/workflows/release.yml` on `release: published` and uploaded as binary assets. Version is injected via `-ldflags "-X main.version=vX.Y.Z"`. The full cut-and-verify procedure lives in [operations/release.md](../operations/release.md).
-
-### Versioning & Compatibility
-
-Releases use clean `vX.Y.Z` semantic versions. Semver covers the CLI flags, the `--json` envelope, `.wikirc` keys, and the wiki contract ([schema.md](schema.md)). JSON fields and config keys may be added in minor releases; renames or removals require a major release.
-
-Go module: `github.com/ramayac/go-wiki-engine`. No external dependencies — standard library only.
-
-## Exclusions
-
-- `scaffold/` is human-readable reference; only `internal/scaffold/files/` is embedded. Always run `make sync-scaffold` after editing templates.
-- `.wiki-instructions/` is the canonical source — edit here, not in the symlinked tool directories.
-- `bin/` is gitignored.
-- The wiki itself (`wiki/`) is excluded from candidate filtering.
+Go module: `github.com/ramayac/go-wiki-engine` (Go stdlib + `gopkg.in/yaml.v3`).
 
 ## Related Pages
 
 - [config.md](config.md) — full `.wikirc` reference.
 - [operations/lint.md](../operations/lint.md) — checker-by-checker repair guide.
 - [operations/ingest.md](../operations/ingest.md) — how architecture facts get updated.
-- [operations/release.md](../operations/release.md) — how releases are cut and verified.
-- [schema.md](schema.md) — the contract this page must satisfy.
+- [operations/release.md](../operations/release.md) — how releases are cut, attested, and verified.
+- [schema.md](schema.md) — the v2 schema contract this page satisfies.

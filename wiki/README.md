@@ -1,7 +1,8 @@
 ---
-status: current
+id: README
+title: Wiki
+lifecycle: current
 description: "Overview of the wiki structure, rules, and navigation."
-superseded_by: ""
 ---
 # Wiki
 

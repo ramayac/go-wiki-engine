@@ -9,23 +9,19 @@ Run the repository wiki refresh workflow.
 
 ## Required context
 
-- Run `wiki-engine context --active` to get the current snapshot of active wiki pages.
-- Use `wiki-engine refresh` for the full maintenance report.
+- Start from active context: run `wiki-engine context --active`.
+- Check each page's `lifecycle` before relying on it; ignore `planned` content as current fact and follow `superseded_by` links.
+- Use `wiki-engine refresh` and `wiki-engine check` for the full maintenance and citation report.
 - Follow the guidelines in [wiki-maintainer.md](wiki-maintainer.md).
 - If wiki-engine is not installed, read [wiki/index.md](../../wiki/index.md) and [wiki/repo-map.md](../../wiki/prologue/repo-map.md).
 
 ## Execution steps
 
-1. Run `wiki-engine refresh`.
-2. If it reports no ingest candidates, stop and explain that no wiki update is needed.
-3. Review the output from `wiki-engine changed` and `wiki-engine candidates`.
-4. If the repo changes require wiki maintenance, update the relevant active pages under `wiki/` (creating them with proper YAML front matter if new). Cross-link updated pages to their related pages.
-5. If a page is added, its status changes, or its role changes, update [wiki/index.md](../../wiki/index.md) using standard relative Markdown links.
-6. Append a dated entry to [wiki/log.md](../../wiki/prologue/log.md) using the log heading convention.
-7. Run `wiki-engine lint`.
-8. Summarize:
-   - what changed in the wiki
-   - which source files drove the change
-   - any remaining gaps or follow-up questions
-
-If the wiki does not need changes, say so explicitly and explain why.
+1. Run `wiki-engine refresh` and `wiki-engine check`.
+2. If there are no ingest candidates, no broken citations, and no pages to review, stop and explain that no wiki update is needed.
+3. Review `wiki-engine changed`, `wiki-engine candidates`, and `wiki-engine impact`.
+4. Update the relevant active pages under `wiki/` (with typed YAML frontmatter, explicit `lifecycle`, exact `sources:`, and cross-links).
+5. Update [wiki/index.md](../../wiki/index.md) if coverage or lifecycle changed.
+6. Append a dated entry to [wiki/log.md](../../wiki/prologue/log.md).
+7. Run `wiki-engine lint` and `wiki-engine check` before finishing.
+8. Summarize what changed, which source files drove the change, and any remaining gaps.

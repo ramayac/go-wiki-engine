@@ -1,8 +1,11 @@
 ---
-status: current
+id: lint
+title: Lint Workflow
+lifecycle: current
 description: "Workflow for running the wiki linter and repairing inconsistencies."
-superseded_by: ""
-references: [source:internal/engine/engine_lint.go, source:cmd/wiki-engine/main.go]
+sources:
+  - file: internal/engine/engine_lint.go
+  - file: cmd/wiki-engine/main.go
 ---
 # Lint Workflow
 
