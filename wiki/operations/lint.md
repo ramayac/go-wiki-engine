@@ -32,6 +32,7 @@ Keep the wiki coherent, linked, and current.
 
 ```bash
 wiki-engine lint
+wiki-engine health
 wiki-engine list
 wiki-engine context --active
 wiki-engine search "TODO:"

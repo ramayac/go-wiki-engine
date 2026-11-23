@@ -37,6 +37,7 @@ Only [index.md](../index.md) and [README.md](../README.md) live at the wiki root
 |---|---|
 | `index.md` | Root catalog — reserved page ID `index`, graph BFS start point. |
 | `README.md` | Wiki rules and navigation. |
+| `vocabulary.yaml` | Optional list of allowed page tags. Created by `init`, never overwritten. Format: `wiki-engine schema --section vocabulary`. |
 | `prologue/` | Wiki-about-the-wiki files: `schema.md`, `repo-map.md`, `phases.md`, `log.md`, `config.md`. |
 | `operations/` | Repeatable workflow pages (`ingest.md`, `query.md`, `lint.md`). |
 | `decisions/`, `entities/`, `incidents/`, `architectures/`, … | Topic pages grouped by domain. |
@@ -67,7 +68,7 @@ description: "One-line summary of this page's purpose"
 superseded_by: ""               # Required when lifecycle is superseded
 created: "2026-01-15"
 updated: "2026-11-23"
-tags: [service]
+tags: [service]                 # Must be listed in vocabulary.yaml once that file lists any tag
 related: [architecture]         # Page IDs
 depends_on: [storage]           # Entity page IDs only
 sources:

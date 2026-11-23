@@ -185,8 +185,10 @@ Commands:
   version                  Print the version
   help                     Show this help
 
-Add --json (accepted anywhere) for structured JSON output. On error, --json
-commands emit {"ok": false, "error": "..."} and exit non-zero.
+Add --json (accepted anywhere) for structured JSON output. Success prints
+{"ok": true, "data": ..., "meta": {"schema_version": "1", "command": ...}}. On
+error, --json commands print {"ok": false, "error": "...", "error_code":
+"usage|findings|runtime"} and exit non-zero (2 for usage errors).
 Use -- to end flag parsing, e.g. wiki-engine search -- --check.
 -h/--help works after any command.`)
 }

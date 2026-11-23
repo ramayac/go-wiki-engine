@@ -36,7 +36,7 @@ wiki-engine lint
 wiki-engine check
 ```
 
-Re-running `wiki-engine init` is idempotent: it reconciles prompts, symlinks, ignore entries, and versioned root shims while preserving user-authored pages, `.wikirc`, and `AGENTS.md`/`CLAUDE.md` content. Pass `wiki-engine init --wiki-dir <name>` to rename an existing wiki directory safely. `init <name>` fails when `.wikirc` names a different directory. `init` and `sync-prompts` refuse to write through a symlink that leaves the repo, copy an edited prompt file to `<name>.bak` before replacing it, and delete only files the engine owns. A retired prompt (`onboard`, `lint`, `refresh`, `watch`) is deleted when it is unchanged and moved to `<name>.bak` when you edited it.
+Re-running `wiki-engine init` is idempotent: it reconciles prompts, symlinks, ignore entries, and versioned root shims while preserving user-authored pages, `.wikirc`, and `AGENTS.md`/`CLAUDE.md` content. Pass `wiki-engine init --wiki-dir <name>` to rename an existing wiki directory safely. `init <name>` fails when `.wikirc` names a different directory. `init` and `sync-prompts` refuse to write through a symlink that leaves the repo, copy an edited prompt file to `<name>.bak` before replacing it, and delete only files the engine owns. A retired prompt (`onboard`, `lint`, `refresh`, `watch`) is deleted when it is unchanged and moved to `<name>.bak` when you edited it. `init` also creates `<wiki_dir>/vocabulary.yaml` (an optional list of allowed page tags; `wiki-engine schema --section vocabulary`), installs the benchmark skill, and adds `.wiki-engine/` to an existing `.gitignore`. Details: [wiki/prologue/repo-map.md](wiki/prologue/repo-map.md).
 
 ## Slash Commands
 
@@ -63,7 +63,7 @@ The primary interface is slash commands in your AI tool, all sharing canonical d
 
 Run `wiki-engine help` for the full list, `wiki-engine schema` for the embedded v2 schema and page templates, or `wiki-engine --json <command>` for structured output. Command-by-command details: [wiki/prologue/repo-map.md](wiki/prologue/repo-map.md).
 
-Core commands: `init`, `sync-prompts`, `schema`, `list`, `headings`, `search`, `relevant`, `context`, `graph`, `summary`, `log-tail`, `changed`, `candidates`, `check`, `impact`, `lint` (`--fix`), `watch --once`, `diff`, `refresh`, `stats`, `health`, `upgrade`.
+Core commands: `init`, `sync-prompts`, `schema`, `list`, `headings`, `search`, `relevant`, `context`, `graph`, `summary`, `log-tail`, `changed`, `candidates`, `check`, `impact`, `lint` (`--fix`), `watch --once`, `diff`, `refresh`, `stats`, `health`, `upgrade`. `stats` prints counts. `health` prints advisory maintenance signals and always exits `0` unless a runtime error occurs. Why these features exist, with known limits and upgrade commands: [wiki/decisions/governance-parity.md](wiki/decisions/governance-parity.md).
 
 ## Configuration (`.wikirc`)
 
@@ -108,6 +108,7 @@ make golangci-lint    # Static analysis with the repo config (golangci-lint v2)
 make govulncheck      # Vulnerability scan (pinned govulncheck)
 make sync-scaffold    # Sync scaffold/ → internal/scaffold/files/ for embedding
 make integration      # End-to-end integration test suite
+make bench-test       # Python tests of the benchmark skill's headless runner (needs python3)
 make install          # go install globally
 ```
 
