@@ -56,8 +56,10 @@ echo "  ok"
 
 # Test: help goes to stdout when explicitly requested
 echo "--- help ---"
-"$BIN" help 2>/dev/null | grep -q "wiki-engine — repo-local wiki management tool" || { echo "FAIL: help should print to stdout"; exit 1; }
-"$BIN" list -h 2>/dev/null | grep -q "Usage:" || { echo "FAIL: list -h should print usage to stdout"; exit 1; }
+out=$("$BIN" help 2>/dev/null)
+grep -q "wiki-engine — repo-local wiki management tool" <<<"$out" || { echo "FAIL: help should print to stdout"; exit 1; }
+out=$("$BIN" list -h 2>/dev/null)
+grep -q "Usage:" <<<"$out" || { echo "FAIL: list -h should print usage to stdout"; exit 1; }
 echo "  ok"
 
 # Test: list
@@ -71,12 +73,14 @@ echo "  ok ($count files)"
 
 # Test: headings
 echo "--- headings ---"
-"$BIN" headings | grep -q "Wiki Index" || { echo "FAIL: expected 'Wiki Index' heading"; exit 1; }
+out=$("$BIN" headings)
+grep -q "Wiki Index" <<<"$out" || { echo "FAIL: expected 'Wiki Index' heading"; exit 1; }
 echo "  ok"
 
 # Test: search
 echo "--- search ---"
-"$BIN" search "schema" | grep -q "schema.md" || { echo "FAIL: search failed"; exit 1; }
+out=$("$BIN" search "schema")
+grep -q "schema.md" <<<"$out" || { echo "FAIL: search failed"; exit 1; }
 echo "  ok"
 
 # Test: lint
@@ -86,36 +90,46 @@ echo "  ok"
 
 # Test: stats
 echo "--- stats ---"
-"$BIN" stats | grep -q "files:" || { echo "FAIL: stats failed"; exit 1; }
+out=$("$BIN" stats)
+grep -q "files:" <<<"$out" || { echo "FAIL: stats failed"; exit 1; }
 echo "  ok"
 
 # Test: context
 echo "--- context ---"
-"$BIN" context --minimal | grep -q "catalog" || { echo "FAIL: context failed"; exit 1; }
+out=$("$BIN" context --minimal)
+grep -q "catalog" <<<"$out" || { echo "FAIL: context failed"; exit 1; }
 echo "  ok"
 
 # Test: summary
 echo "--- summary ---"
-"$BIN" summary README.md | grep -q "# Wiki" || { echo "FAIL: summary failed"; exit 1; }
+out=$("$BIN" summary README.md)
+grep -q "# Wiki" <<<"$out" || { echo "FAIL: summary failed"; exit 1; }
 echo "  ok"
 
 # Test: relevant
 echo "--- relevant ---"
-"$BIN" relevant "wiki" 3 | grep -q "." || { echo "FAIL: relevant failed"; exit 1; }
+out=$("$BIN" relevant "wiki" 3)
+grep -q "." <<<"$out" || { echo "FAIL: relevant failed"; exit 1; }
 echo "  ok"
 
 # Test: --json
 echo "--- json ---"
-"$BIN" --json stats | grep -q '"ok"' || { echo "FAIL: json output missing"; exit 1; }
-"$BIN" --json lint | grep -q '\[\]' || { echo "FAIL: json lint failed"; exit 1; }
+out=$("$BIN" --json stats)
+grep -q '"ok"' <<<"$out" || { echo "FAIL: json output missing"; exit 1; }
+out=$("$BIN" --json lint)
+grep -q '\[\]' <<<"$out" || { echo "FAIL: json lint failed"; exit 1; }
 echo "  ok"
 
 # Test: --json on admin commands
 echo "--- json admin commands ---"
-"$BIN" --json version | grep -q '"ok": true' || { echo "FAIL: --json version should emit an envelope"; exit 1; }
-"$BIN" --json version | grep -qE '"data": "[^"]+"' || { echo "FAIL: --json version should carry the version in data"; exit 1; }
-"$BIN" --json sync-prompts | grep -q '"updated"' || { echo "FAIL: --json sync-prompts should carry updated files"; exit 1; }
-"$BIN" --json sync-prompts | grep -q '"removed"' || { echo "FAIL: --json sync-prompts should carry a removed list"; exit 1; }
+out=$("$BIN" --json version)
+grep -q '"ok": true' <<<"$out" || { echo "FAIL: --json version should emit an envelope"; exit 1; }
+out=$("$BIN" --json version)
+grep -qE '"data": "[^"]+"' <<<"$out" || { echo "FAIL: --json version should carry the version in data"; exit 1; }
+out=$("$BIN" --json sync-prompts)
+grep -q '"updated"' <<<"$out" || { echo "FAIL: --json sync-prompts should carry updated files"; exit 1; }
+out=$("$BIN" --json sync-prompts)
+grep -q '"removed"' <<<"$out" || { echo "FAIL: --json sync-prompts should carry a removed list"; exit 1; }
 if "$BIN" search -- >/dev/null 2>&1; then
   echo "FAIL: search -- without terms should exit non-zero"
   exit 1
@@ -125,19 +139,19 @@ echo "  ok"
 # Test: --json fatal errors carry the envelope
 echo "--- json error envelope ---"
 out=$("$BIN" --json summary does-not-exist.md 2>/dev/null || true)
-echo "$out" | grep -q '"ok": false' || { echo "FAIL: fatal error should emit ok:false envelope"; exit 1; }
-echo "$out" | grep -q '"error"' || { echo "FAIL: fatal error should carry an error field"; exit 1; }
+grep -q '"ok": false' <<<"$out" || { echo "FAIL: fatal error should emit ok:false envelope"; exit 1; }
+grep -q '"error"' <<<"$out" || { echo "FAIL: fatal error should carry an error field"; exit 1; }
 out=$("$BIN" --json definitely-not-a-command 2>/dev/null || true)
-echo "$out" | grep -q '"ok": false' || { echo "FAIL: unknown command should emit ok:false envelope"; exit 1; }
+grep -q '"ok": false' <<<"$out" || { echo "FAIL: unknown command should emit ok:false envelope"; exit 1; }
 echo "  ok"
 
 # Test: --json usage errors carry the envelope too
 echo "--- json usage errors ---"
 out=$("$BIN" --json search 2>/dev/null || true)
-echo "$out" | grep -q '"ok": false' || { echo "FAIL: --json search without query should emit ok:false"; exit 1; }
-echo "$out" | grep -q "usage" || { echo "FAIL: usage error envelope should carry the usage line"; exit 1; }
+grep -q '"ok": false' <<<"$out" || { echo "FAIL: --json search without query should emit ok:false"; exit 1; }
+grep -q "usage" <<<"$out" || { echo "FAIL: usage error envelope should carry the usage line"; exit 1; }
 out=$("$BIN" --json summary 2>/dev/null || true)
-echo "$out" | grep -q '"ok": false' || { echo "FAIL: --json summary without page should emit ok:false"; exit 1; }
+grep -q '"ok": false' <<<"$out" || { echo "FAIL: --json summary without page should emit ok:false"; exit 1; }
 if "$BIN" --json search >/dev/null 2>&1; then
   echo "FAIL: --json search without query should exit non-zero"
   exit 1
@@ -148,7 +162,8 @@ echo "  ok"
 echo "--- diff ---"
 echo "# test change" >> wiki/README.md
 git add wiki/ && git commit -q -m "wiki change"
-"$BIN" diff HEAD~1 HEAD | grep -q "changed" || { echo "FAIL: diff failed"; exit 1; }
+out=$("$BIN" diff HEAD~1 HEAD)
+grep -q "changed" <<<"$out" || { echo "FAIL: diff failed"; exit 1; }
 echo "  ok"
 
 # Test: watch --once
@@ -160,8 +175,10 @@ echo "  ok"
 echo "--- impact ---"
 echo "package main // changed" > main.go
 git add main.go && git commit -q -m "source change"
-"$BIN" impact --fuzzy main.go | grep -q "main.go" || { echo "FAIL: impact --fuzzy failed"; exit 1; }
-"$BIN" --json impact main.go | grep -q '"changed_file"' || { echo "FAIL: json impact failed"; exit 1; }
+out=$("$BIN" impact --fuzzy main.go)
+grep -q "main.go" <<<"$out" || { echo "FAIL: impact --fuzzy failed"; exit 1; }
+out=$("$BIN" --json impact main.go)
+grep -q '"changed_file"' <<<"$out" || { echo "FAIL: json impact failed"; exit 1; }
 echo "  ok"
 
 # Test: duplicate detection (low threshold)
@@ -171,7 +188,7 @@ printf '%s\n' '---' 'id: dup2' 'lifecycle: current' 'description: dup2' '---' '#
 # Set a very low threshold to trigger it
 echo 'duplicate_threshold = 0.1' >> .wikirc
 out=$("$BIN" lint 2>&1 || true)
-echo "$out" | grep -q "duplicate-content" || { echo "FAIL: duplicate detection missing"; exit 1; }
+grep -q "duplicate-content" <<<"$out" || { echo "FAIL: duplicate detection missing"; exit 1; }
 echo "  duplicate detected"
 
 # Test: active flag on list and context
@@ -179,19 +196,22 @@ echo "--- active flag ---"
 # Make one of the operations legacy
 echo -e "---\nstatus: legacy\ndescription: Legacy lint procedure\n---\n# Legacy Lint" > wiki/operations/lint.md
 # Should not show up in list --active
-"$BIN" list --active | grep -q "wiki/operations/lint.md" && { echo "FAIL: legacy page in list --active"; exit 1; }
+out=$("$BIN" list --active)
+if grep -q "wiki/operations/lint.md" <<<"$out"; then echo "FAIL: legacy page in list --active"; exit 1; fi
 # Should show up in context without --active
-"$BIN" context | grep -q "operations/lint.md \[legacy\]" || { echo "FAIL: status missing in context catalog"; exit 1; }
+out=$("$BIN" context)
+grep -q "operations/lint.md \[legacy\]" <<<"$out" || { echo "FAIL: status missing in context catalog"; exit 1; }
 # Should not show up in context --active
-"$BIN" context --active | grep -q "operations/lint.md" && { echo "FAIL: legacy page in context --active"; exit 1; }
+out=$("$BIN" context --active)
+if grep -q "operations/lint.md" <<<"$out"; then echo "FAIL: legacy page in context --active"; exit 1; fi
 # Should show the active wiki graph format
 active_out=$("$BIN" context --active)
-echo "$active_out" | grep -q "== active wiki graph ==" || { echo "FAIL: active graph header missing"; exit 1; }
-echo "$active_out" | grep -q "index.md \[current\]" || { echo "FAIL: active node index.md missing in graph"; exit 1; }
-echo "$active_out" | grep -q "  -> prologue/schema.md" || { echo "FAIL: active edge in graph missing"; exit 1; }
+grep -q "== active wiki graph ==" <<<"$active_out" || { echo "FAIL: active graph header missing"; exit 1; }
+grep -q "index.md \[current\]" <<<"$active_out" || { echo "FAIL: active node index.md missing in graph"; exit 1; }
+grep -q "  -> prologue/schema.md" <<<"$active_out" || { echo "FAIL: active edge in graph missing"; exit 1; }
 # Sort topo check
 topo_out=$("$BIN" context --active --sort=topo)
-echo "$topo_out" | grep -q "== active wiki graph ==" || { echo "FAIL: topo sort failed"; exit 1; }
+grep -q "== active wiki graph ==" <<<"$topo_out" || { echo "FAIL: topo sort failed"; exit 1; }
 # Meaningless flag combos must be rejected, not silently ignored
 if "$BIN" context --sort=topo >/dev/null 2>&1; then
   echo "FAIL: --sort without --active should be rejected"
@@ -203,8 +223,8 @@ if "$BIN" context --minimal --active >/dev/null 2>&1; then
 fi
 # JSON graph format check
 active_json=$("$BIN" --json context --active)
-echo "$active_json" | grep -q '"nodes"' || { echo "FAIL: json graph output missing nodes"; exit 1; }
-echo "$active_json" | grep -q '"edges"' || { echo "FAIL: json graph output missing edges"; exit 1; }
+grep -q '"nodes"' <<<"$active_json" || { echo "FAIL: json graph output missing nodes"; exit 1; }
+grep -q '"edges"' <<<"$active_json" || { echo "FAIL: json graph output missing edges"; exit 1; }
 # graph command: navigation tree, neighborhood, stats, strict gate
 # Run in a fresh-init project: earlier sections leave orphan pages (dup1/dup2) around.
 echo "--- graph ---"
@@ -215,14 +235,15 @@ git config user.email "test@test"
 git config user.name "Test"
 "$BIN" init
 graph_out=$("$BIN" graph)
-echo "$graph_out" | grep -q "== wiki graph ==" || { echo "FAIL: graph header missing"; exit 1; }
-echo "$graph_out" | grep -q "index.md \[current\]" || { echo "FAIL: graph tree missing root node"; exit 1; }
-echo "$graph_out" | grep -q "stats: " || { echo "FAIL: graph stats missing"; exit 1; }
-"$BIN" graph prologue/schema.md | grep -q "== backlinks ==" || { echo "FAIL: graph neighborhood missing backlinks"; exit 1; }
+grep -q "== wiki graph ==" <<<"$graph_out" || { echo "FAIL: graph header missing"; exit 1; }
+grep -q "index.md \[current\]" <<<"$graph_out" || { echo "FAIL: graph tree missing root node"; exit 1; }
+grep -q "stats: " <<<"$graph_out" || { echo "FAIL: graph stats missing"; exit 1; }
+out=$("$BIN" graph prologue/schema.md)
+grep -q "== backlinks ==" <<<"$out" || { echo "FAIL: graph neighborhood missing backlinks"; exit 1; }
 dot_out=$("$BIN" graph --dot)
-echo "$dot_out" | grep -q "digraph wiki {" || { echo "FAIL: graph dot output missing digraph header"; exit 1; }
+grep -q "digraph wiki {" <<<"$dot_out" || { echo "FAIL: graph dot output missing digraph header"; exit 1; }
 graph_json=$("$BIN" --json graph)
-echo "$graph_json" | grep -q '"stats"' || { echo "FAIL: json graph output missing stats"; exit 1; }
+grep -q '"stats"' <<<"$graph_json" || { echo "FAIL: json graph output missing stats"; exit 1; }
 "$BIN" graph --strict || { echo "FAIL: graph --strict should pass on a healthy wiki"; exit 1; }
 if "$BIN" graph nope.md >/dev/null 2>&1; then
   echo "FAIL: graph with unknown page should be rejected"
@@ -233,7 +254,8 @@ if "$BIN" graph --dot --json >/dev/null 2>&1; then
   exit 1
 fi
 # json mode honors the page argument (neighborhood JSON, not the whole graph)
-"$BIN" --json graph prologue/schema.md | grep -q '"backlinks"' || { echo "FAIL: json graph <page> missing neighborhood backlinks"; exit 1; }
+out=$("$BIN" --json graph prologue/schema.md)
+grep -q '"backlinks"' <<<"$out" || { echo "FAIL: json graph <page> missing neighborhood backlinks"; exit 1; }
 # strict applies to neighborhood mode too
 printf '%s\n' '---' 'status: current' 'description: Orphan2' '---' '# Orphan2' > wiki/orphan2.md
 if "$BIN" graph prologue/schema.md --strict >/dev/null 2>&1; then
@@ -247,7 +269,8 @@ if "$BIN" graph --strict >/dev/null 2>&1; then
   echo "FAIL: graph --strict should fail with an orphan page"
   exit 1
 fi
-"$BIN" graph | grep -q "orphan.md" || { echo "FAIL: graph should report the orphan page"; exit 1; }
+out=$("$BIN" graph)
+grep -q "orphan.md" <<<"$out" || { echo "FAIL: graph should report the orphan page"; exit 1; }
 printf '%s\n' '---' 'status: current' 'description: Broken' '---' '# Broken' '- [nope.md](nope.md)' > wiki/broken.md
 cp wiki/index.md "$TMPDIR/index.md.bak"
 printf '%s\n' '- [broken.md](broken.md)' >> wiki/index.md
@@ -255,13 +278,16 @@ if "$BIN" graph --strict >/dev/null 2>&1; then
   echo "FAIL: graph --strict should fail with a broken link"
   exit 1
 fi
-"$BIN" graph | grep -q "broken edge" || { echo "FAIL: graph should report the broken link"; exit 1; }
+out=$("$BIN" graph)
+grep -q "broken edge" <<<"$out" || { echo "FAIL: graph should report the broken link"; exit 1; }
 # references in front matter surface in the neighborhood view and are linted
 echo "package main" > main.go
 printf '%s\n' '---' 'status: current' 'description: Refs' 'references: [source:main.go, issue:JIRA-42]' '---' '# Refs' > wiki/refs.md
 printf '%s\n' '- [refs.md](refs.md)' >> wiki/index.md
-"$BIN" graph refs.md | grep -q "== references ==" || { echo "FAIL: graph neighborhood missing references section"; exit 1; }
-"$BIN" graph refs.md | grep -q "issue: JIRA-42" || { echo "FAIL: graph neighborhood missing issue reference"; exit 1; }
+out=$("$BIN" graph refs.md)
+grep -q "== references ==" <<<"$out" || { echo "FAIL: graph neighborhood missing references section"; exit 1; }
+out=$("$BIN" graph refs.md)
+grep -q "issue: JIRA-42" <<<"$out" || { echo "FAIL: graph neighborhood missing issue reference"; exit 1; }
 "$BIN" lint --check=references || { echo "FAIL: lint --check=references should pass on valid references"; exit 1; }
 # a broken source reference fails the references checker
 printf '%s\n' '---' 'status: current' 'description: Bad' 'references: [source:nope.go, issue:not-a-key]' '---' '# Bad' > wiki/badref.md
@@ -299,7 +325,7 @@ if "$BIN" lint --check=definitely-not-a-checker >/dev/null 2>&1; then
   exit 1
 fi
 out=$("$BIN" lint --check=definitely-not-a-checker 2>&1 || true)
-echo "$out" | grep -q "unknown checker" || { echo "FAIL: expected unknown checker message"; exit 1; }
+grep -q "unknown checker" <<<"$out" || { echo "FAIL: expected unknown checker message"; exit 1; }
 if "$BIN" lint --skip=all >/dev/null 2>&1; then
   echo "FAIL: --skip=all should be rejected"
   exit 1
@@ -313,7 +339,7 @@ if "$BIN" --json lint >/dev/null 2>&1; then
   exit 1
 fi
 out=$("$BIN" --json lint 2>/dev/null || true)
-echo "$out" | grep -q '"ok": false' || { echo "FAIL: failing lint should report ok:false"; exit 1; }
+grep -q '"ok": false' <<<"$out" || { echo "FAIL: failing lint should report ok:false"; exit 1; }
 echo "  ok"
 
 # Test: lint on a missing wiki dir carries the diagnostic in the error field
@@ -324,7 +350,7 @@ git init -q -b main
 git config user.email "test@test"
 git config user.name "Test"
 out=$("$BIN" --json lint 2>/dev/null || true)
-echo "$out" | grep -q '"error": "wiki directory not found' || { echo "FAIL: missing wiki dir should carry the diagnostic in the error field"; exit 1; }
+grep -q '"error": "wiki directory not found' <<<"$out" || { echo "FAIL: missing wiki dir should carry the diagnostic in the error field"; exit 1; }
 cd "$TMPDIR"
 echo "  ok"
 
@@ -337,18 +363,20 @@ echo "  ok"
 # Test: context_summarize = true defaults context to --summarize mode
 echo "--- context_summarize default ---"
 echo 'context_summarize = true' >> .wikirc
-"$BIN" --json context | grep -q '"summarized": true' || { echo "FAIL: context_summarize should default context to summarize mode"; exit 1; }
+out=$("$BIN" --json context)
+grep -q '"summarized": true' <<<"$out" || { echo "FAIL: context_summarize should default context to summarize mode"; exit 1; }
 echo "  ok"
 
 # Test: plain-text context --summarize includes per-page previews
 echo "--- context summarize plain ---"
-"$BIN" context --summarize | grep -q "(lines:" || { echo "FAIL: plain context --summarize should include previews and line counts"; exit 1; }
+out=$("$BIN" context --summarize)
+grep -q "(lines:" <<<"$out" || { echo "FAIL: plain context --summarize should include previews and line counts"; exit 1; }
 if "$BIN" context --active --summarize >/dev/null 2>&1; then
   echo "FAIL: --active --summarize should be rejected"
   exit 1
 fi
 out=$("$BIN" context --active --summarize 2>&1 || true)
-echo "$out" | grep -q "cannot be combined" || { echo "FAIL: rejection should explain the combination"; exit 1; }
+grep -q "cannot be combined" <<<"$out" || { echo "FAIL: rejection should explain the combination"; exit 1; }
 echo "  ok"
 
 # Test: continuous watch is disabled when watch_interval = 0
@@ -358,7 +386,7 @@ if "$BIN" watch >/dev/null 2>&1; then
   exit 1
 fi
 out=$("$BIN" --json watch 2>/dev/null || true)
-echo "$out" | grep -q '"ok": false' || { echo "FAIL: --json watch guidance should emit ok:false"; exit 1; }
+grep -q '"ok": false' <<<"$out" || { echo "FAIL: --json watch guidance should emit ok:false"; exit 1; }
 echo "  ok"
 
 # Test: legacy flat wiki layout still lints (backward compatibility)
@@ -446,8 +474,10 @@ git add . && git commit -q -m "initial"
 
 # 1. Initialize repository & check schema command
 "$BIN" init
-"$BIN" schema --section lifecycle | grep -q "superseded" || { echo "FAIL: schema --section lifecycle failed"; exit 1; }
-"$BIN" --json schema --type entity | grep -q '"name": "entity"' || { echo "FAIL: json schema --type entity failed"; exit 1; }
+out=$("$BIN" schema --section lifecycle)
+grep -q "superseded" <<<"$out" || { echo "FAIL: schema --section lifecycle failed"; exit 1; }
+out=$("$BIN" --json schema --type entity)
+grep -q '"name": "entity"' <<<"$out" || { echo "FAIL: json schema --type entity failed"; exit 1; }
 
 # 2. Re-run initialization after prompt edit — repairs prompt, preserves user content
 echo "# Custom user note" > AGENTS.md
@@ -494,14 +524,16 @@ grep -q "lifecycle: legacy" wiki/legacy-doc.md || { echo "FAIL: lint --fix did n
 grep -q "sources:" wiki/legacy-doc.md || { echo "FAIL: lint --fix did not convert inline source reference"; exit 1; }
 grep -q '\[legacy\]' wiki/index.md || { echo "FAIL: lint --fix did not add index badge"; exit 1; }
 fix2=$("$BIN" --json lint --fix)
-echo "$fix2" | grep -q '"total_fixes": 0' || { echo "FAIL: second lint --fix was not idempotent: $fix2"; exit 1; }
+grep -q '"total_fixes": 0' <<<"$fix2" || { echo "FAIL: second lint --fix was not idempotent: $fix2"; exit 1; }
 
 # 5. Search active vs historical pages
-if "$BIN" search "Unique legacy body" | grep -q "legacy-doc.md"; then
+out=$("$BIN" search "Unique legacy body")
+if grep -q "legacy-doc.md" <<<"$out"; then
   echo "FAIL: default search must exclude legacy pages"
   exit 1
 fi
-"$BIN" search --include-history "Unique legacy body" | grep -q "legacy-doc.md" || { echo "FAIL: search --include-history should find legacy page"; exit 1; }
+out=$("$BIN" search --include-history "Unique legacy body")
+grep -q "legacy-doc.md" <<<"$out" || { echo "FAIL: search --include-history should find legacy page"; exit 1; }
 
 # 6. Build graph with dependencies and source nodes
 mkdir -p wiki/entities
@@ -534,10 +566,14 @@ depends_on: [store]
 See [Index](../index.md).
 EOF
 printf '%s\n' '- [entities/store.md](entities/store.md) | Storage engine' '- [entities/api.md](entities/api.md) | API layer' >> wiki/index.md
-"$BIN" --json graph --include-sources | grep -q '"schema_version": "2"' || { echo "FAIL: graph JSON missing schema_version 2"; exit 1; }
-"$BIN" --json graph --include-sources | grep -q '"kind": "depends_on"' || { echo "FAIL: graph missing depends_on edge"; exit 1; }
-"$BIN" --json graph --include-sources | grep -q '"kind": "source"' || { echo "FAIL: graph missing opt-in source node"; exit 1; }
-"$BIN" graph store | grep -q "entities/store.md" || { echo "FAIL: graph ID lookup failed"; exit 1; }
+out=$("$BIN" --json graph --include-sources)
+grep -q '"schema_version": "2"' <<<"$out" || { echo "FAIL: graph JSON missing schema_version 2"; exit 1; }
+out=$("$BIN" --json graph --include-sources)
+grep -q '"kind": "depends_on"' <<<"$out" || { echo "FAIL: graph missing depends_on edge"; exit 1; }
+out=$("$BIN" --json graph --include-sources)
+grep -q '"kind": "source"' <<<"$out" || { echo "FAIL: graph missing opt-in source node"; exit 1; }
+out=$("$BIN" graph store)
+grep -q "entities/store.md" <<<"$out" || { echo "FAIL: graph ID lookup failed"; exit 1; }
 
 git add . && git commit -q -m "commit typed wiki"
 git checkout -q -b feature/parity-check
@@ -545,12 +581,12 @@ git checkout -q -b feature/parity-check
 # 7 & 8 & 10. Change a cited file (working tree) and run check -> exit 0 with pages_to_review
 echo "package store // changed" > pkg/store/db.go
 chk_out=$("$BIN" --json check --base main)
-echo "$chk_out" | grep -q '"ok": true' || { echo "FAIL: check on modified cited file should be ok:true (review only)"; exit 1; }
-echo "$chk_out" | grep -q 'wiki/entities/store.md' || { echo "FAIL: check should recommend reviewing store.md"; exit 1; }
-echo "$chk_out" | grep -q '"directory"' || { echo "FAIL: check should report directory match reason"; exit 1; }
+grep -q '"ok": true' <<<"$chk_out" || { echo "FAIL: check on modified cited file should be ok:true (review only)"; exit 1; }
+grep -q 'wiki/entities/store.md' <<<"$chk_out" || { echo "FAIL: check should recommend reviewing store.md"; exit 1; }
+grep -q '"directory"' <<<"$chk_out" || { echo "FAIL: check should report directory match reason"; exit 1; }
 # Exact impact also reports directory match reason
 imp_out=$("$BIN" --json impact pkg/store/db.go)
-echo "$imp_out" | grep -q '"reason": "directory"' || { echo "FAIL: impact missing directory reason"; exit 1; }
+grep -q '"reason": "directory"' <<<"$imp_out" || { echo "FAIL: impact missing directory reason"; exit 1; }
 
 # 9. Delete a cited file and verify check fails with exit 1 and reports breakage
 git rm -q main.go
@@ -560,7 +596,7 @@ if "$BIN" check --base main >/dev/null 2>&1; then
   exit 1
 fi
 brk_out=$("$BIN" --json check --base main || true)
-echo "$brk_out" | grep -q '"deleted_source"' || { echo "FAIL: check JSON missing deleted_source finding"; exit 1; }
+grep -q '"deleted_source"' <<<"$brk_out" || { echo "FAIL: check JSON missing deleted_source finding"; exit 1; }
 
 # Restore main.go so repo is healthy again
 git checkout main -- main.go
@@ -577,6 +613,69 @@ echo "unrelated" > notes.txt
 "$BIN" init
 grep -qx "unrelated" notes.txt || { echo "FAIL: re-init modified unrelated file"; exit 1; }
 "$BIN" lint || { echo "FAIL: renamed docs/ wiki failed lint"; exit 1; }
+
+cd "$TMPDIR"
+echo "  ok"
+
+# --- Security regressions ---
+echo "--- security: option injection, symlink write-through, ownership ---"
+mkdir -p "$TMPDIR/secproj"
+cd "$TMPDIR/secproj"
+git init -q -b main
+git config user.email "test@test"
+git config user.name "Test"
+echo "package main" > main.go
+git add main.go && git commit -q -m "initial"
+"$BIN" init >/dev/null
+git add -A && git commit -q -m "wiki"
+echo "victim-original" > "$TMPDIR/victim"
+
+# (a) default_diff in .wikirc must not reach git as an option
+cp .wikirc "$TMPDIR/wikirc.good"
+echo 'default_diff = "--output=../victim"' >> .wikirc
+if "$BIN" changed >/dev/null 2>&1; then
+  echo "FAIL: changed should reject an option-like default_diff"
+  exit 1
+fi
+test "$(cat "$TMPDIR/victim")" = "victim-original" || { echo "FAIL: default_diff option injection modified the victim file"; exit 1; }
+cp "$TMPDIR/wikirc.good" .wikirc
+
+# (b) an option-like diff range on the command line is rejected
+if "$BIN" changed -- '--output=../victim' >/dev/null 2>&1; then
+  echo "FAIL: changed should reject an option-like diff range"
+  exit 1
+fi
+test "$(cat "$TMPDIR/victim")" = "victim-original" || { echo "FAIL: diff range option injection modified the victim file"; exit 1; }
+
+# (c) a symlinked managed directory must not be written through
+rm -rf .wiki-instructions
+mkdir "$TMPDIR/outside"
+echo "outside-original" > "$TMPDIR/outside/ingest.md"
+case "$(uname -s 2>/dev/null || echo Windows)" in
+  Windows|MINGW*|MSYS*|CYGWIN*) echo "  symlink checks skipped (no symlinks)" ;;
+  *)
+    ln -s "$TMPDIR/outside" .wiki-instructions
+    if "$BIN" sync-prompts >/dev/null 2>&1; then
+      echo "FAIL: sync-prompts should fail when .wiki-instructions is a symlink outside the repo"
+      exit 1
+    fi
+    test "$(cat "$TMPDIR/outside/ingest.md")" = "outside-original" || { echo "FAIL: sync-prompts wrote through a symlink"; exit 1; }
+    test "$(ls "$TMPDIR/outside")" = "ingest.md" || { echo "FAIL: sync-prompts created files outside the repo"; exit 1; }
+    rm .wiki-instructions
+    "$BIN" sync-prompts >/dev/null
+    ;;
+esac
+
+# (d) user-owned files in managed directories survive sync-prompts
+mkdir -p .claude/commands
+echo "my command" > .claude/commands/wiki-custom.md
+"$BIN" sync-prompts >/dev/null
+test "$(cat .claude/commands/wiki-custom.md)" = "my command" || { echo "FAIL: sync-prompts removed or changed a user file"; exit 1; }
+
+# (e) an unknown command is a usage error (exit 2)
+rc=0
+"$BIN" bogus >/dev/null 2>&1 || rc=$?
+test "$rc" -eq 2 || { echo "FAIL: unknown command should exit 2, got $rc"; exit 1; }
 
 cd "$TMPDIR"
 echo "  ok"
