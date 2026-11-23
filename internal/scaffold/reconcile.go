@@ -48,6 +48,18 @@ func Reconcile(destDir string, opts ReconcileOptions) (*ReconcileResult, error) 
 	}
 
 	wikiDir := opts.WikiDir
+	// A positional name must match an existing .wikirc, or lint would read the
+	// old directory while init writes the new one.
+	if wikiDir != "" && opts.RenameTo == "" {
+		if err := paths.ValidateWikiDir(wikiDir); err != nil {
+			return nil, err
+		}
+		if _, serr := os.Stat(filepath.Join(destDir, ".wikirc")); serr == nil {
+			if cfg, lerr := config.Load(destDir); lerr == nil && cfg.WikiDir != wikiDir {
+				return nil, fmt.Errorf("wiki_dir in .wikirc is %q; run init --wiki-dir=%s to rename or edit .wikirc", cfg.WikiDir, wikiDir)
+			}
+		}
+	}
 	if wikiDir == "" {
 		if existingWikiDir != "" {
 			wikiDir = existingWikiDir
@@ -114,6 +126,9 @@ func Reconcile(destDir string, opts ReconcileOptions) (*ReconcileResult, error) 
 		}
 
 		dest := filepath.Join(destDir, filepath.FromSlash(rel))
+		if err := guardWrite(destDir, dest); err != nil {
+			return err
+		}
 
 		if d.IsDir() {
 			return os.MkdirAll(dest, 0o755)
@@ -137,8 +152,8 @@ func Reconcile(destDir string, opts ReconcileOptions) (*ReconcileResult, error) 
 			if rerr != nil {
 				return rerr
 			}
-			content := wikiDirAssignRe.ReplaceAllString(string(data), `wiki_dir = "`+wikiDir+`"`)
-			content = ignoreWikiEntryRe.ReplaceAllString(content, `  "`+wikiDir+`/"`)
+			content := wikiDirAssignRe.ReplaceAllLiteralString(string(data), `wiki_dir = "`+wikiDir+`"`)
+			content = ignoreWikiEntryRe.ReplaceAllLiteralString(content, `  "`+wikiDir+`/"`)
 			if err := os.WriteFile(dest, []byte(content), 0o644); err != nil {
 				return err
 			}
@@ -164,7 +179,7 @@ func Reconcile(destDir string, opts ReconcileOptions) (*ReconcileResult, error) 
 		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
 			return err
 		}
-		if err := writeScaffoldFile(dest, rel, data); err != nil {
+		if err := writeScaffoldFile(destDir, dest, rel, data); err != nil {
 			return err
 		}
 		res.Created = append(res.Created, filepath.ToSlash(rel))
@@ -223,9 +238,12 @@ func renameAndReconcile(destDir, oldWikiDir, newWikiDir string) (*ReconcileResul
 	// Update .wikirc wiki_dir and ignore entry.
 	wikircPath := filepath.Join(destDir, ".wikirc")
 	if data, err := os.ReadFile(wikircPath); err == nil {
+		if err := guardWrite(destDir, wikircPath); err != nil {
+			return nil, err
+		}
 		content := string(data)
 		if wikiDirAssignRe.MatchString(content) {
-			content = wikiDirAssignRe.ReplaceAllString(content, `wiki_dir = "`+newWikiDir+`"`)
+			content = wikiDirAssignRe.ReplaceAllLiteralString(content, `wiki_dir = "`+newWikiDir+`"`)
 		} else {
 			content = fmt.Sprintf("wiki_dir = %q\n%s", newWikiDir, content)
 		}

@@ -370,7 +370,8 @@ func TestRunInit(t *testing.T) {
 		}
 	}
 
-	// Custom wiki dir name.
+	// Custom wiki dir name, in a fresh repo (init refuses a name that differs from .wikirc).
+	dir = t.TempDir()
 	if err := os.Chdir(dir); err != nil {
 		t.Fatal(err)
 	}
