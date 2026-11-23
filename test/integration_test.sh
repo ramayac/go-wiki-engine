@@ -680,5 +680,58 @@ test "$rc" -eq 2 || { echo "FAIL: unknown command should exit 2, got $rc"; exit 
 cd "$TMPDIR"
 echo "  ok"
 
+# --- vocabulary ---
+echo "--- vocabulary ---"
+mkdir -p "$TMPDIR/vocabproj"
+cd "$TMPDIR/vocabproj"
+git init -q -b main
+git config user.email "test@test"
+git config user.name "Test"
+echo "package main" > main.go
+git add . && git commit -q -m "initial"
+"$BIN" init
+test -f wiki/vocabulary.yaml || { echo "FAIL: init did not create wiki/vocabulary.yaml"; exit 1; }
+
+# Free-form by default: any tag passes.
+cat > wiki/tagged.md <<'EOF'
+---
+id: tagged
+type: concept
+lifecycle: current
+description: "Tag test page"
+tags: [Typo-Tag]
+---
+# Tagged
+
+See [Index](index.md).
+EOF
+printf '%s\n' '- [tagged.md](tagged.md) | Tag test page' >> wiki/index.md
+"$BIN" lint --check=vocabulary >/dev/null || { echo "FAIL: free-form vocabulary rejected a tag"; exit 1; }
+
+# Listing one tag makes the vocabulary controlled.
+printf 'concerns:\n  - typo-tag\n' > wiki/vocabulary.yaml
+rc=0
+out=$("$BIN" lint --check=vocabulary 2>&1) || rc=$?
+test "$rc" -eq 1 || { echo "FAIL: unlisted tag should fail lint (exit 1), got $rc"; exit 1; }
+grep -q 'did you mean "typo-tag"' <<<"$out" || { echo "FAIL: no did-you-mean hint: $out"; exit 1; }
+"$BIN" lint --skip=vocabulary >/dev/null || { echo "FAIL: --skip=vocabulary did not silence the check"; exit 1; }
+
+# Fixing the tag passes; re-running init keeps the user file.
+sed -i.bak 's/Typo-Tag/typo-tag/' wiki/tagged.md && rm wiki/tagged.md.bak
+"$BIN" lint --check=vocabulary >/dev/null || { echo "FAIL: listed tag rejected"; exit 1; }
+"$BIN" init >/dev/null
+grep -q "typo-tag" wiki/vocabulary.yaml || { echo "FAIL: re-init overwrote wiki/vocabulary.yaml"; exit 1; }
+
+# A malformed file is an error, not free-form.
+printf 'concerns: [a\n' > wiki/vocabulary.yaml
+rc=0
+"$BIN" lint --check=vocabulary >/dev/null 2>&1 || rc=$?
+test "$rc" -eq 1 || { echo "FAIL: malformed vocabulary should fail lint, got $rc"; exit 1; }
+
+out=$("$BIN" schema --section vocabulary)
+grep -q "vocabulary.yaml" <<<"$out" || { echo "FAIL: schema --section vocabulary failed"; exit 1; }
+cd "$TMPDIR"
+echo "  ok"
+
 echo ""
 echo "=== all integration tests passed ==="

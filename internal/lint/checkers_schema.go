@@ -740,3 +740,50 @@ func lineOrOne(l int) int {
 	}
 	return 1
 }
+
+// --- vocabularyChecker ---
+
+type vocabularyChecker struct{}
+
+func (c *vocabularyChecker) Name() string       { return "vocabulary" }
+func (c *vocabularyChecker) Group() string      { return "schema" }
+func (c *vocabularyChecker) Category() Category { return CategorySnapshot }
+
+func (c *vocabularyChecker) Check(snap *model.WikiSnapshot, _ *config.Config) ([]Issue, error) {
+	file := filepath.ToSlash(filepath.Join(snap.WikiDir, model.VocabularyFile))
+	if snap.VocabularyErr != nil {
+		return []Issue{{
+			Severity: SevError,
+			Check:    c.Name(),
+			File:     file,
+			Message:  snap.VocabularyErr.Error(),
+		}}, nil
+	}
+	if snap.Vocabulary.Empty() {
+		return nil, nil
+	}
+	var issues []Issue
+	// Pages of every lifecycle are checked: tags are metadata, not claims.
+	for _, p := range snap.Pages {
+		if p.FMErr != nil {
+			continue
+		}
+		for _, tag := range p.Metadata.Tags {
+			if snap.Vocabulary.Has(tag) {
+				continue
+			}
+			msg := fmt.Sprintf("tag %q is not in %s", tag, file)
+			if hint := snap.Vocabulary.Suggest(tag); hint != "" {
+				msg += fmt.Sprintf(` (did you mean "%s"?)`, hint)
+			}
+			issues = append(issues, Issue{
+				Severity: SevError,
+				Check:    c.Name(),
+				File:     p.Path,
+				Line:     p.Metadata.FieldLines["tags"],
+				Message:  msg,
+			})
+		}
+	}
+	return issues, nil
+}

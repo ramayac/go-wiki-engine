@@ -60,6 +60,12 @@ type WikiSnapshot struct {
 	ByRepoPath map[string]*Page // keyed by Path (e.g. "wiki/prologue/schema.md")
 	LoadIssues []LoadIssue
 	ReadCounts map[string]int // counts disk reads per repo-relative path
+
+	// Vocabulary is the controlled tag vocabulary from vocabulary.yaml. It is
+	// empty (free-form) when the file is missing or lists no tags. VocabularyErr
+	// holds the load error for a malformed or out-of-boundary file.
+	Vocabulary    Vocabulary
+	VocabularyErr error
 }
 
 // LoadSnapshot walks the wiki directory once, validates containment for every
@@ -87,6 +93,8 @@ func LoadSnapshot(repoRoot, wikiDir string) (*WikiSnapshot, error) {
 		ByRepoPath: make(map[string]*Page),
 		ReadCounts: make(map[string]int),
 	}
+
+	snap.Vocabulary, snap.VocabularyErr = LoadVocabulary(wikiRoot)
 
 	var mdPaths []string
 	walkErr := filepath.WalkDir(wikiRoot, func(path string, d fs.DirEntry, err error) error {

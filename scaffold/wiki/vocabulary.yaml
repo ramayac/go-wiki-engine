@@ -1,0 +1,19 @@
+# Controlled Tag Vocabulary — optional, empty by default.
+#
+# Tags are free-form out of the box: as long as this file has no tags
+# listed (comments and a truly empty file behave identically),
+# `wiki-engine lint` accepts any tag on any page.
+#
+# If your team wants a controlled vocabulary instead — it catches typos
+# and near-duplicate tags, and keeps tag search/filtering meaningful as
+# the wiki grows — list allowed tags below under any category headings
+# you like (the category names are just for your own organization; the
+# engine only cares about the tag values). A bare list also works. Once
+# any tag appears here, `wiki-engine lint` starts rejecting any page tag
+# not in this list.
+#
+# Example:
+# concerns:
+#   - documentation
+#   - testing
+#   - security

@@ -94,6 +94,7 @@ func AllCheckers() []Checker {
 		&pageIDsChecker{},
 		&pageTypesChecker{},
 		&relationshipsChecker{},
+		&vocabularyChecker{},
 		&indexFormatChecker{},
 		&bareURLChecker{},
 		&indexLinksChecker{},
