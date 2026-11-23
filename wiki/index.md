@@ -32,4 +32,4 @@ description: "Catalog of all wiki pages with one-line descriptions."
 
 ## Prompt Workflows
 
-The slash-command prompts live outside the wiki in `.wiki-instructions/` (canonical source, symlinked into `.github/prompts/` and `.claude/commands/`). `/wiki-ingest`, `/wiki-query`, and `/wiki-lint` mirror the workflows under [operations/](operations/ingest.md); `/wiki-onboard`, `/wiki-refresh`, `/wiki-watch`, and `/wiki-upgrade` are documented in [prologue/repo-map.md](prologue/repo-map.md).
+The slash-command prompts live outside the wiki in `.wiki-instructions/` (canonical source, symlinked into `.github/prompts/` and `.claude/commands/`). The set is `/wiki-seed`, `/wiki-ingest`, `/wiki-query`, `/wiki-plan`, `/wiki-save`, and `/wiki-upgrade`. `/wiki-ingest` and `/wiki-query` mirror the workflows under [operations/](operations/ingest.md). `lint`, `refresh`, and `watch` are CLI commands, not prompts; see the subcommand table in [prologue/repo-map.md](prologue/repo-map.md). The README has the purpose of each prompt.

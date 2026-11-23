@@ -38,10 +38,7 @@ name: "Wiki Maintainer"
 | Answering a question about the repo | `wiki-query` |
 | Saving a lesson, decision, or procedure from a session | `wiki-save` |
 | Writing an implementation handoff to `.wiki-engine/handoff.md` | `wiki-plan` |
-| Periodic health check, fixing drift | `wiki-refresh` |
-| Structural issues, broken links, formatting errors, or missing metadata | `wiki-lint` |
 | Upgrading the CLI version and reconciling prompts | `wiki-upgrade` |
-| Monitoring for un-ingested changes continuously | `wiki-watch` |
 
 ## Page Lifecycle & Types
 

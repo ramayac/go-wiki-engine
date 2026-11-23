@@ -36,7 +36,7 @@ func TestInit(t *testing.T) {
 	prompts := []string{
 		".github/prompts/wiki-ingest.prompt.md",
 		".github/prompts/wiki-query.prompt.md",
-		".github/prompts/wiki-refresh.prompt.md",
+		".github/prompts/wiki-upgrade.prompt.md",
 		".github/prompts/wiki-seed.prompt.md",
 		".github/prompts/wiki-plan.prompt.md",
 		".github/prompts/wiki-save.prompt.md",
@@ -487,8 +487,8 @@ func assertPromptSymlinks(t *testing.T, dest string) {
 	}
 	for _, f := range []string{
 		".github/prompts/wiki-ingest.prompt.md",
-		".github/prompts/wiki-watch.prompt.md",
-		".claude/commands/wiki-watch.md",
+		".github/prompts/wiki-query.prompt.md",
+		".claude/commands/wiki-upgrade.md",
 		".github/instructions/wiki-maintainer.instructions.md",
 	} {
 		p := filepath.Join(dest, f)

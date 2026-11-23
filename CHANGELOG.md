@@ -42,6 +42,11 @@ surface is defined in [README.md](README.md).
 - **`wiki_dir` and `init` argument rules:** A `wiki_dir` that starts with `-` is rejected in `init` and in `.wikirc`. `init <name>` in a repo whose `.wikirc` names a different wiki directory now fails with a message instead of leaving `.wikirc` stale.
 - **`upgrade` verifies provenance only through `gh attestation verify`:** It is pinned to the `release.yml` signer workflow as well as the repository, and no longer trusts an `.intoto.jsonl` file served by the release. Without `gh` or attestations it still proceeds on the checksum, unless `--require-attestation` is set; any other `gh` failure stops the upgrade. `SECURITY.md` and the release page state what is proven.
 - **`upgrade` is fail-closed:** It never falls back to `go install` on download, checksum, or provenance failure. It streams archives to disk with compressed/expanded size caps and path-traversal checks, and `go install` needs explicit `--from-source` pinned to the release tag.
+- **Retired prompts leave onboarded repos safely:** `sync-prompts` and `init` delete a retired prompt only when its bytes match a version this repo shipped. A retired prompt you edited moves to `<name>.bak` (then `.bak.1`, ...) with one line on stderr. `retiredManagedFiles` now maps each retired path to its shipped SHA-256 digests.
+
+### Removed
+
+- **Prompts `/wiki-onboard`, `/wiki-lint`, `/wiki-refresh`, `/wiki-watch`:** The shipped set is `seed`, `ingest`, `query`, `plan`, `save`, and `upgrade`. `wiki-engine lint`, `refresh`, and `watch` stay as CLI commands. `/wiki-seed` replaces `/wiki-onboard`.
 
 ### Fixed
 

@@ -47,7 +47,7 @@ The user's argument narrows the pass:
    - Take the reason for a design from the README, `docs/`, ADRs, and code comments. Write it in `## Why`. If no source states the reason, leave out `## Why`. Do not write the rationale marker. Do not guess. A seed has no session, commit, or PR, so a marker on every page gives no information.
    - Set `lifecycle: current`, unless the source says the work is planned, in progress, or replaced.
    - Quote the dates (`created: "YYYY-MM-DD"`). Make `id` match the file name without `.md`.
-7. Record each finding as one line in `wiki/architectures/gotchas.md`: `- **[OPEN]** <one sentence>. Evidence: [path](../../path).` Findings are code that no page explains, a producer with no consumer, a missing retry path, a resource outside the infrastructure code, or a ticket id in a comment. Create the page from the `concept` template if it does not exist.
+7. Record each finding as one list item in the `## Open questions` section of `wiki/prologue/repo-map.md`: `- <one sentence>. Evidence: [path](../../path).` Add the section above `## Related` if it does not exist. Findings are code that no page explains, a producer with no consumer, a missing retry path, a resource outside the infrastructure code, or a ticket id in a comment.
 8. Fill `wiki/prologue/repo-map.md`: Purpose, High-Signal Areas, Generated Artifacts, Build and Run Path, and Ignored Paths. Set the phases in `wiki/prologue/phases.md` to match the work done. Link the new pages from `wiki/index.md`, one entry for each page.
 9. Insert one `seed` entry above the newest `## [` heading in `wiki/prologue/log.md`. The log is newest first. Use the heading `## [YYYY-MM-DD] seed | <title>`.
 10. Run `wiki-engine lint --fix`, then `wiki-engine lint`. Fix by hand what remains.

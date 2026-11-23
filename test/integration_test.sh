@@ -36,8 +36,11 @@ case "$(uname -s 2>/dev/null || echo Windows)" in
   Windows|MINGW*|MSYS*|CYGWIN*) echo "  skipped (no symlinks)" ;;
   *)
     test -L .github/prompts/wiki-ingest.prompt.md || { echo "FAIL: prompts should be symlinks"; exit 1; }
-    test -L .github/prompts/wiki-watch.prompt.md || { echo "FAIL: watch prompt symlink missing"; exit 1; }
-    test -L .claude/commands/wiki-watch.md || { echo "FAIL: claude watch symlink missing"; exit 1; }
+    test -L .github/prompts/wiki-seed.prompt.md || { echo "FAIL: seed prompt symlink missing"; exit 1; }
+    test -L .claude/commands/wiki-seed.md || { echo "FAIL: claude seed symlink missing"; exit 1; }
+    for retired in onboard lint refresh watch; do
+      test ! -e ".claude/commands/wiki-$retired.md" || { echo "FAIL: retired prompt $retired still shipped"; exit 1; }
+    done
     echo "  ok"
     ;;
 esac
