@@ -91,6 +91,7 @@ func Reconcile(destDir string, opts ReconcileOptions) (*ReconcileResult, error) 
 			return err
 		}
 		rel, _ := filepath.Rel("files", path)
+		rel = filepath.ToSlash(rel)
 		if rel == "." {
 			return nil
 		}
@@ -112,7 +113,7 @@ func Reconcile(destDir string, opts ReconcileOptions) (*ReconcileResult, error) 
 			rel = wikiDir
 		}
 
-		dest := filepath.Join(destDir, rel)
+		dest := filepath.Join(destDir, filepath.FromSlash(rel))
 
 		if d.IsDir() {
 			return os.MkdirAll(dest, 0o755)

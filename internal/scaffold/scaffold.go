@@ -220,26 +220,28 @@ func cleanOrphanedFiles(destDir string, embedPrefixes []string, cleaned *[]strin
 				return err
 			}
 			rel, _ := filepath.Rel("files", path)
-			known[rel] = true
+			known[filepath.ToSlash(rel)] = true
 			return nil
 		})
 	}
 
 	for _, prefix := range embedPrefixes {
 		relRoot, _ := filepath.Rel("files", prefix)
-		walkRoot := filepath.Join(destDir, relRoot)
+		relRootSlash := filepath.ToSlash(relRoot)
+		walkRoot := filepath.Join(destDir, filepath.FromSlash(relRootSlash))
 		_ = filepath.Walk(walkRoot, func(path string, info os.FileInfo, err error) error {
 			if err != nil || info.IsDir() {
 				return err
 			}
 			rel, _ := filepath.Rel(destDir, path)
+			relSlash := filepath.ToSlash(rel)
 			relToRoot, _ := filepath.Rel(relRoot, rel)
 			relToRoot = filepath.ToSlash(relToRoot)
-			if known[rel] || !isWikiManaged(relRoot, relToRoot) {
+			if known[relSlash] || !isWikiManaged(relRootSlash, relToRoot) {
 				return nil
 			}
 			if err := os.Remove(path); err == nil {
-				*cleaned = append(*cleaned, rel)
+				*cleaned = append(*cleaned, relSlash)
 			}
 			return nil
 		})
@@ -253,14 +255,16 @@ func syncEmbeddedDir(destDir, embedRoot string, updated *[]string) error {
 		}
 		if d.IsDir() {
 			rel, _ := filepath.Rel("files", path)
-			if rel == "files" {
+			rel = filepath.ToSlash(rel)
+			if rel == "files" || rel == "." {
 				return nil
 			}
-			return os.MkdirAll(filepath.Join(destDir, rel), 0o755)
+			return os.MkdirAll(filepath.Join(destDir, filepath.FromSlash(rel)), 0o755)
 		}
 
 		rel, _ := filepath.Rel("files", path)
-		dest := filepath.Join(destDir, rel)
+		rel = filepath.ToSlash(rel)
+		dest := filepath.Join(destDir, filepath.FromSlash(rel))
 
 		data, err := files.ReadFile(path)
 		if err != nil {

@@ -88,7 +88,7 @@ func TestNestedLayoutLogCheckers(t *testing.T) {
 	for _, iss := range result.Issues {
 		if iss.Check == "log-headings" {
 			foundHeading = true
-			if !strings.Contains(iss.File, filepath.Join("wiki", "prologue", "log.md")) {
+			if !strings.Contains(iss.File, "wiki/prologue/log.md") {
 				t.Errorf("log-headings should report prologue/log.md, got %s", iss.File)
 			}
 		}
@@ -125,7 +125,7 @@ func TestNestedLayoutPhaseConsistency(t *testing.T) {
 	for _, iss := range result.Issues {
 		if iss.Check == "phase-consistency" {
 			found = true
-			if !strings.Contains(iss.File, filepath.Join("wiki", "prologue", "phases.md")) {
+			if !strings.Contains(iss.File, "wiki/prologue/phases.md") {
 				t.Errorf("phase-consistency should report prologue/phases.md, got %s", iss.File)
 			}
 		}
