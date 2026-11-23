@@ -34,7 +34,7 @@ internal/model/         Typed page, YAML frontmatter (gopkg.in/yaml.v3), structu
 internal/git/           Unified Git change pipeline (merge-base, renames, working tree, untracked,
                         batched history, commit lookup)
 internal/engine/        Focused operations: context, search, summary, impact, check, graph, watch,
-                        diff, stats, refresh
+                        diff, stats, health, refresh
 internal/lint/          Single-read snapshot lint engine, grouped checkers, and idempotent lint --fix
 internal/scaffold/      Idempotent init/reconciliation, wiki rename, versioned root shims, sync-prompts
   files/                go:embed mirror of scaffold/
@@ -59,6 +59,7 @@ internal/audit/         Repo-wide reference, action-pin SHA, schema, prompt, and
 | `check [--base=<ref>] [--no-working-tree]` | Branch-aware citation and drift check (exit 0 ok/review, 1 breakage, 2 Git/setup error) |
 | `lint [--check=<a,b>] [--skip=<a,b>] [--fix]` | Single-read wiki lint with individual or grouped selectors (`schema`, `links`, `graph`, `freshness`, `security`) and idempotent `--fix` |
 | `stats` | Aggregate statistics: file count, heading count, total lines, last-updated date |
+| `health` | Advisory maintenance signals, a superset of `stats`: sizes, log rotation, lifecycle counts, largest pages, aging `planned`/`wip` pages, `updated` behind git, duplicate titles, index-only pages, open markers. Exits `0` unless a runtime error occurs; `--json` carries `schema_version: "1"` |
 | `context [--minimal] [--summarize] [--active] [--sort=topo\|chrono] [--max-pages=<n>] [--max-bytes=<n>]` | Bounded wiki snapshot or active graph for agent context loading |
 | `graph [page-or-id] [--strict] [--dot] [--include-sources]` | Active wiki graph (ASCII tree, ID/path neighborhood, DOT export, opt-in source nodes, `schema_version: "2"`) |
 | `summary <page-or-id>` | First heading, first paragraph, and bounded preview of a page |

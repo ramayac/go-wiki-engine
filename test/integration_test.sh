@@ -94,6 +94,26 @@ out=$("$BIN" stats)
 grep -q "files:" <<<"$out" || { echo "FAIL: stats failed"; exit 1; }
 echo "  ok"
 
+# Test: health (advisory: exits 0, JSON carries schema_version)
+echo "--- health ---"
+out=$("$BIN" health)
+grep -q "Wiki health:" <<<"$out" || { echo "FAIL: health text output missing"; exit 1; }
+out=$("$BIN" --json health)
+grep -q '"schema_version": "1"' <<<"$out" || { echo "FAIL: health json missing schema_version"; exit 1; }
+grep -q '"open_markers": \[\]' <<<"$out" || { echo "FAIL: health json open_markers should be []"; exit 1; }
+rc=0
+"$BIN" health --bogus >/dev/null 2>&1 || rc=$?
+[ "$rc" -eq 2 ] || { echo "FAIL: health --bogus should exit 2, got $rc"; exit 1; }
+echo "  ok"
+
+# Test: schema conventions section
+echo "--- schema conventions ---"
+out=$("$BIN" schema --section conventions)
+grep -q "Rationale: not recorded" <<<"$out" || { echo "FAIL: conventions section missing rationale marker"; exit 1; }
+out=$("$BIN" schema --type concept)
+grep -q "## Stops applying when" <<<"$out" || { echo "FAIL: concept template missing stop condition"; exit 1; }
+echo "  ok"
+
 # Test: context
 echo "--- context ---"
 out=$("$BIN" context --minimal)

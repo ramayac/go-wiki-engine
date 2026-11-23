@@ -469,6 +469,33 @@ func TestSchemaParityWithDocs(t *testing.T) {
 	}
 }
 
+// TestSchemaDocsCarryConventions keeps the human-readable schema docs in step
+// with `wiki-engine schema --section conventions` and the page templates.
+func TestSchemaDocsCarryConventions(t *testing.T) {
+	root := repoRoot(t)
+	for _, rel := range []string{"wiki/prologue/schema.md", "scaffold/wiki/prologue/schema.md"} {
+		data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		text := string(data)
+		for _, want := range []string{
+			"## Conventions",
+			"`> Rationale: not recorded.`",
+			"`> ⚠️ CONTRADICTION: ",
+			"ASD-STE100 Simplified Technical English",
+			"secrets, credentials, tokens, session IDs, personal or health identifiers, free-text personal data, or whole request or response payloads",
+			"## Why",
+			"## Stops applying when",
+			"log_needs_rotation",
+		} {
+			if !strings.Contains(text, want) {
+				t.Errorf("%s missing %q", rel, want)
+			}
+		}
+	}
+}
+
 // TestWikiCommandDocsParity verifies that wiki/prologue/repo-map.md documents
 // every public CLI subcommand.
 func TestWikiCommandDocsParity(t *testing.T) {
@@ -482,7 +509,7 @@ func TestWikiCommandDocsParity(t *testing.T) {
 		"init", "sync-prompts", "schema", "list", "headings", "search",
 		"log-tail", "changed", "candidates", "check", "lint", "stats",
 		"context", "graph", "summary", "relevant", "impact", "diff",
-		"watch", "refresh", "upgrade", "version",
+		"health", "watch", "refresh", "upgrade", "version",
 	}
 	for _, cmd := range commands {
 		if !strings.Contains(text, "`"+cmd) {
