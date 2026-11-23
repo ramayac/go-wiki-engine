@@ -23,41 +23,46 @@ surface is defined in [README.md](README.md).
 - New `references` front matter field: typed cross-references (`source:<path>`, `external:<url>`, `issue:<KEY>`) declared in a single-line bracket list. References are node annotations, not graph edges — they surface in `wiki-engine graph <page>` and graph JSON.
 - New `references` lint checker: flags missing source files, scheme-less URLs, malformed issue keys, and unknown reference types.
 
+### Changed
+
+- **Exit codes separate usage errors from runtime failures:** Usage errors (unknown command or flag, missing or extra argument, invalid flag value, conflicting flags) exit `2`; they exited `1` before. Runtime and finding failures stay at `1`, and `check` keeps `0`/`1`/`2`. See the exit-code table in [README.md](README.md).
+- **`--json` `ok` matches the exit code:** `graph --strict` and `watch --once` emit `"ok": false` with an `error` summary (and the same `data`) when they exit `1`.
+- **`refresh --json` emits one JSON object** (`diff_range`, `needed`, `wiki_files`, `recent_log`, `changed`, `candidates`, `lint`). `refresh` exits `1` when its lint section fails, using the same `fail_severity` gate as `lint`.
+- **Empty results encode as `[]`, not `null`:** This applies to `changed`, `candidates`, `search`, `relevant`, `log-tail`, `headings`, `diff`, `impact`, `watch --once`, `context`, graph neighborhood, and `sync-prompts`.
+- **`impact` is exact by default:** It matches declared `sources`, directory coverage, and exact Markdown repo links, with explicit match reasons in JSON. Basename prose matching is opt-in via `--fuzzy`.
+- **Default diff detects the base branch:** `main...HEAD` no longer fails on `master` (or other) repos; the engine detects the base branch like `check`. Git errors now show git's reason and tell "not a git repository" from "unknown revision".
+- **`ignore` patterns:** A pattern with `/` now matches the full path (`docs/*.md`, `**`). A bare name matches any path segment.
+- **Git 2.24 or newer is required.**
+- **`sync-prompts` removes only engine-owned files:** It removes symlinks that point into `.wiki-instructions/` and files named in `retiredManagedFiles`. User files in the sync directories, `.pi/skills/wiki/`, and `.wiki-instructions/` stay; before, any `wiki-*` file or file the engine did not ship was deleted.
+- **Edited managed files are backed up:** A hand-edited regular file that `sync-prompts` or `init` replaces with a tool-directory symlink is first copied to `<name>.bak` (then `.bak.1`, ...), with one line on stderr. Identical files are replaced silently.
+- **`wiki_dir` and `init` argument rules:** A `wiki_dir` that starts with `-` is rejected in `init` and in `.wikirc`. `init <name>` in a repo whose `.wikirc` names a different wiki directory now fails with a message instead of leaving `.wikirc` stale.
+- **`upgrade` verifies provenance only through `gh attestation verify`:** It is pinned to the `release.yml` signer workflow as well as the repository, and no longer trusts an `.intoto.jsonl` file served by the release. Without `gh` or attestations it still proceeds on the checksum, unless `--require-attestation` is set; any other `gh` failure stops the upgrade. `SECURITY.md` and the release page state what is proven.
+- **`upgrade` is fail-closed:** It never falls back to `go install` on download, checksum, or provenance failure. It streams archives to disk with compressed/expanded size caps and path-traversal checks, and `go install` needs explicit `--from-source` pinned to the release tag.
+
 ### Fixed
 
-- **Forgeable provenance in `upgrade`:** A release-served `<asset>.intoto.jsonl` could report "verified" and satisfy `--require-attestation`. The code path is removed, so only a successful `gh attestation verify` verifies.
-- **Release tag validation in `upgrade`:** The tag from the redirect must match `vMAJOR.MINOR.PATCH[-pre]` (64 characters at most) before any download or `go install`.
-- **Silent downgrade in `upgrade`:** The upgrade now refuses a latest release lower than the running version and names both versions. Dev and dirty builds may still upgrade.
-- **JSON `null` for empty results:** Empty results (`changed`, `candidates`, `search`, `relevant`, `log-tail`, `headings`, `diff`, `impact`, `watch --once`, `context`, graph neighborhood, `sync-prompts`) now encode as `[]`, not `null`.
+- **`init 'a$b'` wrote `wiki_dir = "a"`:** The `$` was treated as a template reference; `init` now keeps the name.
 - **`--` terminator:** `summary`, `diff`, and `log-tail` now treat `--` as the end of flags, like the other commands.
 - **Unknown command with a broken `.wikirc`:** The command name is checked before `.wikirc` loads, so the error says "unknown command".
-- **Continuous `watch` repeated output:** It now prints a tick only when the changed files, candidates, or lint issues differ from the last printed tick.
-- **Git option injection:** `changed`, `candidates`, `refresh`, `watch --once`, and the `stale-content` check passed the diff range to `git diff` unchecked, so `--output=<path>` could overwrite a file. Ranges now must be revisions or `a..b` / `a...b` of existing revisions, `default_diff` may not start with `-`, and git calls pass `--end-of-options` and `--` where a user or config value reaches them. A `wiki_dir` that starts with `-` is now rejected (see below). Git 2.24 or newer is required.
-- **Symlink write-through in `init` and `sync-prompts`:** The commands wrote through a symlinked managed directory (`.wiki-instructions`, `.claude/commands`, `.github/prompts`, `.github/instructions`, `.pi/skills/wiki`) or a symlinked `AGENTS.md`, `CLAUDE.md`, or `.wikirc` and changed files outside the repo. Every write, mkdir, remove, and symlink now checks that the real destination stays inside the repo and fails with an error naming the path. A symlinked file inside a managed directory is still replaced, not followed.
-- **`sync-prompts` deleted user files:** It removed any `wiki-*` file in the sync directories and anything under `.pi/skills/wiki/` and `.wiki-instructions/` that the engine did not ship. It now removes only symlinks that point into `.wiki-instructions/` and files named in `retiredManagedFiles`.
-- **Silent overwrite of edited prompt files:** A hand-edited regular file that `sync-prompts` or `init` replaces with a tool-directory symlink is first copied to `<name>.bak` (then `.bak.1`, ...), with one line on stderr. Identical files are replaced silently.
-- **`init` argument handling:** `init 'a$b'` wrote `wiki_dir = "a"` (the `$` was treated as a template reference); it now keeps the name. `wiki_dir` names that start with `-` are rejected in `init` and in `.wikirc`. `init <name>` in a repo whose `.wikirc` names a different wiki directory now fails with a message instead of leaving `.wikirc` stale.
-- **Default diff on repos without `main`:** `main...HEAD` no longer fails on `master` (or other) repos; the engine detects the base branch like `check`. Git errors now show git's reason and tell "not a git repository" from "unknown revision".
+- **Continuous `watch` repeated output:** It prints a tick only when the changed files, candidates, or lint issues differ from the last printed tick.
 - **Subdirectory projects:** `changed` and `candidates` return paths relative to `.wikirc`, unquoted for non-ASCII names. `candidates` no longer lists deleted files or the old path of a rename.
-- **`ignore` patterns:** patterns with `/` now match the full path (`docs/*.md`, `**`), and bare names match any path segment.
 - **Non-ASCII wiki paths and shallow clones:** `stale-content` now sees non-ASCII page names and skips (with one `info` issue) in a shallow clone. `check` reports a cited commit missing from a shallow clone as a warning (`unverifiable_commit`), not `invalid_commit`.
 - **`phase-consistency` on boards numbered from 1:** A phase now compares with the nearest lower phase on the board, not with `num-1`, so a board that starts at 1 or skips numbers no longer reports a missing phase. Only `in-progress` and `completed` phases are checked; a `blocked` phase may wait on an open one.
 - **`markdown-format` false positives:** Task-list items such as `- [ ] (optional)` no longer report a spaced link, and prose such as `m[i][j]` no longer reports a reference-style link. Real `[text] (url)` and `[text][ref]` still report.
 - **`bare-urls` and `<https://...>`:** A URL in angle brackets is a valid autolink and is no longer flagged. A naked URL still is.
-- **`duplicate-content` flood:** The check now prints the 50 most similar pairs and one `... and M more duplicate pair(s) not shown` line, not one line per pair.
+- **`duplicate-content` flood:** The check prints the 50 most similar pairs and one `... and M more duplicate pair(s) not shown` line, not one line per pair.
 - **Broken index link reported twice:** `cross-page-links` no longer repeats a link that `index-links` already reported at the same file, line, and target. `--check=cross-page-links` alone still reports it.
 - **`relevant` and `search` read fenced `# comment` lines as headings:** Ranking, section names, and `summary` now skip ``` and ~~~ fenced code. `headings` also skips `~~~` fences.
 - **`lint --fix` rewrote CRLF files to LF:** A fix now keeps each page's line endings and any UTF-8 BOM.
 - **UTF-8 BOM:** A page that starts with a BOM no longer reports `missing front matter block`.
 
-### Changed
+### Security
 
-- **`wiki-engine upgrade` verifies provenance only through `gh attestation verify`:** It is now pinned to the `release.yml` signer workflow as well as the repository. The upgrade no longer trusts an `.intoto.jsonl` file served by the release. Without `gh` or attestations it still proceeds on the checksum, unless `--require-attestation` is set; any other `gh` failure stops the upgrade. `SECURITY.md` and the release page now state what is proven.
-- **Exit codes now separate usage errors from runtime failures:** Usage errors (unknown command or flag, missing or extra argument, invalid flag value, conflicting flags) exit `2`; they exited `1` before. Runtime and finding failures stay at `1`. `check` keeps `0`/`1`/`2`. See the exit-code table in [README.md](README.md).
-- **`--json` `ok` now matches the exit code:** `graph --strict` and `watch --once` emit `"ok": false` with an `error` summary (and the same `data`) when they exit `1`.
-- **`refresh --json` emits one JSON object** (`diff_range`, `needed`, `wiki_files`, `recent_log`, `changed`, `candidates`, `lint`). `refresh` now exits `1` when its lint section fails, using the same `fail_severity` gate as `lint`.
-- **`wiki-engine impact` is exact by default:** Matches declared `sources`, directory coverage, and exact Markdown repo links with explicit match reasons in JSON; basename prose matching is opt-in via `--fuzzy`.
-- **`wiki-engine upgrade` is fail-closed:** Never silently falls back to `go install` on download, checksum, or provenance failure; streams archives to disk with compressed/expanded size caps and archive path-traversal checks; `go install` requires explicit `--from-source` pinned to the release tag.
+- **Git option injection:** `changed`, `candidates`, `refresh`, `watch --once`, and the `stale-content` check passed the diff range to `git diff` unchecked, so `--output=<path>` could overwrite a file. Ranges must now be revisions or `a..b` / `a...b` of existing revisions, `default_diff` may not start with `-`, and git calls pass `--end-of-options` and `--` where a user or config value reaches them.
+- **Symlink write-through in `init` and `sync-prompts`:** The commands wrote through a symlinked managed directory (`.wiki-instructions`, `.claude/commands`, `.github/prompts`, `.github/instructions`, `.pi/skills/wiki`) or a symlinked `AGENTS.md`, `CLAUDE.md`, or `.wikirc` and changed files outside the repo. Every write, mkdir, remove, and symlink now checks that the real destination stays inside the repo and fails with an error naming the path. A symlinked file inside a managed directory is still replaced, not followed.
+- **Unsigned provenance in `upgrade`:** A release-served `<asset>.intoto.jsonl` could report "verified" and satisfy `--require-attestation`. The code path is removed, so only a successful `gh attestation verify` verifies.
+- **Release tag validation in `upgrade`:** The tag from the redirect must match `vMAJOR.MINOR.PATCH[-pre]` (64 characters at most) before any download or `go install`.
+- **Downgrade guard in `upgrade`:** The upgrade refuses a latest release lower than the running version and names both versions. Dev and dirty builds may still upgrade.
 
 ## [1.0.1] - 2026-09-19
 
