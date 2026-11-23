@@ -17,16 +17,27 @@ name: "Wiki Maintainer"
 - Keep wiki files plain Markdown with stable filenames, globally unique `id` matching filename stem, and grep-friendly headings.
 - Add exact `sources:` entries to changed pages whenever documenting repository files or directories.
 - Use standard relative Markdown links (e.g., `[Link Text](path/to/file.md)`) for cross-page references. Never use HTML links, absolute paths, or `[[Page]]` links.
-- Run `wiki-engine lint` after writes and `wiki-engine check` after ingest or save.
+- Run `wiki-engine lint` after writes and `wiki-engine check` after ingest or save. Run `wiki-engine health` for the advisory signals (it never fails a build).
 - Inspect the embedded schema anytime with `wiki-engine schema` or `wiki-engine schema --type <concept|entity|incident|decision|runbook>`.
+- The CLI works in the current directory and reads `.wikirc`. It has no `--repo` flag.
+
+## Writing rules
+
+- **STE.** Write all wiki text in ASD-STE100 Simplified Technical English. Use short, direct sentences. Use active voice. Put one instruction in each sentence. Use the same term for the same thing. Do not use idioms.
+- **Data protection.** Never persist secrets, credentials, tokens, session IDs, personal or health identifiers, free-text personal data, or whole request or response payloads in wiki pages, in the log, or in a handoff. Redact the value. Keep only the technical fact.
+- **Capture why.** Record why, not what. Take the reason from the session, the commit messages, or the PR. If no source states the reason, write the rationale marker. Do not guess a reason. Do not stop to ask. Fill `## Stops applying when` with a condition that someone can check. The marker rule, the contradiction flag, and the log-rotation rule are in `wiki-engine schema --section conventions`. Do not restate them.
+- **Tags.** `wiki/vocabulary.yaml` lists the allowed tags. If it lists any tag, use only listed tags and add a new tag there first. If it lists none, tags are free-form. Reuse an existing tag instead of a near-duplicate.
+- **Log.** `wiki/prologue/log.md` is newest first. Insert each new entry above the newest `## [` heading. Use `## [YYYY-MM-DD] <operation> | <title>`.
 
 ## Prompt selection
 
 | Situation | Use prompt |
 |---|---|
-| Wiki is empty or only has template placeholders | `wiki-onboard` |
+| Wiki is empty or has only template placeholders (first fill) | `wiki-seed` |
 | Absorbing a feature branch or batch of commits | `wiki-ingest` |
 | Answering a question about the repo | `wiki-query` |
+| Saving a lesson, decision, or procedure from a session | `wiki-save` |
+| Writing an implementation handoff to `.wiki-engine/handoff.md` | `wiki-plan` |
 | Periodic health check, fixing drift | `wiki-refresh` |
 | Structural issues, broken links, formatting errors, or missing metadata | `wiki-lint` |
 | Upgrading the CLI version and reconciling prompts | `wiki-upgrade` |
@@ -75,6 +86,7 @@ Semantic page types (`type`): `concept`, `entity`, `incident` (requires `severit
 - **Active agent map:** `wiki-engine context --active --sort=topo` (or `--sort=chrono`, `--json`).
 - **Search:** `wiki-engine search <term>` (exact lines) or `wiki-engine relevant <query>` / `wiki-engine search --ranked <query>` (field-weighted ranker with `--tag`, `--type`, `--lifecycle`, `--include-history`, `--limit`).
 - **Citation & drift check:** `wiki-engine check [--base <ref>]` validates branch citations and working-tree/untracked changes.
+- **Health:** `wiki-engine health` lists duplicate titles, aging `planned`/`wip` pages, `updated` behind git, index-only pages, open markers, and log rotation.
 - **Bounded summaries:** `wiki-engine context --summarize [--max-pages=N] [--max-bytes=N]` and `wiki-engine summary <page-or-id>`.
 
 ## External docs migration

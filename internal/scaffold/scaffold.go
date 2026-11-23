@@ -36,7 +36,7 @@ var (
 
 // promptWorkflows are the canonical workflow files in .wiki-instructions/ that
 // are symlinked into the tool-specific directories.
-var promptWorkflows = []string{"ingest", "lint", "onboard", "query", "refresh", "upgrade", "watch"}
+var promptWorkflows = []string{"ingest", "lint", "onboard", "plan", "query", "refresh", "save", "seed", "upgrade", "watch"}
 
 // toolDirLinks maps destination-relative paths to symlink targets relative to
 // the directory containing the link.

@@ -29,6 +29,7 @@ fail_severity = "warn"
 ignore = [
   "wiki/",
   "bin/",
+  ".wiki-engine/",
   "*.log",
   "*.tmp",
 ]
