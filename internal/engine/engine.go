@@ -260,11 +260,15 @@ func matchSegments(pat, segs []string, needBeneath bool) bool {
 	return matchSegments(pat[1:], segs[1:], needBeneath)
 }
 
-// JSONOutput is the standard JSON envelope for all commands.
+// JSONOutput is the standard JSON envelope for all commands. Meta is present
+// on every success and on every failure that still carries data. ErrorCode is
+// present when OK is false.
 type JSONOutput struct {
-	OK    bool        `json:"ok"`
-	Data  interface{} `json:"data,omitempty"`
-	Error string      `json:"error,omitempty"`
+	OK        bool                   `json:"ok"`
+	Meta      map[string]interface{} `json:"meta,omitempty"`
+	Data      interface{}            `json:"data,omitempty"`
+	Error     string                 `json:"error,omitempty"`
+	ErrorCode string                 `json:"error_code,omitempty"`
 }
 
 // StatsResult holds aggregate wiki statistics.

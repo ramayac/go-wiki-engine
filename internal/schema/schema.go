@@ -264,6 +264,21 @@ var Conventions = []string{
 	"Log rotation: when `wiki-engine health` reports `log_needs_rotation` (the log is 128 KiB or larger), move the oldest complete entries of `log.md` into `log-archive/<YYYY>.log` next to it, until the log is below 96 KiB. Archive files keep the entry format, are append-only, and use the `.log` extension so search, graph, and lint do not read them as pages.",
 }
 
+// jsonContractText is the body of `wiki-engine schema --section json`.
+const jsonContractText = "- `ok`: `true` when the command exits `0`; `false` for every non-zero exit.\n" +
+	"- `meta`: on every success, and on a failure that keeps `data`. Keys on every response: `schema_version` (envelope version) and `command`. Command keys are in the table below.\n" +
+	"- `data`: the command result. Its top-level type does not change (`search` is a list; `graph`, `check`, and `health` are objects). Kept on findings failures. Empty lists encode as `[]`, never `null`.\n" +
+	"- `error`, `error_code`: on failure only. `error_code` is `usage` (invalid invocation, exit 2; also `check` git and setup errors), `findings` (the command ran and found problems, exit 1: `lint`, `check` breakage, `graph --strict`, `refresh` and `watch` lint), or `runtime` (any other exit 1).\n" +
+	"- Compatibility: consumers must ignore unknown keys. New keys ship in minor releases. Removing or renaming a key, or changing its type, is a breaking change.\n\n" +
+	"| Command | `meta` keys | `data` keys (item keys for lists) |\n" +
+	"|---|---|---|\n" +
+	"| `search` (lines) | `query`, `mode` (`lines`), `total` (hits before `--limit`), `returned`, `limit` (`0` = none), `truncated`, `include_history` | per hit: `id`, `file`, `path` (= `file`), `title`, `type`, `tags`, `lifecycle`, `line`, `text` |\n" +
+	"| `search --ranked`, `relevant` | `search --ranked` sets the `search` keys with `mode` `ranked`; `relevant` sets the common keys only | per hit: `id`, `file`, `path` (= `file`), `title`, `type`, `tags`, `lifecycle`, `score`, `matched_terms`, `coverage`, `term_coverage` (= `coverage`), `section`, `start_line`, `context`, `why` |\n" +
+	"| `graph` | `root` (`index.md`, or the page file in neighborhood mode), `mode` (`full` or `neighborhood`), `include_sources` | `schema_version`, `nodes`, `edges`, `unlinked`, `stats`, `issues`; neighborhood: `node`, `backlinks`. Node keys: `id`, `kind`, `file`, `title`, `type`, `tags`, `lifecycle`, `status`, `description`, `links`, `depth`, `referrals` (inbound edge count, `0` allowed) |\n" +
+	"| `health` | common keys | `schema_version`, size and graph counts, `lifecycles`, `largest_pages`, `aging_work`, `updated_behind_git`, `duplicate_titles`, `index_only_pages`, `open_markers`, `thresholds` (`aging_days`, `drift_days`, `log_rotation_bytes`) |\n" +
+	"| `check` | `base`, `working_tree` | `base`, `merge_base`, `working_tree`, `changed_files`, `broken`, `warnings`, `pages_to_review`, `summary` (`broken`, `warnings`, `pages_to_review`, `changed_files`: integers), `exit_code` (`0` or `1`). `broken` and `warnings` entries: `page`, `kind`, `severity` (`broken` or `warning`), `message`, and `id`, `target`, `line` when known. `pages_to_review` entries: `page`, `kind` (`source_changed`), `severity` (`review`), `changed_files`, `match_reasons`, `id` |\n" +
+	"| other commands | common keys | unchanged |\n"
+
 // Get returns the canonical embedded schema document.
 func Get() Document {
 	return Document{
@@ -574,12 +589,14 @@ func renderSection(doc Document, section string) (string, error) {
 	case "exit-codes":
 		b.WriteString("## Exit Codes\n\n")
 		b.WriteString("- `0`: Success (including `check` with review recommendations only)\n")
-		b.WriteString("- `1`: Content/lint/check breakage or usage error\n")
-		b.WriteString("- `2`: Git, config, or setup error (e.g., `check` outside git or invalid base ref)\n")
+		b.WriteString("- `1`: Runtime or finding failure (lint, `graph --strict`, `refresh` lint, `check` breakage, git, config, or I/O errors)\n")
+		b.WriteString("- `2`: Usage error (unknown command or flag, bad argument or flag value); `check` also uses `2` for git and setup errors (e.g., outside git or invalid base ref)\n")
 	case "json":
 		b.WriteString("## JSON Contract\n\n")
-		fmt.Fprintf(&b, "Envelope version: %s (`{\"ok\": bool, \"data\": ..., \"error\": \"...\"}`)\n", doc.JSONEnvelopeVersion)
-		fmt.Fprintf(&b, "Graph schema version: %s\n", doc.GraphSchemaVersion)
+		fmt.Fprintf(&b, "Envelope version: %s\n", doc.JSONEnvelopeVersion)
+		b.WriteString("`{\"ok\": bool, \"meta\": {...}, \"data\": ..., \"error\": \"...\", \"error_code\": \"...\"}`\n")
+		fmt.Fprintf(&b, "Graph schema version: %s (the `schema_version` key inside graph `data`; additive node keys do not change it)\n\n", doc.GraphSchemaVersion)
+		b.WriteString(jsonContractText)
 	default:
 		return "", fmt.Errorf("unknown schema section %q (valid: %s)", section, strings.Join(Sections, ", "))
 	}

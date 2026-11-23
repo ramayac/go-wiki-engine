@@ -1,0 +1,54 @@
+{
+  "ok": true,
+  "meta": {
+    "command": "search",
+    "include_history": false,
+    "limit": 3,
+    "mode": "lines",
+    "query": "token",
+    "returned": 3,
+    "schema_version": "1",
+    "total": 8,
+    "truncated": true
+  },
+  "data": [
+    {
+      "id": "auth",
+      "file": "wiki/auth.md",
+      "path": "wiki/auth.md",
+      "title": "Authentication",
+      "type": "concept",
+      "tags": [
+        "security",
+        "api"
+      ],
+      "lifecycle": "current",
+      "line": 14,
+      "text": "Authentication checks every token. See [Token Validation](tokens.md)."
+    },
+    {
+      "id": "index",
+      "file": "wiki/index.md",
+      "path": "wiki/index.md",
+      "title": "Index",
+      "type": "concept",
+      "tags": [],
+      "lifecycle": "current",
+      "line": 12,
+      "text": "- [Token Validation](tokens.md)"
+    },
+    {
+      "id": "tokens",
+      "file": "wiki/tokens.md",
+      "path": "wiki/tokens.md",
+      "title": "Token Validation",
+      "type": "concept",
+      "tags": [
+        "security"
+      ],
+      "lifecycle": "current",
+      "line": 2,
+      "text": "id: tokens"
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+{
+  "ok": false,
+  "error": "usage: wiki-engine search \u003cquery\u003e",
+  "error_code": "usage"
+}

@@ -11,11 +11,15 @@ import (
 
 // SearchResult is a matching line from an exact-line wiki search.
 type SearchResult struct {
-	ID        string `json:"id,omitempty"`
-	File      string `json:"file"`
-	Lifecycle string `json:"lifecycle,omitempty"`
-	Line      int    `json:"line"`
-	Text      string `json:"text"`
+	ID        string   `json:"id,omitempty"`
+	File      string   `json:"file"`
+	Path      string   `json:"path"` // same value as File
+	Title     string   `json:"title"`
+	Type      string   `json:"type"`
+	Tags      []string `json:"tags"`
+	Lifecycle string   `json:"lifecycle,omitempty"`
+	Line      int      `json:"line"`
+	Text      string   `json:"text"`
 }
 
 // SearchOptions filters and configures both exact-line and ranked search.
@@ -32,12 +36,15 @@ type SearchOptions struct {
 type RankedSearchResult struct {
 	ID           string   `json:"id"`
 	File         string   `json:"file"`
-	Title        string   `json:"title,omitempty"`
-	Type         string   `json:"type,omitempty"`
+	Path         string   `json:"path"` // same value as File
+	Title        string   `json:"title"`
+	Type         string   `json:"type"`
+	Tags         []string `json:"tags"`
 	Lifecycle    string   `json:"lifecycle"`
 	Score        float64  `json:"score"`
 	MatchedTerms []string `json:"matched_terms"`
 	Coverage     float64  `json:"coverage"`
+	TermCoverage float64  `json:"term_coverage"` // same value as Coverage
 	Section      string   `json:"section,omitempty"`
 	StartLine    int      `json:"start_line"`
 	Context      string   `json:"context"`
@@ -65,32 +72,64 @@ func (e *Engine) SearchLines(query string, opts SearchOptions) ([]SearchResult, 
 	if err := snap.FatalLoadError(); err != nil {
 		return nil, err
 	}
-	return searchLinesFromSnapshot(snap, query, opts), nil
+	results, _ := searchLinesFromSnapshot(snap, query, opts)
+	return results, nil
 }
 
-func searchLinesFromSnapshot(snap *model.WikiSnapshot, query string, opts SearchOptions) []SearchResult {
+// SearchLinesTotal is SearchLines that also returns the number of hits before
+// opts.Limit applied.
+func (e *Engine) SearchLinesTotal(query string, opts SearchOptions) ([]SearchResult, int, error) {
+	if strings.TrimSpace(query) == "" {
+		return nil, 0, fmt.Errorf("search query is empty")
+	}
+	snap, err := e.LoadSnapshot()
+	if err != nil {
+		return nil, 0, err
+	}
+	if err := snap.FatalLoadError(); err != nil {
+		return nil, 0, err
+	}
+	results, total := searchLinesFromSnapshot(snap, query, opts)
+	return results, total, nil
+}
+
+// pageTags returns the page tags as a non-nil slice, so JSON encodes [].
+func pageTags(p *model.Page) []string {
+	tags := make([]string, len(p.Metadata.Tags))
+	copy(tags, p.Metadata.Tags)
+	return tags
+}
+
+// searchLinesFromSnapshot returns the hits up to opts.Limit and the total hit count.
+func searchLinesFromSnapshot(snap *model.WikiSnapshot, query string, opts SearchOptions) ([]SearchResult, int) {
 	lowerQ := strings.ToLower(query)
 	results := []SearchResult{}
+	total := 0
 	for _, p := range snap.Pages {
 		if !matchesSearchFilters(p, opts) {
 			continue
 		}
 		for i, text := range p.Lines {
 			if strings.Contains(strings.ToLower(text), lowerQ) {
+				total++
+				if opts.Limit > 0 && len(results) >= opts.Limit {
+					continue
+				}
 				results = append(results, SearchResult{
 					ID:        p.ID,
 					File:      p.Path,
+					Path:      p.Path,
+					Title:     p.EffectiveTitle(),
+					Type:      p.Metadata.Type,
+					Tags:      pageTags(p),
 					Lifecycle: p.EffectiveLifecycle(),
 					Line:      i + 1,
 					Text:      text,
 				})
-				if opts.Limit > 0 && len(results) >= opts.Limit {
-					return results
-				}
 			}
 		}
 	}
-	return results
+	return results, total
 }
 
 // SearchRanked scores wiki pages using field-weighted ranking:
@@ -110,13 +149,37 @@ func (e *Engine) SearchRanked(query string, opts SearchOptions) ([]RankedSearchR
 	return SearchRankedFromSnapshot(snap, query, opts), nil
 }
 
+// SearchRankedTotal is SearchRanked that also returns the number of matching
+// pages before opts.Limit applied.
+func (e *Engine) SearchRankedTotal(query string, opts SearchOptions) ([]RankedSearchResult, int, error) {
+	if strings.TrimSpace(query) == "" {
+		return nil, 0, fmt.Errorf("query is empty")
+	}
+	snap, err := e.LoadSnapshot()
+	if err != nil {
+		return nil, 0, err
+	}
+	if err := snap.FatalLoadError(); err != nil {
+		return nil, 0, err
+	}
+	results, total := searchRankedFromSnapshot(snap, query, opts)
+	return results, total, nil
+}
+
 // SearchRankedFromSnapshot runs field-weighted search directly against a loaded
 // WikiSnapshot (enabling shared-snapshot workflows and benchmarks).
 func SearchRankedFromSnapshot(snap *model.WikiSnapshot, query string, opts SearchOptions) []RankedSearchResult {
+	results, _ := searchRankedFromSnapshot(snap, query, opts)
+	return results
+}
+
+// searchRankedFromSnapshot returns the ranked hits up to opts.Limit and the
+// total number of matching pages.
+func searchRankedFromSnapshot(snap *model.WikiSnapshot, query string, opts SearchOptions) ([]RankedSearchResult, int) {
 	lowerQ := strings.ToLower(strings.TrimSpace(query))
 	terms := uniqueTerms(lowerQ)
 	if len(terms) == 0 {
-		return []RankedSearchResult{}
+		return []RankedSearchResult{}, 0
 	}
 
 	results := []RankedSearchResult{}
@@ -235,12 +298,15 @@ func SearchRankedFromSnapshot(snap *model.WikiSnapshot, query string, opts Searc
 		results = append(results, RankedSearchResult{
 			ID:           p.ID,
 			File:         p.Path,
+			Path:         p.Path,
 			Title:        p.EffectiveTitle(),
 			Type:         p.Metadata.Type,
+			Tags:         pageTags(p),
 			Lifecycle:    lc,
 			Score:        finalScore,
 			MatchedTerms: matchedTerms,
 			Coverage:     coverage,
+			TermCoverage: coverage,
 			Section:      bestSection,
 			StartLine:    bestLine,
 			Context:      ctx,
@@ -255,10 +321,11 @@ func SearchRankedFromSnapshot(snap *model.WikiSnapshot, query string, opts Searc
 		return results[i].File < results[j].File
 	})
 
+	total := len(results)
 	if opts.Limit > 0 && len(results) > opts.Limit {
 		results = results[:opts.Limit]
 	}
-	return results
+	return results, total
 }
 
 // Relevant is a compatibility alias for ranked search.
