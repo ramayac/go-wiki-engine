@@ -415,3 +415,41 @@ func TestRunFollowsAssetRedirects(t *testing.T) {
 		t.Errorf("binary not replaced after redirects: got %q", string(got))
 	}
 }
+
+func TestReplaceExecutableSuccess(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "wiki-engine")
+	payload := []byte("#!/bin/sh\necho new\n")
+	if err := replaceExecutable(path, payload); err != nil {
+		t.Fatalf("replaceExecutable failed: %v", err)
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("replacement not readable: %v", err)
+	}
+	if string(got) != string(payload) {
+		t.Errorf("replacement content = %q, want %q", got, payload)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o755 {
+		t.Errorf("replacement mode = %v, want 0755", info.Mode().Perm())
+	}
+	// No temp files left behind.
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 {
+		t.Errorf("expected exactly one file in dir, got %d", len(entries))
+	}
+}
+
+func TestReplaceExecutableBadDir(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "no-such-dir", "wiki-engine")
+	if err := replaceExecutable(path, []byte("data")); err == nil {
+		t.Error("expected error when the target directory does not exist")
+	}
+}
