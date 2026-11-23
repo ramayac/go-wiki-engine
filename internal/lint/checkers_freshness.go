@@ -3,6 +3,7 @@ package lint
 import (
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -54,6 +55,9 @@ func (c *markersChecker) Check(snap *model.WikiSnapshot, _ *config.Config) ([]Is
 
 // --- duplicateContentChecker ---
 
+// maxDuplicateIssues caps the duplicate pairs one lint run prints.
+const maxDuplicateIssues = 50
+
 type duplicateContentChecker struct{}
 
 func (c *duplicateContentChecker) Name() string       { return "duplicate-content" }
@@ -98,7 +102,11 @@ func (c *duplicateContentChecker) Check(snap *model.WikiSnapshot, cfg *config.Co
 	}
 
 	threshold := cfg.DuplicateThreshold
-	var issues []Issue
+	type duplicate struct {
+		sim  float64
+		a, b string
+	}
+	var dups []duplicate
 	for i := 0; i < len(pages); i++ {
 		for j := i + 1; j < len(pages); j++ {
 			inter := shared[pair{i, j}]
@@ -111,14 +119,39 @@ func (c *duplicateContentChecker) Check(snap *model.WikiSnapshot, cfg *config.Co
 			}
 			sim := float64(inter) / float64(union)
 			if sim >= threshold {
-				issues = append(issues, Issue{
-					Severity: SevWarn,
-					Check:    c.Name(),
-					File:     pages[i].file,
-					Message:  fmt.Sprintf("%.0f%% similar to %s — consider merging", sim*100, pages[j].file),
-				})
+				dups = append(dups, duplicate{sim: sim, a: pages[i].file, b: pages[j].file})
 			}
 		}
+	}
+
+	// Report the most similar pairs first and cap the output. Without a cap, n
+	// near-identical pages print n*(n-1)/2 lines.
+	sort.Slice(dups, func(x, y int) bool {
+		if dups[x].sim != dups[y].sim {
+			return dups[x].sim > dups[y].sim
+		}
+		if dups[x].a != dups[y].a {
+			return dups[x].a < dups[y].a
+		}
+		return dups[x].b < dups[y].b
+	})
+	var issues []Issue
+	for k, d := range dups {
+		if k == maxDuplicateIssues {
+			issues = append(issues, Issue{
+				Severity: SevWarn,
+				Check:    c.Name(),
+				File:     d.a,
+				Message:  fmt.Sprintf("... and %d more duplicate pair(s) not shown (raise duplicate_threshold to reduce)", len(dups)-k),
+			})
+			break
+		}
+		issues = append(issues, Issue{
+			Severity: SevWarn,
+			Check:    c.Name(),
+			File:     d.a,
+			Message:  fmt.Sprintf("%.0f%% similar to %s — consider merging", d.sim*100, d.b),
+		})
 	}
 	return issues, nil
 }

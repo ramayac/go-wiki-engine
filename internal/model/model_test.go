@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ramayac/go-wiki-engine/internal/schema"
 )
@@ -264,6 +265,61 @@ func TestSnapshotSingleReadAndLookup(t *testing.T) {
 		p, err := snap.Lookup(query)
 		if err != nil || p.WikiRel != "prologue/schema.md" {
 			t.Errorf("Lookup(%q) = (%v, %v), want prologue/schema.md", query, p, err)
+		}
+	}
+}
+
+func TestParseFrontMatterStripsBOM(t *testing.T) {
+	res := ParseFrontMatter("\ufeff---\nid: a\ndescription: x\n---\n# A\n")
+	if res.State != FrontMatterPresent || res.Metadata.ID != "a" {
+		t.Fatalf("BOM page: state=%v id=%q", res.State, res.Metadata.ID)
+	}
+	if res := ParseFrontMatter("\ufeff# Title\n"); res.State != FrontMatterMissing {
+		t.Errorf("BOM page without front matter: state=%v", res.State)
+	}
+}
+
+func TestParsePageRecordsEncoding(t *testing.T) {
+	parse := func(raw string) *Page {
+		return ParsePage("/r", "/r/wiki", "wiki", "a.md", "/r/wiki/a.md", []byte(raw), time.Time{})
+	}
+	p := parse("\ufeff---\r\nid: a\r\n---\r\n# A\r\n")
+	if !p.HasBOM || !p.CRLF || p.FMState != FrontMatterPresent || strings.ContainsAny(p.RawContent, "\r\ufeff") {
+		t.Errorf("BOM+CRLF page: %+v", p)
+	}
+	p = parse("---\nid: a\n---\n# A\n")
+	if p.HasBOM || p.CRLF {
+		t.Errorf("LF page flagged: bom=%v crlf=%v", p.HasBOM, p.CRLF)
+	}
+	// Majority rule: two LF lines against one CRLF line stay LF.
+	if p = parse("a\r\nb\nc\n"); p.CRLF {
+		t.Error("mostly-LF page flagged as CRLF")
+	}
+}
+
+func TestFenceTracker(t *testing.T) {
+	var f FenceTracker
+	step := func(line string) (skip, in bool) {
+		skip = f.Skip(line)
+		return skip, f.InFence()
+	}
+	for _, c := range []struct {
+		line     string
+		skip, in bool
+	}{
+		{"text", false, false},
+		{"~~~", true, true},
+		{"```", false, true}, // other fence char does not close
+		{"# in tilde fence", false, true},
+		{"~~~", true, false},
+		{"````sh", true, true},
+		{"```", false, true}, // shorter fence does not close
+		{"````", true, false},
+		{"```a`b", false, false}, // backtick in info string is not a fence
+		{"# heading", false, false},
+	} {
+		if skip, in := step(c.line); skip != c.skip || in != c.in {
+			t.Errorf("%q: skip=%v in=%v, want %v %v", c.line, skip, in, c.skip, c.in)
 		}
 	}
 }

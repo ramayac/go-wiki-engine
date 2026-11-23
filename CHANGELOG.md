@@ -38,6 +38,14 @@ surface is defined in [README.md](README.md).
 - **Subdirectory projects:** `changed` and `candidates` return paths relative to `.wikirc`, unquoted for non-ASCII names. `candidates` no longer lists deleted files or the old path of a rename.
 - **`ignore` patterns:** patterns with `/` now match the full path (`docs/*.md`, `**`), and bare names match any path segment.
 - **Non-ASCII wiki paths and shallow clones:** `stale-content` now sees non-ASCII page names and skips (with one `info` issue) in a shallow clone. `check` reports a cited commit missing from a shallow clone as a warning (`unverifiable_commit`), not `invalid_commit`.
+- **`phase-consistency` on boards numbered from 1:** A phase now compares with the nearest lower phase on the board, not with `num-1`, so a board that starts at 1 or skips numbers no longer reports a missing phase. Only `in-progress` and `completed` phases are checked; a `blocked` phase may wait on an open one.
+- **`markdown-format` false positives:** Task-list items such as `- [ ] (optional)` no longer report a spaced link, and prose such as `m[i][j]` no longer reports a reference-style link. Real `[text] (url)` and `[text][ref]` still report.
+- **`bare-urls` and `<https://...>`:** A URL in angle brackets is a valid autolink and is no longer flagged. A naked URL still is.
+- **`duplicate-content` flood:** The check now prints the 50 most similar pairs and one `... and M more duplicate pair(s) not shown` line, not one line per pair.
+- **Broken index link reported twice:** `cross-page-links` no longer repeats a link that `index-links` already reported at the same file, line, and target. `--check=cross-page-links` alone still reports it.
+- **`relevant` and `search` read fenced `# comment` lines as headings:** Ranking, section names, and `summary` now skip ``` and ~~~ fenced code. `headings` also skips `~~~` fences.
+- **`lint --fix` rewrote CRLF files to LF:** A fix now keeps each page's line endings and any UTF-8 BOM.
+- **UTF-8 BOM:** A page that starts with a BOM no longer reports `missing front matter block`.
 
 ### Changed
 

@@ -65,7 +65,7 @@ func summarizePage(p *model.Page, displayFile string) *SummaryResult {
 
 	paragraphCount := 0
 	var previewLines []string
-	inCodeBlock := false
+	var fence model.FenceTracker
 	fmEnd := p.BodyStartLine - 1
 
 	for i := 0; i < len(p.Lines); i++ {
@@ -76,11 +76,7 @@ func summarizePage(p *model.Page, displayFile string) *SummaryResult {
 		text := p.Lines[i]
 		trimmed := strings.TrimSpace(text)
 
-		if strings.HasPrefix(trimmed, "```") {
-			inCodeBlock = !inCodeBlock
-			continue
-		}
-		if inCodeBlock {
+		if fence.Skip(text) || fence.InFence() {
 			continue
 		}
 
