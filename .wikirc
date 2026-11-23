@@ -9,6 +9,7 @@ stale_days = 0
 ignore = [
   "wiki/",
   "bin/",
+  ".wiki-engine/",
   "*.log",
   "*.tmp",
 ]

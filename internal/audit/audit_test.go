@@ -318,7 +318,7 @@ func TestLegacyFlatPathReferencesAbsent(t *testing.T) {
 
 func TestInstructionLayersIdentical(t *testing.T) {
 	root := repoRoot(t)
-	files := []string{"ingest.md", "lint.md", "onboard.md", "query.md", "refresh.md", "upgrade.md", "watch.md", "wiki-maintainer.md"}
+	files := []string{"ingest.md", "lint.md", "onboard.md", "plan.md", "query.md", "refresh.md", "save.md", "seed.md", "upgrade.md", "watch.md", "wiki-maintainer.md"}
 	var problems []string
 	for _, f := range files {
 		live := filepath.Join(root, ".wiki-instructions", f)
@@ -527,6 +527,9 @@ func TestPromptLifecycleRulesParity(t *testing.T) {
 		".wiki-instructions/ingest.md":          {"context --active", "lifecycle", "superseded_by", "sources:", "wiki-engine lint", "wiki-engine check"},
 		".wiki-instructions/query.md":           {"lifecycle", "planned", "superseded_by", "wiki-engine check"},
 		".wiki-instructions/lint.md":            {"wiki-engine lint --fix", "wiki-engine check", "lifecycle"},
+		".wiki-instructions/seed.md":            {"lifecycle", "sources:", "wiki-engine lint", "wiki-engine check", "wiki-engine health"},
+		".wiki-instructions/save.md":            {"lifecycle", "superseded_by", "sources:", "wiki-engine lint", "wiki-engine check", "wiki-engine health"},
+		".wiki-instructions/plan.md":            {".wiki-engine/handoff.md"},
 		".pi/skills/wiki/SKILL.md":              {"lifecycle", "superseded_by", "sources:", "wiki-engine check", "wiki-engine schema"},
 	}
 	for rel, wants := range checks {
