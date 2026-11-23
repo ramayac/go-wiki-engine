@@ -38,9 +38,9 @@ jobs:
             ext: ".exe"
             archive: zip
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-go@f111f3307d8850f501ac008e886eec1fd1932a34 # v5.3.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version: "1.24"
 
@@ -70,12 +70,12 @@ jobs:
           echo "archive=${ARCHIVE}" >> "$GITHUB_OUTPUT"
 
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@96ab6a427770e137f37f3797379ee7ffaa4693cb # v2.1.0
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
         with:
           subject-path: ${{ steps.build.outputs.archive }}
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@b4b15b8c7c6ac21eaeb8fcf11d52d98981df9e9c # v4.4.3
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: release-${{ matrix.goos }}-${{ matrix.goarch }}
           path: |
@@ -90,7 +90,7 @@ jobs:
       id-token: write
       attestations: write
     steps:
-      - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372680f5a8b # v4.1.8
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: dist
           merge-multiple: true
@@ -102,7 +102,7 @@ jobs:
           cat checksums.txt
 
       - name: Attest checksums manifest
-        uses: actions/attest-build-provenance@96ab6a427770e137f37f3797379ee7ffaa4693cb # v2.1.0
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
         with:
           subject-path: dist/checksums.txt
 

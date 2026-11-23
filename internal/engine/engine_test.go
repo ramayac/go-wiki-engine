@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -755,13 +756,13 @@ func TestLeafPagesChecker(t *testing.T) {
 	lr := eng.LintWithOptions([]string{"leaf-pages"}, nil)
 	found := false
 	for _, iss := range lr.Issues {
-		if iss.Check == "leaf-pages" && iss.File == filepath.Join("wiki", "leaf.md") {
+		if iss.Check == "leaf-pages" && iss.File == "wiki/leaf.md" {
 			found = true
 			if iss.Severity != SevInfo {
 				t.Errorf("leaf-pages should be info severity, got %v", iss.Severity)
 			}
 		}
-		if iss.Check == "leaf-pages" && iss.File == filepath.Join("wiki", "log.md") {
+		if iss.Check == "leaf-pages" && iss.File == "wiki/log.md" {
 			t.Error("log.md should be exempt from leaf-pages")
 		}
 	}
@@ -1415,8 +1416,8 @@ func TestLintMissingWikiDir(t *testing.T) {
 }
 
 func TestHeadingsPropagatesOpenError(t *testing.T) {
-	if os.Getuid() == 0 {
-		t.Skip("permission-based test is meaningless as root")
+	if runtime.GOOS == "windows" || os.Getuid() == 0 {
+		t.Skip("permission-based test is meaningless on Windows or as root")
 	}
 	root := setupWiki(t)
 	eng := newTestEngine(root)
@@ -1525,10 +1526,10 @@ func TestLintOrphansSkipsNonActive(t *testing.T) {
 			orphaned[iss.File] = true
 		}
 	}
-	if orphaned[filepath.Join("wiki", "old-design.md")] {
+	if orphaned["wiki/old-design.md"] {
 		t.Error("legacy page should not be flagged as orphan")
 	}
-	if !orphaned[filepath.Join("wiki", "extra.md")] {
+	if !orphaned["wiki/extra.md"] {
 		t.Error("active unlinked page should be flagged as orphan")
 	}
 }
