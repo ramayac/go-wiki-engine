@@ -8,6 +8,10 @@ description: "Append-only timeline of wiki maintenance activity."
 
 Append-only timeline of wiki maintenance activity.
 
+## [2026-11-23] ingest | controlled tag vocabulary
+
+- Added the optional `<wiki_dir>/vocabulary.yaml` and the `vocabulary` lint check (`schema` group). `init` creates the file and never overwrites it. See [lint.md](../operations/lint.md).
+
 ## [2026-11-23] fix | second audit fixes — option injection, symlink write-through, ownership, upgrade trust
 
 - Git calls now reject option-like ranges and `default_diff` values, and `init`/`sync-prompts` refuse to write through symlinks; `sync-prompts` deletes only engine-owned files. See [audit-v2-fixes](../decisions/audit-v2-fixes.md).

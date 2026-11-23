@@ -313,3 +313,87 @@ func assertPromptSymlinks(t *testing.T, dest string) {
 		}
 	}
 }
+
+func TestInitCreatesVocabularyAndPreservesEdits(t *testing.T) {
+	dest := t.TempDir()
+	if err := Init(dest, "wiki"); err != nil {
+		t.Fatalf("Init failed: %v", err)
+	}
+	path := filepath.Join(dest, "wiki", "vocabulary.yaml")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("init must create vocabulary.yaml: %v", err)
+	}
+	if !strings.Contains(string(data), "free-form") || !strings.Contains(string(data), "wiki-engine lint") {
+		t.Errorf("scaffold header missing the free-form explanation:\n%s", data)
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if trimmed := strings.TrimSpace(line); trimmed != "" && !strings.HasPrefix(trimmed, "#") {
+			t.Errorf("scaffold vocabulary.yaml must hold only comments, got %q", line)
+		}
+	}
+
+	edited := "concerns:\n  - testing\n"
+	if err := os.WriteFile(path, []byte(edited), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	res, err := Reconcile(dest, ReconcileOptions{})
+	if err != nil {
+		t.Fatalf("Reconcile failed: %v", err)
+	}
+	got, _ := os.ReadFile(path)
+	if string(got) != edited {
+		t.Errorf("re-running init overwrote the user vocabulary:\n%s", got)
+	}
+	preserved := false
+	for _, p := range res.Preserved {
+		preserved = preserved || p == "wiki/vocabulary.yaml"
+	}
+	if !preserved {
+		t.Errorf("vocabulary.yaml not reported as preserved: %v", res.Preserved)
+	}
+}
+
+func TestInitCreatesVocabularyInCustomDirAndRenameCarriesIt(t *testing.T) {
+	dest := t.TempDir()
+	if err := Init(dest, "docs"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dest, "docs", "vocabulary.yaml")); err != nil {
+		t.Fatalf("vocabulary.yaml missing in custom wiki dir: %v", err)
+	}
+	edited := "areas:\n  - api\n"
+	if err := os.WriteFile(filepath.Join(dest, "docs", "vocabulary.yaml"), []byte(edited), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Reconcile(dest, ReconcileOptions{RenameTo: "knowledge"}); err != nil {
+		t.Fatalf("rename failed: %v", err)
+	}
+	got, err := os.ReadFile(filepath.Join(dest, "knowledge", "vocabulary.yaml"))
+	if err != nil || string(got) != edited {
+		t.Errorf("rename must carry the vocabulary unchanged: %q, %v", got, err)
+	}
+	if _, err := os.Stat(filepath.Join(dest, "docs")); !os.IsNotExist(err) {
+		t.Error("old directory still exists after rename")
+	}
+}
+
+func TestInitRefusesVocabularySymlinkOutsideRepo(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlinks need privileges on Windows")
+	}
+	dest := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dest, "wiki"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	outside := filepath.Join(t.TempDir(), "outside.yaml") // does not exist: dangling link
+	if err := os.Symlink(outside, filepath.Join(dest, "wiki", "vocabulary.yaml")); err != nil {
+		t.Fatal(err)
+	}
+	if err := Init(dest, "wiki"); err == nil {
+		t.Fatal("init must refuse a vocabulary.yaml symlink that leaves the repo")
+	}
+	if _, err := os.Lstat(outside); !os.IsNotExist(err) {
+		t.Error("init wrote through the symlink")
+	}
+}

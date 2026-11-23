@@ -245,6 +245,7 @@ var Sections = []string{
 	"types",
 	"sources",
 	"references",
+	"vocabulary",
 	"graph",
 	"templates",
 	"exit-codes",
@@ -479,6 +480,7 @@ func renderSection(doc Document, section string) (string, error) {
 		fmt.Fprintf(&b, "Schema version: %s\n", doc.SchemaVersion)
 		fmt.Fprintf(&b, "Required fields: %s\n", strings.Join(doc.RequiredFields, ", "))
 		fmt.Fprintf(&b, "Optional fields: %s\n", strings.Join(doc.OptionalFields, ", "))
+		b.WriteString("Tags: free-form unless the wiki lists them in `vocabulary.yaml`. Run `wiki-engine schema --section vocabulary`.\n")
 		b.WriteString("Legacy compatibility: v1 `status: planned|current|legacy|deprecated` maps to `lifecycle` with a deprecation notice. Missing lifecycle never defaults to active.\n")
 	case "lifecycle":
 		b.WriteString("## Lifecycle\n\n")
@@ -505,6 +507,15 @@ func renderSection(doc Document, section string) (string, error) {
 		fmt.Fprintf(&b, "Structured reference types: %s\n", strings.Join(doc.ReferenceTypes, ", "))
 		fmt.Fprintf(&b, "Default issue key pattern: `%s`\n", doc.DefaultIssuePattern)
 		b.WriteString("External references must use `http://` or `https://`.\n")
+	case "vocabulary":
+		b.WriteString("## Vocabulary\n\n")
+		b.WriteString("`<wiki_dir>/vocabulary.yaml` is an optional, user-owned list of allowed page tags. `wiki-engine init` creates it with no entries and never overwrites it.\n")
+		b.WriteString("Format: YAML with any top-level keys (category names, for people only), each holding a list of tag strings. A bare list is also valid. The allowed set is the union of all listed tags.\n")
+		b.WriteString("```yaml\nconcerns:\n  - testing\n  - security\nareas:\n  - api\n```\n")
+		b.WriteString("Mode free-form: a missing, empty, or comments-only file lists no tags, and `lint` accepts any tag.\n")
+		b.WriteString("Mode controlled: once any tag is listed, the `vocabulary` check reports an error for every page tag that is not listed, on pages of every lifecycle. If a listed tag differs only by case or `-` versus `_`, the message adds a \"did you mean\" hint.\n")
+		b.WriteString("A malformed file, a non-string value, or a file that resolves outside the repository gives one error on `vocabulary.yaml`. It never falls back to free-form.\n")
+		b.WriteString("Select the check with `wiki-engine lint --check=vocabulary` or skip it with `--skip=vocabulary`. It belongs to the `schema` group.\n")
 	case "graph":
 		b.WriteString("## Graph\n\n")
 		fmt.Fprintf(&b, "Graph JSON schema version: %s\n", doc.GraphSchemaVersion)

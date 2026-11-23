@@ -62,3 +62,22 @@ func TestRenderText(t *testing.T) {
 		t.Error("unknown section should error")
 	}
 }
+
+func TestVocabularySection(t *testing.T) {
+	out, err := RenderText("", "vocabulary")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"## Vocabulary", "vocabulary.yaml", "free-form", "controlled", "lint", "bare list", "did you mean"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("vocabulary section missing %q:\n%s", want, out)
+		}
+	}
+	fm, err := RenderText("", "frontmatter")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(fm, "schema --section vocabulary") {
+		t.Errorf("frontmatter section must point at the vocabulary section:\n%s", fm)
+	}
+}
