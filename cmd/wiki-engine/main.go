@@ -26,7 +26,7 @@ func main() {
 
 	if len(args) < 2 {
 		if useJSONMode {
-			writeJSONResult(nil, false, "no command given (see: wiki-engine help)")
+			writeJSONError("no command given (see: wiki-engine help)", errCodeUsage)
 		} else {
 			usage(os.Stderr)
 		}
@@ -34,6 +34,7 @@ func main() {
 	}
 
 	cmd := args[1]
+	jsonCommand = cmd
 
 	// -h/--help after a command is a help request, not an argument.
 	afterTerminator := false

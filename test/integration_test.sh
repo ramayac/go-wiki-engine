@@ -36,8 +36,11 @@ case "$(uname -s 2>/dev/null || echo Windows)" in
   Windows|MINGW*|MSYS*|CYGWIN*) echo "  skipped (no symlinks)" ;;
   *)
     test -L .github/prompts/wiki-ingest.prompt.md || { echo "FAIL: prompts should be symlinks"; exit 1; }
-    test -L .github/prompts/wiki-watch.prompt.md || { echo "FAIL: watch prompt symlink missing"; exit 1; }
-    test -L .claude/commands/wiki-watch.md || { echo "FAIL: claude watch symlink missing"; exit 1; }
+    test -L .github/prompts/wiki-seed.prompt.md || { echo "FAIL: seed prompt symlink missing"; exit 1; }
+    test -L .claude/commands/wiki-seed.md || { echo "FAIL: claude seed symlink missing"; exit 1; }
+    for retired in onboard lint refresh watch; do
+      test ! -e ".claude/commands/wiki-$retired.md" || { echo "FAIL: retired prompt $retired still shipped"; exit 1; }
+    done
     echo "  ok"
     ;;
 esac
@@ -92,6 +95,26 @@ echo "  ok"
 echo "--- stats ---"
 out=$("$BIN" stats)
 grep -q "files:" <<<"$out" || { echo "FAIL: stats failed"; exit 1; }
+echo "  ok"
+
+# Test: health (advisory: exits 0, JSON carries schema_version)
+echo "--- health ---"
+out=$("$BIN" health)
+grep -q "Wiki health:" <<<"$out" || { echo "FAIL: health text output missing"; exit 1; }
+out=$("$BIN" --json health)
+grep -q '"schema_version": "1"' <<<"$out" || { echo "FAIL: health json missing schema_version"; exit 1; }
+grep -q '"open_markers": \[\]' <<<"$out" || { echo "FAIL: health json open_markers should be []"; exit 1; }
+rc=0
+"$BIN" health --bogus >/dev/null 2>&1 || rc=$?
+[ "$rc" -eq 2 ] || { echo "FAIL: health --bogus should exit 2, got $rc"; exit 1; }
+echo "  ok"
+
+# Test: schema conventions section
+echo "--- schema conventions ---"
+out=$("$BIN" schema --section conventions)
+grep -q "Rationale: not recorded" <<<"$out" || { echo "FAIL: conventions section missing rationale marker"; exit 1; }
+out=$("$BIN" schema --type concept)
+grep -q "## Stops applying when" <<<"$out" || { echo "FAIL: concept template missing stop condition"; exit 1; }
 echo "  ok"
 
 # Test: context
@@ -677,6 +700,59 @@ rc=0
 "$BIN" bogus >/dev/null 2>&1 || rc=$?
 test "$rc" -eq 2 || { echo "FAIL: unknown command should exit 2, got $rc"; exit 1; }
 
+cd "$TMPDIR"
+echo "  ok"
+
+# --- vocabulary ---
+echo "--- vocabulary ---"
+mkdir -p "$TMPDIR/vocabproj"
+cd "$TMPDIR/vocabproj"
+git init -q -b main
+git config user.email "test@test"
+git config user.name "Test"
+echo "package main" > main.go
+git add . && git commit -q -m "initial"
+"$BIN" init
+test -f wiki/vocabulary.yaml || { echo "FAIL: init did not create wiki/vocabulary.yaml"; exit 1; }
+
+# Free-form by default: any tag passes.
+cat > wiki/tagged.md <<'EOF'
+---
+id: tagged
+type: concept
+lifecycle: current
+description: "Tag test page"
+tags: [Typo-Tag]
+---
+# Tagged
+
+See [Index](index.md).
+EOF
+printf '%s\n' '- [tagged.md](tagged.md) | Tag test page' >> wiki/index.md
+"$BIN" lint --check=vocabulary >/dev/null || { echo "FAIL: free-form vocabulary rejected a tag"; exit 1; }
+
+# Listing one tag makes the vocabulary controlled.
+printf 'concerns:\n  - typo-tag\n' > wiki/vocabulary.yaml
+rc=0
+out=$("$BIN" lint --check=vocabulary 2>&1) || rc=$?
+test "$rc" -eq 1 || { echo "FAIL: unlisted tag should fail lint (exit 1), got $rc"; exit 1; }
+grep -q 'did you mean "typo-tag"' <<<"$out" || { echo "FAIL: no did-you-mean hint: $out"; exit 1; }
+"$BIN" lint --skip=vocabulary >/dev/null || { echo "FAIL: --skip=vocabulary did not silence the check"; exit 1; }
+
+# Fixing the tag passes; re-running init keeps the user file.
+sed -i.bak 's/Typo-Tag/typo-tag/' wiki/tagged.md && rm wiki/tagged.md.bak
+"$BIN" lint --check=vocabulary >/dev/null || { echo "FAIL: listed tag rejected"; exit 1; }
+"$BIN" init >/dev/null
+grep -q "typo-tag" wiki/vocabulary.yaml || { echo "FAIL: re-init overwrote wiki/vocabulary.yaml"; exit 1; }
+
+# A malformed file is an error, not free-form.
+printf 'concerns: [a\n' > wiki/vocabulary.yaml
+rc=0
+"$BIN" lint --check=vocabulary >/dev/null 2>&1 || rc=$?
+test "$rc" -eq 1 || { echo "FAIL: malformed vocabulary should fail lint, got $rc"; exit 1; }
+
+out=$("$BIN" schema --section vocabulary)
+grep -q "vocabulary.yaml" <<<"$out" || { echo "FAIL: schema --section vocabulary failed"; exit 1; }
 cd "$TMPDIR"
 echo "  ok"
 

@@ -36,17 +36,34 @@ wiki-engine lint
 wiki-engine check
 ```
 
-Re-running `wiki-engine init` is idempotent: it reconciles prompts, symlinks, ignore entries, and versioned root shims while preserving user-authored pages, `.wikirc`, and `AGENTS.md`/`CLAUDE.md` content. Pass `wiki-engine init --wiki-dir <name>` to rename an existing wiki directory safely. `init <name>` fails when `.wikirc` names a different directory. `init` and `sync-prompts` refuse to write through a symlink that leaves the repo, copy an edited prompt file to `<name>.bak` before replacing it, and delete only files the engine owns.
+Re-running `wiki-engine init` is idempotent: it reconciles prompts, symlinks, ignore entries, and versioned root shims while preserving user-authored pages, `.wikirc`, and `AGENTS.md`/`CLAUDE.md` content. Pass `wiki-engine init --wiki-dir <name>` to rename an existing wiki directory safely. `init <name>` fails when `.wikirc` names a different directory. `init` and `sync-prompts` refuse to write through a symlink that leaves the repo, copy an edited prompt file to `<name>.bak` before replacing it, and delete only files the engine owns. A retired prompt (`onboard`, `lint`, `refresh`, `watch`) is deleted when it is unchanged and moved to `<name>.bak` when you edited it. `init` also creates `<wiki_dir>/vocabulary.yaml` (an optional list of allowed page tags; `wiki-engine schema --section vocabulary`), installs the benchmark skill, and adds `.wiki-engine/` to an existing `.gitignore`. Details: [wiki/prologue/repo-map.md](wiki/prologue/repo-map.md).
 
 ## Slash Commands
 
-The primary interface is slash commands in your AI tool, all sharing canonical definitions in `.wiki-instructions/`: `/wiki-ingest`, `/wiki-query`, `/wiki-refresh`, `/wiki-onboard`, `/wiki-lint`, `/wiki-upgrade`, `/wiki-watch`. The multi-tool integration model is documented in [wiki/prologue/repo-map.md](wiki/prologue/repo-map.md).
+The primary interface is slash commands in your AI tool, all sharing canonical definitions in `.wiki-instructions/`.
+
+| Command | Purpose |
+|---|---|
+| `/wiki-seed` | Fill an empty or thin wiki from the code and docs, grouped by domain. |
+| `/wiki-ingest` | Absorb a code diff into the affected wiki pages. |
+| `/wiki-query` | Answer a question from the wiki, with citations. |
+| `/wiki-plan` | Write an implementation handoff from wiki and repo evidence. |
+| `/wiki-save` | Save a lesson, decision, or procedure from a session into the wiki. |
+| `/wiki-upgrade` | Migrate the wiki to the current schema after a CLI upgrade. |
+
+**Cold start:** run `wiki-engine init`, then `/wiki-seed` to write the first pages. Lint, refresh, and watch are CLI commands, not slash commands: run `wiki-engine lint`, `wiki-engine refresh`, and `wiki-engine watch --once`. The multi-tool integration model is documented in [wiki/prologue/repo-map.md](wiki/prologue/repo-map.md).
+
+## Benchmark skill
+
+`wiki-engine init` installs the `wiki-benchmark` skill in `.claude/skills/wiki-benchmark/`. It measures whether the wiki makes an agent answer your questions better. It runs 7 questions through 3 arms (no wiki, wiki available, wiki first), grades the answers blind, and reports accuracy, wrong claims, tokens, tool calls, and time per arm. It works only in Claude Code, because it spawns agents. A headless runner (`headless/bench.py`, Python 3 standard library) runs the same questions as real `claude -p` sessions.
+
+`questions.md` is a template. Replace its 3 example questions with 7 real ones before you run the skill. The skill stops while the template marker is in the file. `init` and `sync-prompts` never overwrite `questions.md`. They refresh the other skill files and copy an edited file to `<name>.bak` first. Seven questions are a pilot: read the result as a direction, not as proof.
 
 ## Commands
 
 Run `wiki-engine help` for the full list, `wiki-engine schema` for the embedded v2 schema and page templates, or `wiki-engine --json <command>` for structured output. Command-by-command details: [wiki/prologue/repo-map.md](wiki/prologue/repo-map.md).
 
-Core commands: `init`, `sync-prompts`, `schema`, `list`, `headings`, `search`, `relevant`, `context`, `graph`, `summary`, `log-tail`, `changed`, `candidates`, `check`, `impact`, `lint` (`--fix`), `watch --once`, `diff`, `refresh`, `stats`, `upgrade`.
+Core commands: `init`, `sync-prompts`, `schema`, `list`, `headings`, `search`, `relevant`, `context`, `graph`, `summary`, `log-tail`, `changed`, `candidates`, `check`, `impact`, `lint` (`--fix`), `watch --once`, `diff`, `refresh`, `stats`, `health`, `upgrade`. `stats` prints counts. `health` prints advisory maintenance signals and always exits `0` unless a runtime error occurs. Why these features exist, with known limits and upgrade commands: [wiki/decisions/governance-parity.md](wiki/decisions/governance-parity.md).
 
 ## Configuration (`.wikirc`)
 
@@ -65,8 +82,15 @@ Releases use clean `vX.Y.Z` semantic versions. The compatibility surface covered
   | `2` | Usage error: unknown command or flag, missing or extra argument, invalid flag value. `check` also uses `2` for git and setup errors (e.g., outside a Git repo or invalid base ref) |
 
   `-h` and `--help` exit `0`.
-- **Global JSON envelope (version `1`):** `{"ok": bool, "data": ..., "error": "..."}`. With `--json`, `ok` is `false` whenever the exit code is non-zero, and `data` is kept when the command has findings to report. Empty lists encode as `[]`, never `null`.
-- **Graph JSON schema (version `2`):** `{"schema_version": "2", "nodes": [], "edges": [], "unlinked": [], "stats": {}, "issues": []}`
+- **Global JSON envelope (version `1`):** `{"ok": bool, "meta": {...}, "data": ..., "error": "...", "error_code": "..."}`. With `--json`, `ok` is `false` whenever the exit code is non-zero, and `data` is kept when the command has findings to report. `meta` (always `schema_version` and `command`, plus command keys) is on every success and on every failure that keeps `data`. `error_code` is on failures: `usage` (exit 2), `findings` (the command ran and found problems), or `runtime` (other exit 1). Empty lists encode as `[]`, never `null`. **Consumers must ignore unknown keys:** new keys ship in minor releases. Full key table: `wiki-engine schema --section json`.
+
+  | Command | `meta` keys | New `data` keys |
+  |---------|-------------|-----------------|
+  | `search` | `query`, `mode`, `total`, `returned`, `limit`, `truncated`, `include_history` | per hit: `path`, `title`, `type`, `tags`; ranked also `term_coverage` |
+  | `graph` | `root`, `mode`, `include_sources` | per node: `type`, `tags`, `referrals` |
+  | `health` | common keys | `thresholds` |
+  | `check` | `base`, `working_tree` | `summary`, `exit_code`; per entry: `severity`, `line` |
+- **Graph JSON schema (version `2`):** `{"schema_version": "2", "nodes": [], "edges": [], "unlinked": [], "stats": {}, "issues": []}`. Additive node keys do not change the version.
 - **Frontmatter schema (version `2`):** Real YAML (`gopkg.in/yaml.v3`) with `id`, `title`, `type`, `lifecycle`, workflow `status`/`severity`, `related`, `depends_on`, structured `sources`, and structured `references`.
   - **Migration policy:** v1 frontmatter (`status: planned|current|legacy|deprecated` and inline `references: [source:...]`) remains readable for one major release; `wiki-engine lint --fix` migrates pages deterministically. Missing lifecycle metadata never becomes active by default.
   - **Major-version policy:** Additive JSON fields, flags, and config keys ship in minor releases; breaking removals (such as retiring v1 frontmatter fallbacks or the `relevant` alias) require a major release.
@@ -84,6 +108,7 @@ make golangci-lint    # Static analysis with the repo config (golangci-lint v2)
 make govulncheck      # Vulnerability scan (pinned govulncheck)
 make sync-scaffold    # Sync scaffold/ → internal/scaffold/files/ for embedding
 make integration      # End-to-end integration test suite
+make bench-test       # Python tests of the benchmark skill's headless runner (needs python3)
 make install          # go install globally
 ```
 

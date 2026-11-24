@@ -1,0 +1,131 @@
+{
+  "ok": false,
+  "meta": {
+    "command": "graph",
+    "include_sources": false,
+    "mode": "full",
+    "root": "index.md",
+    "schema_version": "1"
+  },
+  "data": {
+    "schema_version": "2",
+    "nodes": [
+      {
+        "id": "index",
+        "kind": "page",
+        "file": "index.md",
+        "title": "Index",
+        "type": "concept",
+        "tags": [],
+        "lifecycle": "current",
+        "status": "current",
+        "description": "Index page",
+        "updated": "2026-01-01",
+        "links": [
+          "auth.md",
+          "tokens.md",
+          "log.md"
+        ],
+        "depth": 0,
+        "referrals": 0
+      },
+      {
+        "id": "auth",
+        "kind": "page",
+        "file": "auth.md",
+        "title": "Authentication",
+        "type": "concept",
+        "tags": [
+          "security",
+          "api"
+        ],
+        "lifecycle": "current",
+        "status": "current",
+        "description": "Authentication page",
+        "updated": "2026-01-01",
+        "links": [
+          "tokens.md"
+        ],
+        "sources": [
+          {
+            "file": "src/main.go"
+          }
+        ],
+        "depth": 1,
+        "referrals": 1
+      },
+      {
+        "id": "log",
+        "kind": "page",
+        "file": "log.md",
+        "title": "Log",
+        "type": "concept",
+        "tags": [],
+        "lifecycle": "current",
+        "status": "current",
+        "description": "Log page",
+        "updated": "2026-01-01",
+        "links": [],
+        "depth": 1,
+        "referrals": 1
+      },
+      {
+        "id": "tokens",
+        "kind": "page",
+        "file": "tokens.md",
+        "title": "Token Validation",
+        "type": "concept",
+        "tags": [
+          "security"
+        ],
+        "lifecycle": "current",
+        "status": "current",
+        "description": "Token Validation page",
+        "updated": "2026-01-01",
+        "links": [],
+        "depth": 1,
+        "referrals": 2
+      }
+    ],
+    "edges": [
+      {
+        "from": "index.md",
+        "to": "auth.md",
+        "kind": "link"
+      },
+      {
+        "from": "index.md",
+        "to": "tokens.md",
+        "kind": "link"
+      },
+      {
+        "from": "index.md",
+        "to": "log.md",
+        "kind": "link"
+      },
+      {
+        "from": "auth.md",
+        "to": "tokens.md",
+        "kind": "link"
+      }
+    ],
+    "unlinked": [
+      "orphan.md"
+    ],
+    "stats": {
+      "node_count": 4,
+      "edge_count": 4,
+      "max_depth": 1,
+      "roots": [
+        "index.md"
+      ],
+      "leaves": [
+        "log.md",
+        "tokens.md"
+      ]
+    },
+    "issues": []
+  },
+  "error": "graph strict check failed: 1 unlinked page(s), 0 graph issue(s)",
+  "error_code": "findings"
+}

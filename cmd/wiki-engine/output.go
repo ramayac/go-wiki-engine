@@ -7,23 +7,82 @@ import (
 	"os"
 
 	"github.com/ramayac/go-wiki-engine/internal/engine"
+	"github.com/ramayac/go-wiki-engine/internal/schema"
 )
 
 // useJSONMode records whether --json was requested for this invocation.
 var useJSONMode bool
 
+// jsonSchemaVersion is the version of the JSON envelope, reported in meta.
+const jsonSchemaVersion = schema.JSONEnvelopeVersion
+
+// Values of the "error_code" key of a failed JSON response.
+const (
+	errCodeUsage    = "usage"    // invalid invocation, exit 2
+	errCodeFindings = "findings" // the command ran and found problems, exit 1
+	errCodeRuntime  = "runtime"  // any other failure, exit 1
+)
+
+// jsonCommand is the command name reported in meta. main sets it once.
+var jsonCommand string
+
+// jsonMetaExtra holds the command-specific meta keys set with setMeta.
+var jsonMetaExtra = map[string]interface{}{}
+
+// setMeta adds a command-specific key to the meta object of the response.
+func setMeta(key string, value interface{}) {
+	jsonMetaExtra[key] = value
+}
+
+// buildMeta returns the meta object: the common keys plus the extra keys.
+func buildMeta() map[string]interface{} {
+	m := map[string]interface{}{
+		"schema_version": jsonSchemaVersion,
+		"command":        jsonCommand,
+	}
+	for k, v := range jsonMetaExtra {
+		m[k] = v
+	}
+	return m
+}
+
+// errorCodeForExit maps an exit code to an error_code value.
+func errorCodeForExit(exit int) string {
+	if exit == exitUsage {
+		return errCodeUsage
+	}
+	return errCodeRuntime
+}
+
+// writeJSON writes a success response.
 func writeJSON(data interface{}) {
-	writeJSONResultTo(os.Stdout, data, true, "")
+	writeJSONResultTo(os.Stdout, data, true, "", "")
 }
 
-func writeJSONResult(data interface{}, ok bool, errMsg string) {
-	writeJSONResultTo(os.Stdout, data, ok, errMsg)
+// writeFindings writes the response of a command that can report findings. It
+// is a success when ok is true. Otherwise it is a "findings" failure that keeps data.
+func writeFindings(data interface{}, ok bool, errMsg string) {
+	code := ""
+	if !ok {
+		code = errCodeFindings
+	}
+	writeJSONResultTo(os.Stdout, data, ok, errMsg, code)
 }
 
-func writeJSONResultTo(w io.Writer, data interface{}, ok bool, errMsg string) {
+// writeJSONError writes a failure response without data.
+func writeJSONError(errMsg, code string) {
+	writeJSONResultTo(os.Stdout, nil, false, errMsg, code)
+}
+
+// writeJSONResultTo is the only place that builds the envelope. Meta goes on
+// every success and on every failure that carries data.
+func writeJSONResultTo(w io.Writer, data interface{}, ok bool, errMsg, code string) {
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
-	out := engine.JSONOutput{OK: ok, Data: data, Error: errMsg}
+	out := engine.JSONOutput{OK: ok, Data: data, Error: errMsg, ErrorCode: code}
+	if ok || data != nil {
+		out.Meta = buildMeta()
+	}
 	if err := enc.Encode(out); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
@@ -57,7 +116,7 @@ func usageFatal(err error) {
 // unknownCommand reports an unknown command and exits with the usage code.
 func unknownCommand(cmd string) {
 	if useJSONMode {
-		writeJSONResult(nil, false, fmt.Sprintf("unknown command: %s", cmd))
+		writeJSONError(fmt.Sprintf("unknown command: %s", cmd), errCodeUsage)
 	} else {
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n", cmd)
 		usage(os.Stderr)
@@ -67,7 +126,7 @@ func unknownCommand(cmd string) {
 
 func fatalWithCode(err error, code int) {
 	if useJSONMode {
-		writeJSONResult(nil, false, err.Error())
+		writeJSONError(err.Error(), errorCodeForExit(code))
 	} else {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 	}
@@ -76,7 +135,7 @@ func fatalWithCode(err error, code int) {
 
 func usageError(usageLine string) {
 	if useJSONMode {
-		writeJSONResult(nil, false, usageLine)
+		writeJSONError(usageLine, errCodeUsage)
 	} else {
 		fmt.Fprintln(os.Stderr, usageLine)
 	}
@@ -106,6 +165,7 @@ Commands:
   check [--base=<ref>] [--no-working-tree]
                            Branch-aware citation and drift check (exit 0 ok/review, 1 broken, 2 setup)
   stats                    Show aggregate wiki statistics
+  health                   Show advisory maintenance signals (superset of stats; never a lint failure)
   context [--minimal] [--summarize] [--active] [--sort=topo|chrono] [--max-pages=<n>] [--max-bytes=<n>]
                            Condensed wiki snapshot / active graph for agent context loading
   graph [page-or-id] [--strict] [--dot] [--include-sources]
@@ -125,8 +185,10 @@ Commands:
   version                  Print the version
   help                     Show this help
 
-Add --json (accepted anywhere) for structured JSON output. On error, --json
-commands emit {"ok": false, "error": "..."} and exit non-zero.
+Add --json (accepted anywhere) for structured JSON output. Success prints
+{"ok": true, "data": ..., "meta": {"schema_version": "1", "command": ...}}. On
+error, --json commands print {"ok": false, "error": "...", "error_code":
+"usage|findings|runtime"} and exit non-zero (2 for usage errors).
 Use -- to end flag parsing, e.g. wiki-engine search -- --check.
 -h/--help works after any command.`)
 }

@@ -1,0 +1,78 @@
+{
+  "ok": true,
+  "meta": {
+    "command": "search",
+    "include_history": false,
+    "limit": 0,
+    "mode": "ranked",
+    "query": "token",
+    "returned": 3,
+    "schema_version": "1",
+    "total": 3,
+    "truncated": false
+  },
+  "data": [
+    {
+      "id": "tokens",
+      "file": "wiki/tokens.md",
+      "path": "wiki/tokens.md",
+      "title": "Token Validation",
+      "type": "concept",
+      "tags": [
+        "security"
+      ],
+      "lifecycle": "current",
+      "score": 53.75,
+      "matched_terms": [
+        "token"
+      ],
+      "coverage": 1,
+      "term_coverage": 1,
+      "section": "Token Validation",
+      "start_line": 10,
+      "context": "tags: [security]\n---\n# Token Validation\n\n## Rules",
+      "why": "lifecycle=current, coverage=100%, 1 heading, 2 body under Token Validation"
+    },
+    {
+      "id": "auth",
+      "file": "wiki/auth.md",
+      "path": "wiki/auth.md",
+      "title": "Authentication",
+      "type": "concept",
+      "tags": [
+        "security",
+        "api"
+      ],
+      "lifecycle": "current",
+      "score": 1.25,
+      "matched_terms": [
+        "token"
+      ],
+      "coverage": 1,
+      "term_coverage": 1,
+      "section": "Authentication",
+      "start_line": 14,
+      "context": "# Authentication\n\nAuthentication checks every token. See [Token Validation](tokens.md).",
+      "why": "lifecycle=current, coverage=100%, 0 heading, 1 body under Authentication"
+    },
+    {
+      "id": "index",
+      "file": "wiki/index.md",
+      "path": "wiki/index.md",
+      "title": "Index",
+      "type": "concept",
+      "tags": [],
+      "lifecycle": "current",
+      "score": 1.25,
+      "matched_terms": [
+        "token"
+      ],
+      "coverage": 1,
+      "term_coverage": 1,
+      "section": "Index",
+      "start_line": 12,
+      "context": "- [Authentication](auth.md)\n- [Token Validation](tokens.md)\n- [Log](log.md)",
+      "why": "lifecycle=current, coverage=100%, 0 heading, 1 body under Index"
+    }
+  ]
+}

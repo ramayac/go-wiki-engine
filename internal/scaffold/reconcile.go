@@ -189,13 +189,7 @@ func Reconcile(destDir string, opts ReconcileOptions) (*ReconcileResult, error) 
 	}
 
 	// 2. Reconcile prompt files, tool symlinks, and retired managed files.
-	prefixes := []string{
-		"files/.wiki-instructions",
-		"files/.github/prompts",
-		"files/.github/instructions",
-		"files/.claude/commands",
-		"files/.pi/skills",
-	}
+	prefixes := syncPrefixes
 	for _, prefix := range prefixes {
 		if err := syncEmbeddedDir(destDir, prefix, &res.Updated); err != nil {
 			return nil, err
@@ -212,7 +206,50 @@ func Reconcile(destDir string, opts ReconcileOptions) (*ReconcileResult, error) 
 	res.Updated = append(res.Updated, shimUpdated...)
 	res.ShimsPreserved = shimPreserved
 
+	// 4. Keep the temporary handoff folder out of git when the repo has a .gitignore.
+	gitignoreChanged, err := ensureGitignoreEntry(destDir)
+	if err != nil {
+		return nil, err
+	}
+	if gitignoreChanged {
+		res.Updated = append(res.Updated, ".gitignore")
+	}
+
 	return res, nil
+}
+
+// handoffDir is the temporary folder that the Wiki Plan prompt writes to.
+const handoffDir = ".wiki-engine"
+
+// ensureGitignoreEntry appends handoffDir to an existing .gitignore that does
+// not ignore it yet. It never creates a .gitignore. It reports whether it wrote.
+func ensureGitignoreEntry(destDir string) (bool, error) {
+	path := filepath.Join(destDir, ".gitignore")
+	if _, err := os.Lstat(path); err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	if err := guardWrite(destDir, path); err != nil {
+		return false, err
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false, err
+	}
+	text := string(data)
+	for _, line := range strings.Split(text, "\n") {
+		switch strings.TrimSpace(line) {
+		case handoffDir, handoffDir + "/", "/" + handoffDir, "/" + handoffDir + "/":
+			return false, nil
+		}
+	}
+	if text != "" && !strings.HasSuffix(text, "\n") {
+		text += "\n"
+	}
+	text += handoffDir + "/\n"
+	return true, os.WriteFile(path, []byte(text), 0o644)
 }
 
 func renameAndReconcile(destDir, oldWikiDir, newWikiDir string) (*ReconcileResult, error) {
@@ -294,6 +331,7 @@ func isPromptLayerPath(rel string) bool {
 		".github/instructions",
 		".claude/commands",
 		".pi/skills",
+		skillDir,
 	} {
 		if s == p || strings.HasPrefix(s, p+"/") {
 			return true

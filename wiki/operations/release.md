@@ -30,7 +30,7 @@ How to cut, publish, and verify a release of go-wiki-engine.
 
 ## Pre-release Checklist
 
-1. All gates green: `make test`, `make lint`, `make audit`, `make integration`, `make golangci-lint`, `make govulncheck`, and `go test -race ./...`.
+1. All gates green: `make test`, `make lint`, `make audit`, `make integration`, `make bench-test`, `make golangci-lint`, `make govulncheck`, and `go test -race ./...`.
 2. `make sync-scaffold` leaves `internal/scaffold/files` unchanged.
 3. `wiki-engine lint`, `wiki-engine check`, `wiki-engine graph --strict`, and `wiki-engine context --active` are clean on this repo.
 4. `CHANGELOG.md` has its Unreleased entries moved to the new version and dated.
@@ -45,7 +45,7 @@ How to cut, publish, and verify a release of go-wiki-engine.
 
 1. `go install github.com/ramayac/go-wiki-engine/cmd/wiki-engine@vX.Y.Z` — `wiki-engine version` must report vX.Y.Z.
 2. From an installed older binary, run `wiki-engine upgrade --require-attestation` (needs a logged-in `gh`) and confirm the replacement succeeds. Plain `wiki-engine upgrade` checks only the SHA-256 when `gh` or the attestation is missing.
-3. Run `wiki-engine init` (or `wiki-engine sync-prompts`) in each initialized repo to reconcile prompts, symlinks, and root shims.
+3. Run `wiki-engine init` (or `wiki-engine sync-prompts`) in each initialized repo to reconcile prompts, symlinks, root shims, and the benchmark skill. Upgrade notes: [governance-parity.md](../decisions/governance-parity.md).
 
 ## Post-release Bookkeeping
 

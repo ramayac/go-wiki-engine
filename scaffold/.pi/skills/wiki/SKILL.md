@@ -3,8 +3,8 @@ name: wiki
 description: >
   Maintain a repo-local wiki for durable project knowledge.
   Use for ingesting repo changes, querying architecture, refreshing
-  stale docs, onboarding cold-start projects, upgrading the wiki-engine
-  CLI, monitoring drift, and linting wiki health.
+  stale docs, seeding an empty wiki, saving lessons, planning handoffs,
+  upgrading the wiki-engine CLI, monitoring drift, and linting wiki health.
   Works with the wiki-engine CLI for filesystem-level inspection.
 license: MIT
 compatibility: "Requires wiki-engine CLI (go install github.com/ramayac/go-wiki-engine/cmd/wiki-engine@latest)"
@@ -35,6 +35,7 @@ wiki-engine impact [--fuzzy] <file...>          # Exact source impact (or --fuzz
 wiki-engine lint [--check=<a,b>] [--skip=<a,b>] [--fix]
 wiki-engine refresh [diff-range]                # Combined maintenance snapshot
 wiki-engine stats                               # Aggregate wiki statistics
+wiki-engine health                              # Advisory maintenance signals (never fails CI)
 wiki-engine diff <from> <to>                    # Wiki changes between two git refs
 wiki-engine watch [--once]                      # Poll for changes + lint issues
 wiki-engine init [--wiki-dir=<name>]            # Idempotent bootstrap/reconcile or rename
@@ -64,13 +65,19 @@ sources:
 - **Follow `superseded_by` links** to active replacements.
 - Add exact `sources:` to changed pages.
 - Run `wiki-engine lint` after writes and `wiki-engine check` after ingest or save.
+- Write wiki text in ASD-STE100 Simplified Technical English. Never persist secrets, tokens, personal or health identifiers, or whole payloads.
+- Record why, not what. If no source states the reason, write the rationale marker (`wiki-engine schema --section conventions`).
+- Tags: `wiki/vocabulary.yaml` is free-form until it lists a tag. Then use only listed tags.
 
 ## Workflows
 
-1. **Ingest (`/wiki-ingest`):** `context --active` → `changed` / `candidates` / `check` / `impact` → update pages with exact `sources:` → update `index.md` + `log.md` → `lint` + `check`.
+1. **Ingest (`/wiki-ingest`):** no ingest history and no real pages → run Seed. Otherwise read commit messages and the PR body (`gh`) → `check` / `impact` → `search` / `graph <id>` → update pages with exact `sources:` and the reason → update `index.md` + one `log.md` entry → `lint --fix` + `lint` → `check` → `health`.
 2. **Query (`/wiki-query`):** `graph` / `context --active --sort=topo` → `search` / `relevant` → read active pages (ignore `planned`, follow `superseded_by`) → widen to `sources:` only if needed.
-3. **Refresh (`/wiki-refresh`):** `refresh` + `check` → update impacted pages → `lint` + `check`.
-4. **Onboard (`/wiki-onboard`):** `schema` → survey repo → migrate external docs → populate `repo-map.md` + typed pages → `lint` + `check` + `graph --strict`.
-5. **Lint (`/wiki-lint`):** `lint --fix` → `lint --json` + `check --json` → resolve remaining issues → `lint` + `check` + `graph --strict`.
-6. **Upgrade (`/wiki-upgrade`):** `upgrade` → `init` (reconcile prompts) → `lint` + `check`.
-7. **Watch (`/wiki-watch`):** `watch --once` + `check` → `impact` → ingest → `lint` + `check`.
+3. **Upgrade (`/wiki-upgrade`):** `upgrade` → `init` (reconcile prompts) → `lint` + `check`.
+4. **Seed (`/wiki-seed`):** inventory repo → group by domain → `search` + `impact` for overlaps → confirm plan → write pages (omit `## Why` when no source states it) + `repo-map.md` + phases → `index.md` + one `log.md` entry → `lint --fix` + `lint` → `check` + `health` + `graph --strict`.
+5. **Save (`/wiki-save`):** `search` → `graph <id>` → update or create a page with `sources:`, the reason, and `## Stops applying when` → `index.md` + one `log.md` entry → `lint --fix` + `lint` → `check` → `health`.
+6. **Plan (`/wiki-plan`):** `search` + `graph <id>` + `impact` → write `.wiki-engine/handoff.md` (temporary; never durable wiki).
+
+Lint, refresh, and watch are CLI commands, not prompts: run `wiki-engine lint --fix`, `wiki-engine refresh`, and `wiki-engine watch --once`.
+
+To measure whether the wiki helps an agent, use the Claude Code skill `.claude/skills/wiki-benchmark/`. It needs Claude Code, because it spawns agents.

@@ -1,0 +1,80 @@
+{
+  "ok": true,
+  "meta": {
+    "command": "health",
+    "schema_version": "1"
+  },
+  "data": {
+    "schema_version": "1",
+    "pages": 5,
+    "wiki_bytes": 1026,
+    "index_bytes": 193,
+    "log_bytes": 154,
+    "log_needs_rotation": false,
+    "graph_nodes": 4,
+    "graph_edges": 4,
+    "lifecycles": {
+      "current": 4,
+      "implemented": 0,
+      "legacy": 1,
+      "planned": 0,
+      "superseded": 0,
+      "unset": 0,
+      "wip": 0
+    },
+    "largest_pages": [
+      {
+        "id": "auth",
+        "path": "wiki/auth.md",
+        "title": "Authentication",
+        "lifecycle": "current",
+        "bytes": 266,
+        "words": 31
+      },
+      {
+        "id": "tokens",
+        "path": "wiki/tokens.md",
+        "title": "Token Validation",
+        "lifecycle": "current",
+        "bytes": 239,
+        "words": 36
+      },
+      {
+        "id": "index",
+        "path": "wiki/index.md",
+        "title": "Index",
+        "lifecycle": "current",
+        "bytes": 193,
+        "words": 24
+      },
+      {
+        "id": "old",
+        "path": "wiki/old.md",
+        "title": "Old Tokens",
+        "lifecycle": "legacy",
+        "bytes": 174,
+        "words": 28
+      },
+      {
+        "id": "log",
+        "path": "wiki/log.md",
+        "title": "Log",
+        "lifecycle": "current",
+        "bytes": 154,
+        "words": 24
+      }
+    ],
+    "aging_work": [],
+    "updated_behind_git": [],
+    "duplicate_titles": [],
+    "index_only_pages": [
+      "wiki/auth.md"
+    ],
+    "open_markers": [],
+    "thresholds": {
+      "aging_days": 90,
+      "drift_days": 7,
+      "log_rotation_bytes": 131072
+    }
+  }
+}

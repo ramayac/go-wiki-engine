@@ -85,7 +85,7 @@ func TestArgsAfterFilters(t *testing.T) {
 
 func TestWriteJSONResultTo(t *testing.T) {
 	var buf bytes.Buffer
-	writeJSONResultTo(&buf, map[string]string{"wiki_dir": "docs"}, true, "")
+	writeJSONResultTo(&buf, map[string]string{"wiki_dir": "docs"}, true, "", "")
 
 	var out map[string]json.RawMessage
 	if err := json.Unmarshal(buf.Bytes(), &out); err != nil {
@@ -103,7 +103,7 @@ func TestWriteJSONResultTo(t *testing.T) {
 
 	// Error envelope: data omitted, error present.
 	buf.Reset()
-	writeJSONResultTo(&buf, nil, false, "boom")
+	writeJSONResultTo(&buf, nil, false, "boom", errCodeRuntime)
 	out = map[string]json.RawMessage{}
 	if err := json.Unmarshal(buf.Bytes(), &out); err != nil {
 		t.Fatalf("error envelope is not valid JSON: %v\n%s", err, buf.String())

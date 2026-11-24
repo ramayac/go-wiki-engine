@@ -13,5 +13,9 @@ bin/
 Thumbs.db
 
 # Test artifacts
+__pycache__/
 *.test
 *.out
+
+# Temporary agent handoff (wiki-plan)
+.wiki-engine/

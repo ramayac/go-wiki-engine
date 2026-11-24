@@ -8,6 +8,28 @@ description: "Append-only timeline of wiki maintenance activity."
 
 Append-only timeline of wiki maintenance activity.
 
+## [2026-11-23] ingest | governance parity: benchmark skill, additive JSON, decision page
+
+- `init` installs the `wiki-benchmark` skill in `.claude/skills/wiki-benchmark/`. `make bench-test` runs its Python tests. See [repo-map.md](repo-map.md).
+- Every `--json` response carries `meta`, and a failure carries `error_code`. The richer fields are additive. See [schema.md](schema.md).
+- The decision page [governance-parity](../decisions/governance-parity.md) records what was ported, the known limits, and the upgrade commands.
+
+## [2026-11-23] refactor | prompt set aligned with sibling; four prompts retired
+
+- The shipped prompts are now `seed`, `ingest`, `query`, `plan`, `save`, and `upgrade`. The prompts `onboard`, `lint`, `refresh`, and `watch` are retired. Their CLI commands stay. See [index.md](../index.md).
+- `sync-prompts` and `init` delete a retired prompt only when it is unchanged. An edited retired prompt moves to `<name>.bak`. See [repo-map.md](repo-map.md).
+- `/wiki-seed` records open questions in an `## Open questions` section of [repo-map.md](repo-map.md).
+
+## [2026-11-23] ingest | governance parity: health command, why and stop-condition templates, markers
+
+- Added `wiki-engine health`: advisory maintenance signals that exit `0` and never fail CI. See [repo-map.md](repo-map.md).
+- Added `## Why` and `## Stops applying when` to the page templates, and `schema --section conventions` for the rationale marker, contradiction flag, writing language, data protection, and log rotation. See [schema.md](schema.md).
+- The `markers` lint check now skips the open rationale marker and contradiction flag. See [lint.md](../operations/lint.md).
+
+## [2026-11-23] ingest | controlled tag vocabulary
+
+- Added the optional `<wiki_dir>/vocabulary.yaml` and the `vocabulary` lint check (`schema` group). `init` creates the file and never overwrites it. See [lint.md](../operations/lint.md).
+
 ## [2026-11-23] fix | second audit fixes — option injection, symlink write-through, ownership, upgrade trust
 
 - Git calls now reject option-like ranges and `default_diff` values, and `init`/`sync-prompts` refuse to write through symlinks; `sync-prompts` deletes only engine-owned files. See [audit-v2-fixes](../decisions/audit-v2-fixes.md).

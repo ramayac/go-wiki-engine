@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -318,7 +319,7 @@ func TestLegacyFlatPathReferencesAbsent(t *testing.T) {
 
 func TestInstructionLayersIdentical(t *testing.T) {
 	root := repoRoot(t)
-	files := []string{"ingest.md", "lint.md", "onboard.md", "query.md", "refresh.md", "upgrade.md", "watch.md", "wiki-maintainer.md"}
+	files := []string{"ingest.md", "plan.md", "query.md", "save.md", "seed.md", "upgrade.md", "wiki-maintainer.md"}
 	var problems []string
 	for _, f := range files {
 		live := filepath.Join(root, ".wiki-instructions", f)
@@ -336,6 +337,72 @@ func TestInstructionLayersIdentical(t *testing.T) {
 	}
 	if len(problems) > 0 {
 		t.Errorf("instruction layer drift:\n  %s", strings.Join(problems, "\n  "))
+	}
+}
+
+// TestBenchmarkSkillParity keeps the dogfooded .claude/skills/wiki-benchmark/
+// layer in step with the scaffold copy. Every file must match byte for byte,
+// except questions.md, which a repo owner edits after install. The scaffold
+// questions.md must stay a template, and prepare.sh must stay executable.
+func TestBenchmarkSkillParity(t *testing.T) {
+	root := repoRoot(t)
+	const skill = ".claude/skills/wiki-benchmark"
+	const userOwned = "questions.md"
+	const marker = "<!-- TEMPLATE: replace these example questions -->"
+	scafDir := filepath.Join(root, "scaffold", filepath.FromSlash(skill))
+	liveDir := filepath.Join(root, filepath.FromSlash(skill))
+
+	scafFiles, err := collectFiles(scafDir, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	liveFiles, err := collectFiles(liveDir, nil)
+	if err != nil {
+		t.Fatalf("root skill layer missing: %v", err)
+	}
+	sort.Strings(scafFiles)
+	sort.Strings(liveFiles)
+	if len(scafFiles) < 6 {
+		t.Fatalf("scaffold skill has %d files, expected SKILL.md, prepare.sh, questions.md and the headless files: %v", len(scafFiles), scafFiles)
+	}
+	if strings.Join(scafFiles, "\n") != strings.Join(liveFiles, "\n") {
+		t.Errorf("%s file set differs from scaffold\nscaffold-only: %v\nroot-only: %v",
+			skill, diffStrings(scafFiles, liveFiles), diffStrings(liveFiles, scafFiles))
+	}
+	for _, rel := range scafFiles {
+		a, err := os.ReadFile(filepath.Join(scafDir, filepath.FromSlash(rel)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, err := os.ReadFile(filepath.Join(liveDir, filepath.FromSlash(rel)))
+		if err != nil {
+			continue // already reported by the file-set check
+		}
+		if rel != userOwned && string(a) != string(b) {
+			t.Errorf("%s/%s differs from scaffold copy", skill, rel)
+		}
+	}
+
+	for _, rel := range []string{userOwned, "SKILL.md"} {
+		data, err := os.ReadFile(filepath.Join(scafDir, rel))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(data), marker) {
+			t.Errorf("scaffold %s/%s must carry the template marker", skill, rel)
+		}
+	}
+
+	if runtime.GOOS != "windows" {
+		for _, dir := range []string{scafDir, liveDir} {
+			fi, err := os.Stat(filepath.Join(dir, "prepare.sh"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if fi.Mode()&0o100 == 0 {
+				t.Errorf("%s/prepare.sh is not executable (mode %s)", dir, fi.Mode())
+			}
+		}
 	}
 }
 
@@ -469,6 +536,33 @@ func TestSchemaParityWithDocs(t *testing.T) {
 	}
 }
 
+// TestSchemaDocsCarryConventions keeps the human-readable schema docs in step
+// with `wiki-engine schema --section conventions` and the page templates.
+func TestSchemaDocsCarryConventions(t *testing.T) {
+	root := repoRoot(t)
+	for _, rel := range []string{"wiki/prologue/schema.md", "scaffold/wiki/prologue/schema.md"} {
+		data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		text := string(data)
+		for _, want := range []string{
+			"## Conventions",
+			"`> Rationale: not recorded.`",
+			"`> ⚠️ CONTRADICTION: ",
+			"ASD-STE100 Simplified Technical English",
+			"secrets, credentials, tokens, session IDs, personal or health identifiers, free-text personal data, or whole request or response payloads",
+			"## Why",
+			"## Stops applying when",
+			"log_needs_rotation",
+		} {
+			if !strings.Contains(text, want) {
+				t.Errorf("%s missing %q", rel, want)
+			}
+		}
+	}
+}
+
 // TestWikiCommandDocsParity verifies that wiki/prologue/repo-map.md documents
 // every public CLI subcommand.
 func TestWikiCommandDocsParity(t *testing.T) {
@@ -482,7 +576,7 @@ func TestWikiCommandDocsParity(t *testing.T) {
 		"init", "sync-prompts", "schema", "list", "headings", "search",
 		"log-tail", "changed", "candidates", "check", "lint", "stats",
 		"context", "graph", "summary", "relevant", "impact", "diff",
-		"watch", "refresh", "upgrade", "version",
+		"health", "watch", "refresh", "upgrade", "version",
 	}
 	for _, cmd := range commands {
 		if !strings.Contains(text, "`"+cmd) {
@@ -499,7 +593,9 @@ func TestPromptLifecycleRulesParity(t *testing.T) {
 		".wiki-instructions/wiki-maintainer.md": {"lifecycle", "planned", "superseded_by", "sources:", "wiki-engine lint", "wiki-engine check"},
 		".wiki-instructions/ingest.md":          {"context --active", "lifecycle", "superseded_by", "sources:", "wiki-engine lint", "wiki-engine check"},
 		".wiki-instructions/query.md":           {"lifecycle", "planned", "superseded_by", "wiki-engine check"},
-		".wiki-instructions/lint.md":            {"wiki-engine lint --fix", "wiki-engine check", "lifecycle"},
+		".wiki-instructions/seed.md":            {"lifecycle", "sources:", "## Open questions", "wiki-engine lint", "wiki-engine check", "wiki-engine health"},
+		".wiki-instructions/save.md":            {"lifecycle", "superseded_by", "sources:", "wiki-engine lint", "wiki-engine check", "wiki-engine health"},
+		".wiki-instructions/plan.md":            {".wiki-engine/handoff.md"},
 		".pi/skills/wiki/SKILL.md":              {"lifecycle", "superseded_by", "sources:", "wiki-engine check", "wiki-engine schema"},
 	}
 	for rel, wants := range checks {

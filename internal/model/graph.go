@@ -17,7 +17,8 @@ type GraphNode struct {
 	Kind        string            `json:"kind,omitempty"` // "page" (default) or "source"
 	File        string            `json:"file"`
 	Title       string            `json:"title,omitempty"`
-	Type        string            `json:"type,omitempty"`
+	Type        string            `json:"type"`
+	Tags        []string          `json:"tags"`
 	Lifecycle   string            `json:"lifecycle,omitempty"`
 	Status      string            `json:"status"`
 	Description string            `json:"description"`
@@ -30,6 +31,8 @@ type GraphNode struct {
 	Sources     []SourceReference `json:"sources,omitempty"`
 	References  []Reference       `json:"references,omitempty"`
 	Depth       int               `json:"depth"`
+	// Referrals counts the inbound edges of the node (all kinds).
+	Referrals int `json:"referrals"`
 }
 
 // GraphEdge represents a directed, deduplicated edge in the wiki graph.
@@ -127,6 +130,7 @@ func BuildGraph(snap *WikiSnapshot, opts GraphOptions) (*GraphView, error) {
 			File:        p.WikiRel,
 			Title:       p.EffectiveTitle(),
 			Type:        p.Metadata.Type,
+			Tags:        append([]string{}, p.Metadata.Tags...),
 			Lifecycle:   lc,
 			Status:      statusDisplay,
 			Description: p.Metadata.Description,
@@ -234,6 +238,7 @@ func BuildGraph(snap *WikiSnapshot, opts GraphOptions) (*GraphView, error) {
 						File:        srcID,
 						Status:      "source",
 						Description: "Repository source file",
+						Tags:        []string{},
 						Links:       []string{},
 						Depth:       gn.Depth + 1,
 					}
@@ -262,8 +267,13 @@ func BuildGraph(snap *WikiSnapshot, opts GraphOptions) (*GraphView, error) {
 	}
 	sort.Strings(unlinked)
 
+	inbound := make(map[string]int, len(nodesMap))
+	for _, e := range edges {
+		inbound[e.To]++
+	}
 	nodes := make([]GraphNode, 0, len(nodesMap))
 	for _, gn := range nodesMap {
+		gn.Referrals = inbound[gn.File]
 		nodes = append(nodes, *gn)
 	}
 	SortGraphNodes(nodes, "topo")

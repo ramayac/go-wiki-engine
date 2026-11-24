@@ -9,6 +9,7 @@ live in the [wiki](wiki/index.md) — read it before broad changes.
 - **git** — required by the diff-driven commands (`changed`, `candidates`,
   `check`, `refresh`, `watch`, `diff`, `impact`) and by the test suite
 - **make** — optional; `make help` lists all targets
+- **Python 3** — optional; only `make bench-test` needs it (it skips when `python3` is absent)
 
 ## Development Loop
 
@@ -18,12 +19,21 @@ make test             # unit tests
 make lint             # go vet + wiki-engine lint on this repo's own wiki
 make audit            # repo-wide wiki reference, action-pin, and schema parity audit
 make integration      # end-to-end CLI suite (test/integration_test.sh)
+make bench-test       # Python tests of the benchmark skill's headless runner
 make golangci-lint    # golangci-lint v2 with .golangci-lint.yml
 make govulncheck      # vulnerability scan with pinned govulncheck
 go test -race ./...   # race detector
 ```
 
 All of these run in CI (`.github/workflows/test.yml`).
+
+## JSON Contract Tests
+
+`cmd/wiki-engine/json_contract_test.go` compares the `--json` output of `search`, `graph`, `health`, `check`, and one error per `error_code` with golden files in `cmd/wiki-engine/testdata/golden/`. Temp paths, commit hashes, and timestamps are normalized first. `TestJSONCompat` fails when a key of the previous shape disappears or changes type. After an intended, additive output change, review the diff and regenerate:
+
+```bash
+go test ./cmd/wiki-engine -run TestJSONGolden -update
+```
 
 ## Scaffold Changes
 

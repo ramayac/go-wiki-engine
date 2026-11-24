@@ -4,13 +4,16 @@ package scaffold
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/ramayac/go-wiki-engine/internal/paths"
@@ -36,7 +39,7 @@ var (
 
 // promptWorkflows are the canonical workflow files in .wiki-instructions/ that
 // are symlinked into the tool-specific directories.
-var promptWorkflows = []string{"ingest", "lint", "onboard", "query", "refresh", "upgrade", "watch"}
+var promptWorkflows = []string{"ingest", "plan", "query", "save", "seed", "upgrade"}
 
 // toolDirLinks maps destination-relative paths to symlink targets relative to
 // the directory containing the link.
@@ -52,6 +55,27 @@ func buildToolDirLinks() map[string]string {
 		links[".claude/commands/wiki-"+w+".md"] = target
 	}
 	return links
+}
+
+// skillDir is the engine-managed benchmark skill. Its files are refreshed by
+// sync-prompts, except the user-owned ones.
+const skillDir = ".claude/skills/wiki-benchmark"
+
+// userOwnedFiles are files inside a managed directory that the engine creates
+// when missing and never touches again. Paths are relative to the repo root.
+var userOwnedFiles = map[string]bool{
+	skillDir + "/questions.md": true,
+}
+
+// syncPrefixes are the embedded directories that init and sync-prompts keep in
+// step with the engine. The instruction layers come first.
+var syncPrefixes = []string{
+	"files/.wiki-instructions",
+	"files/.github/prompts",
+	"files/.github/instructions",
+	"files/.claude/commands",
+	"files/.pi/skills",
+	"files/" + skillDir,
 }
 
 // warnOut receives one-line notices such as backups. Tests replace it.
@@ -117,20 +141,15 @@ func writeScaffoldFile(root, dest, rel string, data []byte) error {
 	}
 	target, isLink := toolDirLinks[rel]
 	if !isLink {
-		return os.WriteFile(dest, data, 0o644)
-	}
-	if lerr == nil && info.Mode().IsRegular() {
-		existing, err := os.ReadFile(dest)
-		if err != nil {
-			return err
-		}
-		if !bytes.Equal(existing, data) {
-			bak, err := backupFile(dest, existing)
-			if err != nil {
+		if strings.HasPrefix(rel, skillDir+"/") {
+			if err := backupIfEdited(dest, rel, data); err != nil {
 				return err
 			}
-			_, _ = fmt.Fprintf(warnOut, "backed up edited %s to %s\n", rel, filepath.ToSlash(filepath.Base(bak)))
 		}
+		return writeManagedFile(dest, rel, data)
+	}
+	if err := backupIfEdited(dest, rel, data); err != nil {
+		return err
 	}
 	if err := os.Remove(dest); err != nil && !os.IsNotExist(err) {
 		return err
@@ -138,7 +157,46 @@ func writeScaffoldFile(root, dest, rel string, data []byte) error {
 	if err := os.Symlink(target, dest); err == nil {
 		return nil
 	}
-	return os.WriteFile(dest, data, 0o644)
+	return writeManagedFile(dest, rel, data)
+}
+
+// backupIfEdited copies a regular file at dest to a .bak file when its bytes
+// differ from data. A missing file or a symlink needs no backup.
+func backupIfEdited(dest, rel string, data []byte) error {
+	info, err := os.Lstat(dest)
+	if err != nil || !info.Mode().IsRegular() {
+		return nil
+	}
+	existing, err := os.ReadFile(dest)
+	if err != nil {
+		return err
+	}
+	if bytes.Equal(existing, data) {
+		return nil
+	}
+	bak, err := backupFile(dest, existing)
+	if err != nil {
+		return err
+	}
+	_, _ = fmt.Fprintf(warnOut, "backed up edited %s to %s\n", rel, filepath.ToSlash(filepath.Base(bak)))
+	return nil
+}
+
+// writeManagedFile writes data to dest. Shell scripts get mode 0755, because
+// the embedded files keep no mode bits. os.WriteFile keeps the mode of an
+// existing file, so the chmod also repairs a script that lost its executable bit.
+func writeManagedFile(dest, rel string, data []byte) error {
+	mode := os.FileMode(0o644)
+	if strings.HasSuffix(rel, ".sh") {
+		mode = 0o755
+	}
+	if err := os.WriteFile(dest, data, mode); err != nil {
+		return err
+	}
+	if mode != 0o644 {
+		return os.Chmod(dest, mode)
+	}
+	return nil
 }
 
 func renderShimBlock(name, wikiDir string) string {
@@ -244,17 +302,12 @@ func Init(destDir, wikiDir string) error {
 }
 
 // SyncPrompts overwrites the .wiki-instructions/, .github/prompts/,
-// .github/instructions/, .claude/commands/, and .pi/skills/ files in
-// destDir with the current embedded versions. It does not touch wiki/
-// content or .wikirc.
+// .github/instructions/, .claude/commands/, .pi/skills/, and
+// .claude/skills/wiki-benchmark/ files in destDir with the current embedded
+// versions. It creates the user-owned questions.md when missing and never
+// overwrites it. It does not touch wiki/ content or .wikirc.
 func SyncPrompts(destDir string) (updated, removed []string, err error) {
-	prefixes := []string{
-		"files/.wiki-instructions",
-		"files/.github/prompts",
-		"files/.github/instructions",
-		"files/.claude/commands",
-		"files/.pi/skills",
-	}
+	prefixes := syncPrefixes
 	for _, prefix := range prefixes {
 		err := syncEmbeddedDir(destDir, prefix, &updated)
 		if err != nil {
@@ -274,19 +327,35 @@ func SyncPrompts(destDir string) (updated, removed []string, err error) {
 
 // retiredManagedFiles are files earlier releases shipped in the sync
 // directories that the current embed no longer has. Paths are relative to the
-// repo root, with forward slashes. The engine deletes these and no other
-// regular file.
-var retiredManagedFiles = map[string]bool{
-	".claude/commands/wiki-migrate-shims.md":       true,
-	".github/prompts/wiki-migrate-shims.prompt.md": true,
-	".wiki-instructions/migrate-shims.md":          true,
-	".wiki-instructions/summarize.md":              true,
+// repo root, with forward slashes. The value lists the SHA-256 of every
+// version this repo shipped at that path (see shippedDigests).
+//
+// A regular file whose bytes match a digest is deleted. A regular file with
+// other bytes is backed up first. An empty list means the engine deletes the
+// file as it is. A symlink into .wiki-instructions/ is deleted. The engine
+// removes no other file.
+var retiredManagedFiles = buildRetiredManagedFiles()
+
+func buildRetiredManagedFiles() map[string][]string {
+	retired := map[string][]string{
+		".claude/commands/wiki-migrate-shims.md":       nil,
+		".github/prompts/wiki-migrate-shims.prompt.md": nil,
+		".wiki-instructions/migrate-shims.md":          nil,
+		".wiki-instructions/summarize.md":              nil,
+	}
+	for name, digests := range shippedDigests {
+		retired[".wiki-instructions/"+name+".md"] = digests
+		retired[".claude/commands/wiki-"+name+".md"] = digests
+		retired[".github/prompts/wiki-"+name+".prompt.md"] = digests
+	}
+	return retired
 }
 
-// isEngineOwned reports whether the engine may delete path. It owns a retired
-// file, and a symlink that points into .wiki-instructions/ (its own tool links).
+// isEngineOwned reports whether the engine may delete path as it is. It owns a
+// retired file without digests, and a symlink that points into
+// .wiki-instructions/ (its own tool links).
 func isEngineOwned(destDir, path, rel string, info os.FileInfo) bool {
-	if retiredManagedFiles[rel] {
+	if digests, ok := retiredManagedFiles[rel]; ok && len(digests) == 0 {
 		return true
 	}
 	if info.Mode()&os.ModeSymlink == 0 {
@@ -301,6 +370,28 @@ func isEngineOwned(destDir, path, rel string, info os.FileInfo) bool {
 	}
 	inRel, err := filepath.Rel(filepath.Join(destDir, ".wiki-instructions"), link)
 	return err == nil && inRel != "." && inRel != ".." && !strings.HasPrefix(inRel, ".."+string(filepath.Separator))
+}
+
+// retireRegular deletes a retired regular file. It copies the file to a .bak
+// file first unless its bytes match a digest the engine shipped. It reports
+// whether it deleted the file.
+func retireRegular(destDir, path, rel string, digests []string) bool {
+	if guardWrite(destDir, path) != nil {
+		return false
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	sum := sha256.Sum256(data)
+	if !slices.Contains(digests, hex.EncodeToString(sum[:])) {
+		bak, err := backupFile(path, data)
+		if err != nil {
+			return false
+		}
+		_, _ = fmt.Fprintf(warnOut, "backed up edited retired %s to %s\n", rel, filepath.ToSlash(filepath.Base(bak)))
+	}
+	return os.Remove(path) == nil
 }
 
 func cleanOrphanedFiles(destDir string, embedPrefixes []string, cleaned *[]string) {
@@ -328,7 +419,16 @@ func cleanOrphanedFiles(destDir string, embedPrefixes []string, cleaned *[]strin
 			}
 			rel, _ := filepath.Rel(destDir, path)
 			relSlash := filepath.ToSlash(rel)
-			if known[relSlash] || !isEngineOwned(destDir, path, relSlash, info) {
+			if known[relSlash] {
+				return nil
+			}
+			if digests, ok := retiredManagedFiles[relSlash]; ok && len(digests) > 0 && info.Mode().IsRegular() {
+				if retireRegular(destDir, path, relSlash, digests) {
+					*cleaned = append(*cleaned, relSlash)
+				}
+				return nil
+			}
+			if !isEngineOwned(destDir, path, relSlash, info) {
 				return nil
 			}
 			if err := os.Remove(path); err == nil {
@@ -371,6 +471,11 @@ func syncEmbeddedDir(destDir, embedRoot string, updated *[]string) error {
 		}
 		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
 			return err
+		}
+		if userOwnedFiles[rel] {
+			if _, err := os.Lstat(dest); err == nil {
+				return nil
+			}
 		}
 		if err := writeScaffoldFile(destDir, dest, rel, data); err != nil {
 			return err

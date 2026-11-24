@@ -61,6 +61,8 @@ jobs:
         run: make wiki-lint
       - name: integration tests
         run: make integration
+      - name: benchmark skill tests
+        run: make bench-test
       - name: scaffold-sync check
         run: |
           make sync-scaffold

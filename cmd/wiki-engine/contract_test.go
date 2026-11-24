@@ -21,6 +21,7 @@ func TestPublicCommandContractAndUsageParity(t *testing.T) {
 		"diff",
 		"graph",
 		"headings",
+		"health",
 		"help",
 		"impact",
 		"init",
