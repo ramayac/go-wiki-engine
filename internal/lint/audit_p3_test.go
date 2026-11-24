@@ -352,3 +352,18 @@ func TestMarkersIgnoreDefinedOpenMarkers(t *testing.T) {
 		t.Errorf("TODO marker must stay a finding, got:\n%s", msgs)
 	}
 }
+
+func TestFreshnessCheckersIgnoreTildeFences(t *testing.T) {
+	sharedWords := "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu"
+	tildeBlock := "~~~\nTODO: ignored inside tilde fence\n" + sharedWords + "\n~~~\n"
+	root := setupLintWiki(t, map[string]string{
+		"wiki/a.md": plainPage("a", "# Page A\n\n"+tildeBlock+"\nUnique prose for page alpha one two three four five six seven eight nine ten eleven twelve.\n"),
+		"wiki/b.md": plainPage("b", "# Page B\n\n"+tildeBlock+"\nCompletely different prose for page beta thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty.\n"),
+	})
+	if msgs := issueMessages(runChecks(t, root, "markers")); msgs != "" {
+		t.Errorf("markers inside ~~~ fence should be ignored:\n%s", msgs)
+	}
+	if msgs := issueMessages(runChecks(t, root, "duplicate-content")); msgs != "" {
+		t.Errorf("duplicate-content should ignore ~~~ fenced blocks:\n%s", msgs)
+	}
+}

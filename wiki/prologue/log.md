@@ -8,6 +8,12 @@ description: "Append-only timeline of wiki maintenance activity."
 
 Append-only timeline of wiki maintenance activity.
 
+## [2026-11-23] audit | v3 audit — tilde-fence lint fix, performance passes, and .wikirc.example sync
+
+- Updated `markers` and `duplicate-content` in `internal/lint/checkers_freshness.go` to use `model.FenceTracker` so `~~~` fenced code blocks are skipped consistently, and switched `duplicate-content` to iterate `shared` pairs directly (`O(|shared|)` instead of `O(P^2)`).
+- Reduced redundant allocations and subprocess calls in `internal/engine/impact.go` (precomputed page lowercasing in fuzzy mode) and `internal/engine/check.go` (map lookup for `nonWikiChanged` and per-run `CommitExists` cache).
+- Synced [.wikirc.example](../../.wikirc.example) with [config.md](config.md) (`base_ref`, `issue_pattern`, `schema_version`, `context_max_pages`, `context_max_bytes`, and path-segment `ignore` rules) and added regression tests in `internal/lint` and `internal/audit`.
+
 ## [2026-11-23] ingest | governance parity: benchmark skill, additive JSON, decision page
 
 - `init` installs the `wiki-benchmark` skill in `.claude/skills/wiki-benchmark/`. `make bench-test` runs its Python tests. See [repo-map.md](repo-map.md).
