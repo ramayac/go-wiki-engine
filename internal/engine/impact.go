@@ -60,11 +60,31 @@ func (e *Engine) ImpactWithOptions(changedFiles []string, opts ImpactOptions) ([
 		hm[m.Page] = m
 	}
 
+	type changedEntry struct {
+		raw       string
+		clean     string
+		lowerBase string
+	}
+	entries := make([]changedEntry, 0, len(changedFiles))
+	for _, cf := range changedFiles {
+		clean := filepath.ToSlash(filepath.Clean(cf))
+		entries = append(entries, changedEntry{
+			raw:       cf,
+			clean:     clean,
+			lowerBase: strings.ToLower(filepath.Base(clean)),
+		})
+	}
+
 	for _, p := range snap.Pages {
 		hasDeclaredSources := len(p.ResolvedSources) > 0
+		var lowerContent string
+		if opts.Fuzzy && !hasDeclaredSources {
+			lowerContent = strings.ToLower(p.RawContent)
+		}
 
-		for _, cf := range changedFiles {
-			cfClean := filepath.ToSlash(filepath.Clean(cf))
+		for _, ce := range entries {
+			cf := ce.raw
+			cfClean := ce.clean
 
 			// 1. Exact declared sources (and directory source coverage).
 			// Cross-repo sources are skipped automatically by MatchesFile.
@@ -109,13 +129,12 @@ func (e *Engine) ImpactWithOptions(changedFiles []string, opts ImpactOptions) ([
 			// 3. Opt-in fuzzy basename scan (only behind --fuzzy, and never for pages
 			// that already declare exact sources).
 			if opts.Fuzzy && !hasDeclaredSources {
-				base := filepath.Base(cfClean)
-				if base != "" && strings.Contains(strings.ToLower(p.RawContent), strings.ToLower(base)) {
+				if ce.lowerBase != "" && strings.Contains(lowerContent, ce.lowerBase) {
 					record(cf, ImpactMatch{
 						Page:          p.Path,
 						ID:            p.ID,
 						Reason:        "fuzzy_basename",
-						MatchedSource: base,
+						MatchedSource: filepath.Base(cfClean),
 					})
 				}
 			}

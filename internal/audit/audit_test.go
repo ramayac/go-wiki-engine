@@ -612,6 +612,35 @@ func TestPromptLifecycleRulesParity(t *testing.T) {
 	}
 }
 
+func TestWikircExampleCoversAllConfigKeys(t *testing.T) {
+	root := repoRoot(t)
+	data, err := os.ReadFile(filepath.Join(root, ".wikirc.example"))
+	if err != nil {
+		t.Fatalf("read .wikirc.example: %v", err)
+	}
+	text := string(data)
+	for _, key := range []string{
+		"wiki_dir",
+		"default_diff",
+		"base_ref",
+		"issue_pattern",
+		"schema_version",
+		"log_lines",
+		"duplicate_threshold",
+		"stale_days",
+		"context_summarize",
+		"context_max_pages",
+		"context_max_bytes",
+		"watch_interval",
+		"fail_severity",
+		"ignore",
+	} {
+		if !strings.Contains(text, key) {
+			t.Errorf(".wikirc.example missing documented config key %q", key)
+		}
+	}
+}
+
 func diffStrings(a, b []string) []string {
 	inB := make(map[string]bool, len(b))
 	for _, s := range b {

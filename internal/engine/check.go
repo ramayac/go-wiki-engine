@@ -141,9 +141,14 @@ func (e *Engine) Check(opts CheckOptions) (*CheckResult, error) {
 	}
 
 	nonWikiChanged := cs.NonWikiChanged(e.Cfg.WikiDir)
+	nonWikiChangedMap := make(map[string]string, len(nonWikiChanged))
+	for _, cf := range nonWikiChanged {
+		nonWikiChangedMap[filepath.ToSlash(filepath.Clean(cf))] = cf
+	}
 
 	// A shallow clone lacks older commits, so a missing commit is not proof of a bad citation.
 	shallow := git.IsShallow(e.RootDir)
+	commitExistsCache := make(map[string]bool)
 
 	// 1. Validate changed live pages: sources, repo links, frontmatter, and commit citations.
 	for _, p := range snap.Pages {
@@ -189,7 +194,12 @@ func (e *Engine) Check(opts CheckOptions) (*CheckResult, error) {
 		// Validate explicit `commit:<sha>` citations in changed live pages.
 		for _, m := range commitRefRe.FindAllStringSubmatch(p.Body, -1) {
 			sha := m[1]
-			if !git.CommitExists(e.RootDir, sha) {
+			exists, cached := commitExistsCache[sha]
+			if !cached {
+				exists = git.CommitExists(e.RootDir, sha)
+				commitExistsCache[sha] = exists
+			}
+			if !exists {
 				if shallow {
 					res.Warnings = append(res.Warnings, CheckFinding{
 						Page:    p.Path,
@@ -324,11 +334,9 @@ func (e *Engine) Check(opts CheckOptions) (*CheckResult, error) {
 					continue
 				}
 			}
-			for _, cf := range nonWikiChanged {
-				if filepath.ToSlash(filepath.Clean(cf)) == linkPath {
-					reviewFiles[cf] = true
-					reviewReasons["markdown_link"] = true
-				}
+			if cf, ok := nonWikiChangedMap[linkPath]; ok {
+				reviewFiles[cf] = true
+				reviewReasons["markdown_link"] = true
 			}
 		}
 
