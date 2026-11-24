@@ -49,6 +49,12 @@ func ValidateWikiDir(name string) error {
 	if strings.ContainsRune(name, '\x00') {
 		return fmt.Errorf("%w: wiki_dir contains NUL byte", ErrInvalidWikiDir)
 	}
+	// A quote or control character would break the quoted .wikirc value.
+	for _, r := range name {
+		if r == '"' || r < 0x20 || r == 0x7f {
+			return fmt.Errorf("%w: wiki_dir must not contain quotes or control characters: %q", ErrInvalidWikiDir, name)
+		}
+	}
 	if name == "." || name == ".." {
 		return fmt.Errorf("%w: %q is not allowed", ErrInvalidWikiDir, name)
 	}
@@ -62,6 +68,10 @@ func ValidateWikiDir(name string) error {
 	// Reject Windows drive-letter prefixes like "C:" even on POSIX hosts.
 	if len(name) >= 2 && name[1] == ':' {
 		return fmt.Errorf("%w: wiki_dir must not contain a drive prefix: %q", ErrInvalidWikiDir, name)
+	}
+	// A leading "-" would read as a command-line option to git and other tools.
+	if strings.HasPrefix(name, "-") {
+		return fmt.Errorf("%w: wiki_dir must not start with \"-\": %q", ErrInvalidWikiDir, name)
 	}
 	if reservedRepoNames[strings.ToLower(name)] {
 		return fmt.Errorf("%w: %q is a reserved repository metadata name", ErrInvalidWikiDir, name)
@@ -130,7 +140,7 @@ func ResolveWithin(root, target string) (string, error) {
 		return "", fmt.Errorf("%w: %q resolves outside %s", ErrOutsideBoundary, target, absRoot)
 	}
 
-	if err := checkSymlinkContainment(absRoot, candidate); err != nil {
+	if err := CheckSymlinkContainment(absRoot, candidate); err != nil {
 		return "", fmt.Errorf("%w: %q: %v", ErrOutsideBoundary, target, err)
 	}
 
@@ -173,7 +183,7 @@ func ResolvePageRelative(wikiRoot, pageDir, target string) (absPath string, wiki
 	if !isWithinLexical(absWiki, candidate) {
 		return "", "", fmt.Errorf("%w: link %q escapes wiki boundary", ErrOutsideBoundary, target)
 	}
-	if err := checkSymlinkContainment(absWiki, candidate); err != nil {
+	if err := CheckSymlinkContainment(absWiki, candidate); err != nil {
 		return "", "", fmt.Errorf("%w: link %q escapes wiki via symlink: %v", ErrOutsideBoundary, target, err)
 	}
 
@@ -217,7 +227,7 @@ func ResolveRepoSource(repoRoot, pageDir, target string) (absPath string, repoRe
 		if perr == nil && isWithinLexical(absRepo, absPageDir) {
 			cand := filepath.Clean(filepath.Join(absPageDir, normalized))
 			if isWithinLexical(absRepo, cand) {
-				if serr := checkSymlinkContainment(absRepo, cand); serr == nil {
+				if serr := CheckSymlinkContainment(absRepo, cand); serr == nil {
 					if _, statErr := os.Stat(cand); statErr == nil {
 						rel, _ := filepath.Rel(absRepo, cand)
 						return cand, filepath.ToSlash(rel), true, nil
@@ -235,7 +245,7 @@ func ResolveRepoSource(repoRoot, pageDir, target string) (absPath string, repoRe
 	if !isWithinLexical(absRepo, cand) {
 		return "", "", false, fmt.Errorf("%w: source %q escapes repository", ErrOutsideBoundary, target)
 	}
-	if err := checkSymlinkContainment(absRepo, cand); err != nil {
+	if err := CheckSymlinkContainment(absRepo, cand); err != nil {
 		return "", "", false, fmt.Errorf("%w: source %q escapes repository via symlink: %v", ErrOutsideBoundary, target, err)
 	}
 	rel, err := filepath.Rel(absRepo, cand)
@@ -259,10 +269,11 @@ func isWithinLexical(root, target string) bool {
 	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
-// checkSymlinkContainment resolves symlinks on root and on the deepest existing
+// CheckSymlinkContainment resolves symlinks on root and on the deepest existing
 // ancestor of target (including target itself if it exists), verifying that the
-// real target stays within realRoot.
-func checkSymlinkContainment(absRoot, absTarget string) error {
+// real target stays within realRoot. Callers use it before reads and before any
+// write, mkdir, remove, or symlink under a managed path.
+func CheckSymlinkContainment(absRoot, absTarget string) error {
 	realRoot, err := filepath.EvalSymlinks(absRoot)
 	if err != nil {
 		if os.IsNotExist(err) {

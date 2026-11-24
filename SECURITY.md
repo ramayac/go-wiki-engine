@@ -25,8 +25,19 @@ Do not open a public issue. You will get a response as soon as possible.
 - **Fail-closed self-upgrade (`internal/upgrade`):**
   - Downloads release archives over HTTPS, streaming directly to disk with both
     compressed (100 MiB) and expanded (200 MiB) size caps.
-  - Verifies SHA-256 checksums against `checksums.txt` and build-provenance
-    attestations when available (`--require-attestation` enforces presence).
+  - Checks the SHA-256 of the asset against `checksums.txt` from the same
+    release. This proves integrity, not authenticity: whoever can replace the
+    asset can replace `checksums.txt`.
+  - Authenticity comes only from `gh attestation verify`, pinned to this
+    repository and to the `release.yml` signer workflow. The upgrade trusts no
+    provenance file that the release itself serves.
+  - Without `gh` (or when `gh` is not logged in, or the release has no
+    attestations), the upgrade proceeds on the checksum only.
+    `--require-attestation` makes it fail instead. Any other `gh` failure
+    always stops the upgrade.
+  - Accepts only release tags of the form `vMAJOR.MINOR.PATCH[-pre]`, and
+    refuses a tag lower than the running version (downgrade). A `dev` or
+    otherwise unparsable running version may upgrade.
   - Rejects archive entries with unsafe paths (`..`, absolute paths, symlinks).
   - Never silently falls back to `go install` on download or verification
     failure; building from source requires explicit `--from-source` (pinned to

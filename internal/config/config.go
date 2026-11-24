@@ -141,6 +141,9 @@ func Load(dir string) (*Config, error) {
 		case "wiki_dir":
 			cfg.WikiDir = val
 		case "default_diff":
+			if strings.HasPrefix(val, "-") {
+				return nil, fmt.Errorf("invalid default_diff %q in .wikirc: must be a git revision or range and must not start with \"-\"", val)
+			}
 			cfg.DefaultDiff = val
 		case "base_ref":
 			cfg.BaseRef = val

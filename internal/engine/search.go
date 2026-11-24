@@ -70,7 +70,7 @@ func (e *Engine) SearchLines(query string, opts SearchOptions) ([]SearchResult, 
 
 func searchLinesFromSnapshot(snap *model.WikiSnapshot, query string, opts SearchOptions) []SearchResult {
 	lowerQ := strings.ToLower(query)
-	var results []SearchResult
+	results := []SearchResult{}
 	for _, p := range snap.Pages {
 		if !matchesSearchFilters(p, opts) {
 			continue
@@ -116,10 +116,10 @@ func SearchRankedFromSnapshot(snap *model.WikiSnapshot, query string, opts Searc
 	lowerQ := strings.ToLower(strings.TrimSpace(query))
 	terms := uniqueTerms(lowerQ)
 	if len(terms) == 0 {
-		return nil
+		return []RankedSearchResult{}
 	}
 
-	var results []RankedSearchResult
+	results := []RankedSearchResult{}
 	for _, p := range snap.Pages {
 		if !matchesSearchFilters(p, opts) {
 			continue
@@ -164,6 +164,13 @@ func SearchRankedFromSnapshot(snap *model.WikiSnapshot, query string, opts Searc
 			}
 		}
 
+		// Headings come from the parsed page, so fenced code lines such as
+		// "# comment" do not count as headings.
+		headingLines := make(map[int]bool, len(p.Headings))
+		for _, h := range p.Headings {
+			headingLines[h.Line] = true
+		}
+
 		// Scan body lines tracking current section heading.
 		currentSection := p.EffectiveTitle()
 		fmEnd := p.BodyStartLine - 1
@@ -173,7 +180,7 @@ func SearchRankedFromSnapshot(snap *model.WikiSnapshot, query string, opts Searc
 				continue
 			}
 			lower := strings.ToLower(line)
-			isHeading := headingRe.MatchString(line)
+			isHeading := headingLines[lineNo]
 			if isHeading {
 				currentSection = strings.TrimSpace(strings.TrimLeft(line, "#"))
 			}

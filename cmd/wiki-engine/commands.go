@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -289,9 +290,9 @@ func runSyncPrompts(useJSON bool) {
 
 	if useJSON {
 		writeJSON(map[string]interface{}{
-			"updated":         updated,
-			"removed":         removed,
-			"shims_preserved": preExistingShims,
+			"updated":         nonNil(updated),
+			"removed":         nonNil(removed),
+			"shims_preserved": nonNil(preExistingShims),
 		})
 	}
 }
@@ -318,7 +319,7 @@ func runSchema(args []string, useJSON bool) {
 		if typeName != "" {
 			ts, err := schema.TypeByName(typeName)
 			if err != nil {
-				fatal(err)
+				usageFatal(err)
 			}
 			writeJSON(ts)
 			return
@@ -326,7 +327,7 @@ func runSchema(args []string, useJSON bool) {
 		if section != "" {
 			text, err := schema.RenderText("", section)
 			if err != nil {
-				fatal(err)
+				usageFatal(err)
 			}
 			writeJSON(map[string]string{
 				"schema_version": schema.SchemaVersion,
@@ -341,13 +342,13 @@ func runSchema(args []string, useJSON bool) {
 
 	out, err := schema.RenderText(typeName, section)
 	if err != nil {
-		fatal(err)
+		usageFatal(err)
 	}
 	fmt.Print(out)
 }
 
 func runUpgrade(args []string, useJSON bool) {
-	opts := upgrade.Options{}
+	opts := upgrade.Options{CurrentVersion: getVersion()}
 	for _, a := range args[2:] {
 		switch a {
 		case "--from-source":
@@ -379,7 +380,7 @@ func loadEngine() (*config.Config, *engine.Engine) {
 
 func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string, useJSON bool) {
 	if err := validateCommandArgs(cmd, args[2:]); err != nil {
-		fatal(err)
+		usageFatal(err)
 	}
 	switch cmd {
 	case "list":
@@ -458,8 +459,8 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 
 	case "log-tail":
 		n := cfg.LogLines
-		if len(args) > 2 {
-			n = config.ParsePositiveInt(args[2], cfg.LogLines)
+		if pos := positionalArgs(args[2:]); len(pos) > 0 {
+			n = config.ParsePositiveInt(pos[0], cfg.LogLines)
 		}
 		lines, err := eng.LogTail(n)
 		if err != nil {
@@ -579,7 +580,7 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 			}
 		}
 		if err := validateLintSelectors(check, skip); err != nil {
-			fatal(err)
+			usageFatal(err)
 		}
 		if doFix {
 			fixRes, err := eng.LintFix()
@@ -634,14 +635,25 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 
 	case "refresh":
 		diff := cfg.DefaultDiff
-		if len(args) > 2 {
-			diff = args[2]
+		if pos := positionalArgs(args[2:]); len(pos) > 0 {
+			diff = pos[0]
 		}
-		out, err := eng.Refresh(diff)
+		res, err := eng.RefreshSnapshot(diff)
 		if err != nil {
 			fatal(err)
 		}
-		fmt.Print(out)
+		if useJSON {
+			errMsg := ""
+			if !res.Lint.OK {
+				errMsg = fmt.Sprintf("refresh lint failed: %d issue(s)", len(res.Lint.Issues))
+			}
+			writeJSONResult(res, res.Lint.OK, errMsg)
+		} else {
+			fmt.Print(res.Text())
+		}
+		if !res.Lint.OK {
+			os.Exit(exitFailure)
+		}
 
 	case "stats":
 		st, err := eng.Stats()
@@ -699,10 +711,10 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 
 		if active {
 			if explicitSummarize {
-				fatal(fmt.Errorf("--summarize cannot be combined with --active; run wiki-engine context --summarize for page previews"))
+				usageFatal(fmt.Errorf("--summarize cannot be combined with --active; run wiki-engine context --summarize for page previews"))
 			}
 			if minimal {
-				fatal(fmt.Errorf("--minimal cannot be combined with --active"))
+				usageFatal(fmt.Errorf("--minimal cannot be combined with --active"))
 			}
 			view, err := eng.BuildGraphView()
 			if err != nil {
@@ -733,7 +745,7 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 		}
 
 		if explicitSort {
-			fatal(fmt.Errorf("--sort=topo|chrono requires --active (it orders the active wiki graph)"))
+			usageFatal(fmt.Errorf("--sort=topo|chrono requires --active (it orders the active wiki graph)"))
 		}
 
 		cr, err := eng.ContextWithOptions(engine.ContextOptions{
@@ -814,10 +826,10 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 		}
 		if dot {
 			if page != "" {
-				fatal(fmt.Errorf("--dot cannot be combined with a page argument; run wiki-engine graph --dot or wiki-engine graph <page>"))
+				usageFatal(fmt.Errorf("--dot cannot be combined with a page argument; run wiki-engine graph --dot or wiki-engine graph <page>"))
 			}
 			if useJSON {
-				fatal(fmt.Errorf("--dot cannot be combined with --json"))
+				usageFatal(fmt.Errorf("--dot cannot be combined with --json"))
 			}
 		}
 
@@ -836,14 +848,15 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 		}
 
 		if useJSON {
+			var data interface{} = view
 			if nv != nil {
-				writeJSON(nv)
-			} else {
-				writeJSON(view)
+				data = nv
 			}
 			if strict && unhealthy {
-				os.Exit(1)
+				writeJSONResult(data, false, fmt.Sprintf("graph strict check failed: %d unlinked page(s), %d graph issue(s)", len(view.Unlinked), len(view.Issues)))
+				os.Exit(exitFailure)
 			}
+			writeJSON(data)
 			return
 		}
 
@@ -920,10 +933,11 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 		}
 
 	case "summary":
-		if len(args) < 3 {
+		pos := positionalArgs(args[2:])
+		if len(pos) < 1 {
 			usageError("usage: wiki-engine summary <page>")
 		}
-		page := args[2]
+		page := pos[0]
 		sr, err := eng.Summary(page)
 		if err != nil {
 			fatal(err)
@@ -1010,10 +1024,11 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 		}
 
 	case "diff":
-		if len(args) < 4 {
+		pos := positionalArgs(args[2:])
+		if len(pos) < 2 {
 			usageError("usage: wiki-engine diff <from-ref> <to-ref>")
 		}
-		from, to := args[2], args[3]
+		from, to := pos[0], pos[1]
 		dr, err := eng.Diff(from, to)
 		if err != nil {
 			fatal(err)
@@ -1065,19 +1080,10 @@ func runEngine(cmd string, cfg *config.Config, eng *engine.Engine, args []string
 		ticker := time.NewTicker(time.Duration(interval) * time.Second)
 		defer ticker.Stop()
 
-		runWatchCycle(eng, useJSON)
-		for range ticker.C {
-			runWatchCycle(eng, useJSON)
-		}
+		watchLoop(eng, useJSON, ticker.C)
 
 	default:
-		if useJSON {
-			writeJSONResult(nil, false, fmt.Sprintf("unknown command: %s", cmd))
-		} else {
-			fmt.Fprintf(os.Stderr, "unknown command: %s\n", cmd)
-			usage(os.Stderr)
-		}
-		os.Exit(1)
+		unknownCommand(cmd)
 	}
 }
 
@@ -1130,9 +1136,14 @@ func parseChangeArgs(args []string, defaultDiff string) engine.ChangeOptions {
 		DiffRange:          defaultDiff,
 		IncludeWorkingTree: true,
 	}
+	afterTerminator := false
 	for i := 0; i < len(args); i++ {
 		a := args[i]
 		switch {
+		case afterTerminator:
+			opts.DiffRange = a
+		case a == "--":
+			afterTerminator = true
 		case a == "--no-working-tree":
 			opts.IncludeWorkingTree = false
 		case strings.HasPrefix(a, "--base="):
@@ -1150,17 +1161,43 @@ func parseChangeArgs(args []string, defaultDiff string) engine.ChangeOptions {
 }
 
 func runWatchCycle(eng *engine.Engine, useJSON bool) bool {
+	return watchCycle(eng, useJSON, nil)
+}
+
+// watchLoop runs one cycle at once, then one per tick until ticks closes.
+// It prints only when the result differs from the last printed result.
+func watchLoop(eng *engine.Engine, useJSON bool, ticks <-chan time.Time) {
+	var last string
+	watchCycle(eng, useJSON, &last)
+	for range ticks {
+		watchCycle(eng, useJSON, &last)
+	}
+}
+
+// watchCycle runs one watch cycle and reports whether lint failed. When last
+// is not nil, it skips printing a result equal to the one stored in last.
+func watchCycle(eng *engine.Engine, useJSON bool, last *string) bool {
 	wr, err := eng.WatchOnce()
 	if err != nil {
-		if useJSON {
-			writeJSONResult(nil, false, err.Error())
-		} else {
-			fmt.Fprintf(os.Stderr, "watch error: %v\n", err)
+		if shouldPrintWatch(last, "error: "+err.Error()) {
+			if useJSON {
+				writeJSONResult(nil, false, err.Error())
+			} else {
+				fmt.Fprintf(os.Stderr, "watch error: %v\n", err)
+			}
 		}
 		return true
 	}
+	fingerprint, _ := json.Marshal(wr)
+	if !shouldPrintWatch(last, string(fingerprint)) {
+		return !wr.LintOK
+	}
 	if useJSON {
-		writeJSON(wr)
+		errMsg := ""
+		if !wr.LintOK {
+			errMsg = fmt.Sprintf("watch lint failed: %d issue(s)", len(wr.LintIssues))
+		}
+		writeJSONResult(wr, wr.LintOK, errMsg)
 		return !wr.LintOK
 	}
 	if len(wr.Changed) > 0 {
@@ -1180,4 +1217,16 @@ func runWatchCycle(eng *engine.Engine, useJSON bool) bool {
 		}
 	}
 	return !wr.LintOK
+}
+
+// shouldPrintWatch reports whether a watch result is new. A nil last always prints.
+func shouldPrintWatch(last *string, fingerprint string) bool {
+	if last == nil {
+		return true
+	}
+	if *last == fingerprint {
+		return false
+	}
+	*last = fingerprint
+	return true
 }

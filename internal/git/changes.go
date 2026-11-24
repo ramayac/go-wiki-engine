@@ -8,6 +8,11 @@ import (
 	"strings"
 )
 
+// LegacyDefaultDiff is the historical default_diff value. When it is the
+// configured range and its base ref does not exist, DiscoverChanges falls back
+// to base auto-detection instead of failing.
+const LegacyDefaultDiff = "main...HEAD"
+
 // ChangeSet captures all repository file changes across branch history and
 // optionally the working tree (staged, unstaged, and untracked files).
 type ChangeSet struct {
@@ -36,8 +41,11 @@ type ChangeOptions struct {
 // merge-base with HEAD, tracks renames and deletions, and merges working-tree
 // and untracked files when enabled.
 func DiscoverChanges(dir string, opts ChangeOptions) (*ChangeSet, error) {
+	if _, err := exec.LookPath("git"); err != nil {
+		return nil, fmt.Errorf("git not found in PATH (this command requires git)")
+	}
 	if !IsRepo(dir) {
-		return nil, fmt.Errorf("git diff failed (this command requires git and a git repository)")
+		return nil, fmt.Errorf("not a git repository: %s", dir)
 	}
 
 	cs := &ChangeSet{
@@ -48,16 +56,27 @@ func DiscoverChanges(dir string, opts ChangeOptions) (*ChangeSet, error) {
 	changedSet := make(map[string]bool)
 	deletedSet := make(map[string]bool)
 
-	if opts.DiffRange != "" && opts.Base == "" {
-		cs.Base = opts.DiffRange
+	diffRange := opts.DiffRange
+	// The scaffolded default names `main`. On repositories without that
+	// branch, auto-detect the base the same way `check` does.
+	if diffRange == LegacyDefaultDiff && diffRange == opts.DefaultDiff && opts.Base == "" &&
+		!RefExists(dir, extractBaseFromRange(diffRange)) {
+		diffRange = ""
+	}
+
+	if diffRange != "" && opts.Base == "" {
+		if err := ValidateDiffRange(dir, diffRange); err != nil {
+			return nil, fmt.Errorf("invalid diff range: %w", err)
+		}
+		cs.Base = diffRange
 		// If it's a triple-dot range `a...b`, record merge-base for metadata when resolvable.
-		if base := extractBaseFromRange(opts.DiffRange); base != "" && RefExists(dir, base) {
+		if base := extractBaseFromRange(diffRange); base != "" && RefExists(dir, base) {
 			if mb, err := MergeBase(dir, base); err == nil {
 				cs.MergeBase = mb
 			}
 		}
-		if err := collectNameStatus(dir, []string{"diff", "--name-status", "-M", opts.DiffRange}, changedSet, deletedSet, cs.Renames); err != nil {
-			return nil, fmt.Errorf("git diff failed (this command requires git and a git repository): %w", err)
+		if err := collectNameStatus(dir, []string{"diff", "-z", "--name-status", "-M", "--relative", "--end-of-options", diffRange, "--"}, changedSet, deletedSet, cs.Renames); err != nil {
+			return nil, fmt.Errorf("git diff failed: %w", err)
 		}
 	} else {
 		baseRef, err := ResolveBaseRef(dir, opts.Base, opts.ConfigBase, opts.DefaultDiff)
@@ -71,18 +90,18 @@ func DiscoverChanges(dir string, opts ChangeOptions) (*ChangeSet, error) {
 		cs.Base = baseRef
 		cs.MergeBase = mb
 
-		if err := collectNameStatus(dir, []string{"diff", "--name-status", "-M", mb, "HEAD"}, changedSet, deletedSet, cs.Renames); err != nil {
+		if err := collectNameStatus(dir, []string{"diff", "-z", "--name-status", "-M", "--relative", "--end-of-options", mb, "HEAD", "--"}, changedSet, deletedSet, cs.Renames); err != nil {
 			return nil, fmt.Errorf("git diff failed: %w", err)
 		}
 	}
 
 	if opts.IncludeWorkingTree {
 		// Staged changes (index vs HEAD).
-		if err := collectNameStatus(dir, []string{"diff", "--cached", "--name-status", "-M"}, changedSet, deletedSet, cs.Renames); err != nil {
+		if err := collectNameStatus(dir, []string{"diff", "-z", "--cached", "--name-status", "-M", "--relative"}, changedSet, deletedSet, cs.Renames); err != nil {
 			return nil, fmt.Errorf("git diff --cached failed: %w", err)
 		}
 		// Unstaged changes (worktree vs index).
-		if err := collectNameStatus(dir, []string{"diff", "--name-status", "-M"}, changedSet, deletedSet, cs.Renames); err != nil {
+		if err := collectNameStatus(dir, []string{"diff", "-z", "--name-status", "-M", "--relative"}, changedSet, deletedSet, cs.Renames); err != nil {
 			return nil, fmt.Errorf("git diff working tree failed: %w", err)
 		}
 		// Untracked files (respecting .gitignore).
@@ -114,42 +133,47 @@ func DiscoverChanges(dir string, opts ChangeOptions) (*ChangeSet, error) {
 	return cs, nil
 }
 
-// collectNameStatus executes `git <args...>` and merges modified/added/renamed/deleted
-// paths into the provided sets.
+// collectNameStatus executes `git <args...>` (which must use -z --name-status)
+// and merges modified/added/renamed/deleted paths into the provided sets.
+// Paths are relative to dir.
 func collectNameStatus(dir string, args []string, changedSet, deletedSet map[string]bool, renames map[string]string) error {
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
-	out, err := cmd.Output()
+	out, err := gitOutput(dir, args...)
 	if err != nil {
 		return err
 	}
-	for _, line := range strings.Split(strings.TrimRight(string(out), "\r\n"), "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" {
+	tokens := strings.Split(string(out), "\x00")
+	for i := 0; i < len(tokens); {
+		status := tokens[i]
+		i++
+		if status == "" {
 			continue
 		}
-		fields := strings.Split(line, "\t")
-		if len(fields) < 2 {
-			continue
+		pathCount := 1
+		if strings.HasPrefix(status, "R") || strings.HasPrefix(status, "C") {
+			pathCount = 2
 		}
-		status := fields[0]
+		if i+pathCount > len(tokens) {
+			break
+		}
+		fields := tokens[i : i+pathCount]
+		i += pathCount
 		switch {
-		case strings.HasPrefix(status, "R") && len(fields) >= 3:
-			oldPath := filepath.ToSlash(fields[1])
-			newPath := filepath.ToSlash(fields[2])
+		case strings.HasPrefix(status, "R"):
+			oldPath := filepath.ToSlash(fields[0])
+			newPath := filepath.ToSlash(fields[1])
 			renames[oldPath] = newPath
 			changedSet[newPath] = true
 			changedSet[oldPath] = true
 			delete(deletedSet, newPath)
-		case strings.HasPrefix(status, "C") && len(fields) >= 3:
-			newPath := filepath.ToSlash(fields[2])
+		case strings.HasPrefix(status, "C"):
+			newPath := filepath.ToSlash(fields[1])
 			changedSet[newPath] = true
 		case status == "D":
-			p := filepath.ToSlash(fields[1])
+			p := filepath.ToSlash(fields[0])
 			deletedSet[p] = true
 			changedSet[p] = true
 		default:
-			p := filepath.ToSlash(fields[1])
+			p := filepath.ToSlash(fields[0])
 			changedSet[p] = true
 			delete(deletedSet, p)
 		}
@@ -158,17 +182,14 @@ func collectNameStatus(dir string, args []string, changedSet, deletedSet map[str
 }
 
 func listUntracked(dir string) ([]string, error) {
-	cmd := exec.Command("git", "ls-files", "--others", "--exclude-standard")
-	cmd.Dir = dir
-	out, err := cmd.Output()
+	out, err := gitOutput(dir, "ls-files", "-z", "--others", "--exclude-standard")
 	if err != nil {
 		return nil, err
 	}
 	var files []string
-	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-		line = strings.TrimSpace(line)
-		if line != "" {
-			files = append(files, filepath.ToSlash(line))
+	for _, f := range strings.Split(string(out), "\x00") {
+		if f != "" {
+			files = append(files, filepath.ToSlash(f))
 		}
 	}
 	sort.Strings(files)
@@ -184,6 +205,25 @@ func (cs *ChangeSet) NonWikiChanged(wikiDir string) []string {
 			continue
 		}
 		out = append(out, f)
+	}
+	return out
+}
+
+// LiveNonWikiChanged returns NonWikiChanged without deleted files and without
+// the old path of renames, so it lists only files that exist after the change.
+func (cs *ChangeSet) LiveNonWikiChanged(wikiDir string) []string {
+	gone := make(map[string]bool, len(cs.DeletedFiles)+len(cs.Renames))
+	for _, f := range cs.DeletedFiles {
+		gone[f] = true
+	}
+	for oldPath := range cs.Renames {
+		gone[oldPath] = true
+	}
+	var out []string
+	for _, f := range cs.NonWikiChanged(wikiDir) {
+		if !gone[f] {
+			out = append(out, f)
+		}
 	}
 	return out
 }

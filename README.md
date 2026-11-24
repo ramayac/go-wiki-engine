@@ -24,7 +24,7 @@ make build
 ### Prerequisites
 
 - **Go 1.24+** — to build from source or install via `go install`.
-- **git** — required by the diff-driven commands: `changed`, `candidates`, `check`, `refresh`, `watch`, `diff`, and `impact`.
+- **git** 2.24 or newer — required by the diff-driven commands: `changed`, `candidates`, `check`, `refresh`, `watch`, `diff`, and `impact`.
 - **Prebuilt binaries** — linux amd64/arm64, darwin amd64/arm64, and windows amd64 on [GitHub Releases](https://github.com/ramayac/go-wiki-engine/releases) with SHA-256 checksums and build-provenance attestations.
 
 ```bash
@@ -36,7 +36,7 @@ wiki-engine lint
 wiki-engine check
 ```
 
-Re-running `wiki-engine init` is idempotent: it reconciles prompts, symlinks, ignore entries, and versioned root shims while preserving user-authored pages, `.wikirc`, and `AGENTS.md`/`CLAUDE.md` content. Pass `wiki-engine init --wiki-dir <name>` to rename an existing wiki directory safely.
+Re-running `wiki-engine init` is idempotent: it reconciles prompts, symlinks, ignore entries, and versioned root shims while preserving user-authored pages, `.wikirc`, and `AGENTS.md`/`CLAUDE.md` content. Pass `wiki-engine init --wiki-dir <name>` to rename an existing wiki directory safely. `init <name>` fails when `.wikirc` names a different directory. `init` and `sync-prompts` refuse to write through a symlink that leaves the repo, copy an edited prompt file to `<name>.bak` before replacing it, and delete only files the engine owns.
 
 ## Slash Commands
 
@@ -57,10 +57,15 @@ Config lives in a `.wikirc` file at the repo root (sensible defaults apply when 
 Releases use clean `vX.Y.Z` semantic versions. The compatibility surface covered by semver is:
 
 - **CLI commands, flags, and exit codes:**
-  - `0`: Success (including `wiki-engine check` with review recommendations only)
-  - `1`: Content/lint/check breakage or usage error
-  - `2`: Git, config, or setup error (e.g., `check` outside a Git repo or invalid base ref)
-- **Global JSON envelope (version `1`):** `{"ok": bool, "data": ..., "error": "..."}`
+
+  | Code | Meaning |
+  |------|---------|
+  | `0` | Success (including `wiki-engine check` with review recommendations only) |
+  | `1` | Runtime or finding failure: lint issues, `graph --strict` findings, `check` breakage, git, config, or I/O errors |
+  | `2` | Usage error: unknown command or flag, missing or extra argument, invalid flag value. `check` also uses `2` for git and setup errors (e.g., outside a Git repo or invalid base ref) |
+
+  `-h` and `--help` exit `0`.
+- **Global JSON envelope (version `1`):** `{"ok": bool, "data": ..., "error": "..."}`. With `--json`, `ok` is `false` whenever the exit code is non-zero, and `data` is kept when the command has findings to report. Empty lists encode as `[]`, never `null`.
 - **Graph JSON schema (version `2`):** `{"schema_version": "2", "nodes": [], "edges": [], "unlinked": [], "stats": {}, "issues": []}`
 - **Frontmatter schema (version `2`):** Real YAML (`gopkg.in/yaml.v3`) with `id`, `title`, `type`, `lifecycle`, workflow `status`/`severity`, `related`, `depends_on`, structured `sources`, and structured `references`.
   - **Migration policy:** v1 frontmatter (`status: planned|current|legacy|deprecated` and inline `references: [source:...]`) remains readable for one major release; `wiki-engine lint --fix` migrates pages deterministically. Missing lifecycle metadata never becomes active by default.
@@ -85,7 +90,7 @@ make install          # go install globally
 ## Self-Upgrade
 
 ```bash
-wiki-engine upgrade                 # Fail-closed checksum + provenance verified binary upgrade
+wiki-engine upgrade                 # Checksum-verified binary upgrade; attestation checked when `gh` is available
 wiki-engine upgrade --from-source   # Explicit pinned `go install` from release tag
 wiki-engine init                    # Reconcile prompts, symlinks, and shims in each repo
 ```

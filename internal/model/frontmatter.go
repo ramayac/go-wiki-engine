@@ -161,7 +161,7 @@ func (m PageMetadata) AllSources() []SourceReference {
 // missing, unterminated, invalid YAML, and scalar type errors.
 func ParseFrontMatter(content string) FrontMatterParseResult {
 	// Normalize CRLF to LF for deterministic line tracking while preserving content.
-	norm := strings.ReplaceAll(content, "\r\n", "\n")
+	norm := strings.ReplaceAll(strings.TrimPrefix(content, utf8BOM), "\r\n", "\n")
 	lines := strings.Split(norm, "\n")
 
 	startIdx := -1

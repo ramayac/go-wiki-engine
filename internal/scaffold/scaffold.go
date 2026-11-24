@@ -3,8 +3,10 @@
 package scaffold
 
 import (
+	"bytes"
 	"embed"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -52,10 +54,83 @@ func buildToolDirLinks() map[string]string {
 	return links
 }
 
-func writeScaffoldFile(dest, rel string, data []byte) error {
+// warnOut receives one-line notices such as backups. Tests replace it.
+var warnOut io.Writer = os.Stderr
+
+// guardWrite refuses to touch target when its real location is outside root.
+// It resolves symlinks on the deepest existing ancestor of target, so a
+// symlinked managed directory or file that leaves the repo is an error.
+func guardWrite(root, target string) error {
+	absRoot, err := filepath.Abs(root)
+	if err != nil {
+		return err
+	}
+	absTarget, err := filepath.Abs(target)
+	if err != nil {
+		return err
+	}
+	if err := paths.CheckSymlinkContainment(absRoot, absTarget); err != nil {
+		rel, rerr := filepath.Rel(absRoot, absTarget)
+		if rerr != nil {
+			rel = target
+		}
+		return fmt.Errorf("refusing to write %s: %w", filepath.ToSlash(rel), err)
+	}
+	return nil
+}
+
+// backupFile copies data to the first free name in <dest>.bak, <dest>.bak.1, ...
+// and never overwrites an existing backup.
+func backupFile(dest string, data []byte) (string, error) {
+	for i := 0; ; i++ {
+		name := dest + ".bak"
+		if i > 0 {
+			name = fmt.Sprintf("%s.bak.%d", dest, i)
+		}
+		f, err := os.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+		if os.IsExist(err) {
+			continue
+		}
+		if err != nil {
+			return "", err
+		}
+		_, werr := f.Write(data)
+		if cerr := f.Close(); werr == nil {
+			werr = cerr
+		}
+		return name, werr
+	}
+}
+
+// writeScaffoldFile writes one managed file under root. A symlink already at
+// dest is replaced, never followed. A hand-edited regular file that is about
+// to become a tool-directory symlink is copied to a .bak file first.
+func writeScaffoldFile(root, dest, rel string, data []byte) error {
+	if err := guardWrite(root, filepath.Dir(dest)); err != nil {
+		return err
+	}
+	info, lerr := os.Lstat(dest)
+	if lerr == nil && info.Mode()&os.ModeSymlink != 0 {
+		if err := os.Remove(dest); err != nil {
+			return err
+		}
+	}
 	target, isLink := toolDirLinks[rel]
 	if !isLink {
 		return os.WriteFile(dest, data, 0o644)
+	}
+	if lerr == nil && info.Mode().IsRegular() {
+		existing, err := os.ReadFile(dest)
+		if err != nil {
+			return err
+		}
+		if !bytes.Equal(existing, data) {
+			bak, err := backupFile(dest, existing)
+			if err != nil {
+				return err
+			}
+			_, _ = fmt.Fprintf(warnOut, "backed up edited %s to %s\n", rel, filepath.ToSlash(filepath.Base(bak)))
+		}
 	}
 	if err := os.Remove(dest); err != nil && !os.IsNotExist(err) {
 		return err
@@ -103,6 +178,9 @@ func reconcileShims(destDir, wikiDir string, appendToUser bool) (updated []strin
 	for _, name := range shimFiles {
 		dest := filepath.Join(destDir, name)
 		block := renderShimBlock(name, wikiDir)
+		if err := guardWrite(destDir, dest); err != nil {
+			return updated, preserved, err
+		}
 
 		existing, rerr := os.ReadFile(dest)
 		if os.IsNotExist(rerr) {
@@ -120,7 +198,7 @@ func reconcileShims(destDir, wikiDir string, appendToUser bool) (updated []strin
 		switch {
 		case fencedShimRe.MatchString(text):
 			// Update only the fenced wiki-engine block; keep any user content outside untouched.
-			replaced := fencedShimRe.ReplaceAllString(text, block)
+			replaced := fencedShimRe.ReplaceAllLiteralString(text, block)
 			if replaced != text {
 				if err := os.WriteFile(dest, []byte(replaced), 0o644); err != nil {
 					return updated, preserved, err
@@ -194,22 +272,35 @@ func SyncPrompts(destDir string) (updated, removed []string, err error) {
 	return updated, removed, err
 }
 
-// retiredWikiFiles are files this tool once shipped in its sync directories
-// and later removed.
-var retiredWikiFiles = map[string]bool{
-	"migrate-shims.md": true,
-	"summarize.md":     true,
+// retiredManagedFiles are files earlier releases shipped in the sync
+// directories that the current embed no longer has. Paths are relative to the
+// repo root, with forward slashes. The engine deletes these and no other
+// regular file.
+var retiredManagedFiles = map[string]bool{
+	".claude/commands/wiki-migrate-shims.md":       true,
+	".github/prompts/wiki-migrate-shims.prompt.md": true,
+	".wiki-instructions/migrate-shims.md":          true,
+	".wiki-instructions/summarize.md":              true,
 }
 
-func isWikiManaged(relRoot, rel string) bool {
-	if relRoot == ".pi/skills" {
-		return strings.HasPrefix(rel, "wiki/")
-	}
-	base := filepath.Base(rel)
-	if strings.HasPrefix(base, "wiki-") {
+// isEngineOwned reports whether the engine may delete path. It owns a retired
+// file, and a symlink that points into .wiki-instructions/ (its own tool links).
+func isEngineOwned(destDir, path, rel string, info os.FileInfo) bool {
+	if retiredManagedFiles[rel] {
 		return true
 	}
-	return retiredWikiFiles[base]
+	if info.Mode()&os.ModeSymlink == 0 {
+		return false
+	}
+	link, err := os.Readlink(path)
+	if err != nil {
+		return false
+	}
+	if !filepath.IsAbs(link) {
+		link = filepath.Join(filepath.Dir(path), link)
+	}
+	inRel, err := filepath.Rel(filepath.Join(destDir, ".wiki-instructions"), link)
+	return err == nil && inRel != "." && inRel != ".." && !strings.HasPrefix(inRel, ".."+string(filepath.Separator))
 }
 
 func cleanOrphanedFiles(destDir string, embedPrefixes []string, cleaned *[]string) {
@@ -227,17 +318,17 @@ func cleanOrphanedFiles(destDir string, embedPrefixes []string, cleaned *[]strin
 
 	for _, prefix := range embedPrefixes {
 		relRoot, _ := filepath.Rel("files", prefix)
-		relRootSlash := filepath.ToSlash(relRoot)
-		walkRoot := filepath.Join(destDir, filepath.FromSlash(relRootSlash))
+		walkRoot := filepath.Join(destDir, relRoot)
+		if guardWrite(destDir, walkRoot) != nil {
+			continue
+		}
 		_ = filepath.Walk(walkRoot, func(path string, info os.FileInfo, err error) error {
 			if err != nil || info.IsDir() {
 				return err
 			}
 			rel, _ := filepath.Rel(destDir, path)
 			relSlash := filepath.ToSlash(rel)
-			relToRoot, _ := filepath.Rel(relRoot, rel)
-			relToRoot = filepath.ToSlash(relToRoot)
-			if known[relSlash] || !isWikiManaged(relRootSlash, relToRoot) {
+			if known[relSlash] || !isEngineOwned(destDir, path, relSlash, info) {
 				return nil
 			}
 			if err := os.Remove(path); err == nil {
@@ -259,7 +350,11 @@ func syncEmbeddedDir(destDir, embedRoot string, updated *[]string) error {
 			if rel == "files" || rel == "." {
 				return nil
 			}
-			return os.MkdirAll(filepath.Join(destDir, filepath.FromSlash(rel)), 0o755)
+			dir := filepath.Join(destDir, filepath.FromSlash(rel))
+			if err := guardWrite(destDir, dir); err != nil {
+				return err
+			}
+			return os.MkdirAll(dir, 0o755)
 		}
 
 		rel, _ := filepath.Rel("files", path)
@@ -271,10 +366,13 @@ func syncEmbeddedDir(destDir, embedRoot string, updated *[]string) error {
 			return err
 		}
 
+		if err := guardWrite(destDir, filepath.Dir(dest)); err != nil {
+			return err
+		}
 		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
 			return err
 		}
-		if err := writeScaffoldFile(dest, rel, data); err != nil {
+		if err := writeScaffoldFile(destDir, dest, rel, data); err != nil {
 			return err
 		}
 		*updated = append(*updated, rel)
