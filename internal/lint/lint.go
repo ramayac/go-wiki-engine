@@ -54,6 +54,10 @@ type Issue struct {
 	File     string   `json:"file"`
 	Line     int      `json:"line"`
 	Message  string   `json:"message"`
+
+	// linkKey names the link behind a broken-link issue (file, line, target) so
+	// that two checkers do not report the same link twice. It is not serialised.
+	linkKey string
 }
 
 // Checker inspects a single WikiSnapshot and returns findings.
@@ -223,6 +227,8 @@ func Run(snap *model.WikiSnapshot, cfg *config.Config, check, skip []string) Res
 		allIssues = append(allIssues, issues...)
 	}
 
+	allIssues = dropDuplicateIndexLinks(allIssues)
+
 	sort.SliceStable(allIssues, func(i, j int) bool {
 		if allIssues[i].File != allIssues[j].File {
 			return allIssues[i].File < allIssues[j].File
@@ -262,4 +268,31 @@ func Run(snap *model.WikiSnapshot, cfg *config.Config, check, skip []string) Res
 		Messages: msgs,
 		Issues:   allIssues,
 	}
+}
+
+// dropDuplicateIndexLinks removes cross-page-links issues for links that
+// index-links already reported at the same file, line, and target. When
+// index-links did not run, nothing is dropped.
+func dropDuplicateIndexLinks(issues []Issue) []Issue {
+	seen := make(map[string]bool)
+	for _, iss := range issues {
+		if iss.Check == "index-links" && iss.linkKey != "" {
+			seen[iss.linkKey] = true
+		}
+	}
+	if len(seen) == 0 {
+		return issues
+	}
+	out := issues[:0]
+	for _, iss := range issues {
+		if iss.Check == "cross-page-links" && seen[iss.linkKey] {
+			continue
+		}
+		out = append(out, iss)
+	}
+	return out
+}
+
+func brokenLinkKey(file string, line int, target string) string {
+	return fmt.Sprintf("%s:%d:%s", file, line, target)
 }

@@ -8,6 +8,14 @@ description: "Append-only timeline of wiki maintenance activity."
 
 Append-only timeline of wiki maintenance activity.
 
+## [2026-11-23] fix | second audit fixes — option injection, symlink write-through, ownership, upgrade trust
+
+- Git calls now reject option-like ranges and `default_diff` values, and `init`/`sync-prompts` refuse to write through symlinks; `sync-prompts` deletes only engine-owned files. See [audit-v2-fixes](../decisions/audit-v2-fixes.md).
+- `upgrade` verifies provenance only through `gh attestation verify`, validates the release tag, and refuses downgrades. See [release.md](../operations/release.md).
+- Usage errors exit `2`, empty JSON lists encode as `[]`, and `refresh --json` emits one object. See [repo-map.md](repo-map.md) and [config.md](config.md).
+- Integration tests no longer fail on `grep -q` closing the pipe early, and they cover the security fixes.
+- The decision page also records the limits left in place.
+
 ## [2026-11-23] ingest | parity improvement plan implementation (Phases 0–9)
 
 - Implemented strict path containment (`internal/paths`) across `.wikirc`, `init`, `sync-prompts`, `summary`, graph traversal, and source resolution.

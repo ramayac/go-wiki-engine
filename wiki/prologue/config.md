@@ -11,7 +11,7 @@ All settings live in `.wikirc` at the repo root. If the file is absent, sensible
 ## Paths
 
 ### `wiki_dir`
-Single safe directory segment for the wiki, relative to repo root. Empty values, `.`, `..`, absolute paths, path separators, and repository metadata names (`.git`, `.github`, etc.) are rejected at load time.
+Single safe directory segment for the wiki, relative to repo root. Empty values, `.`, `..`, absolute paths, path separators, names that start with `-`, and repository metadata names (`.git`, `.github`, etc.) are rejected at load time.
 ```
 wiki_dir = "wiki"
 ```
@@ -52,12 +52,14 @@ context_max_bytes = 65536
 |--------:|-----------------------------|
 
 ### `default_diff`
-Git diff range used by `changed`, `candidates`, `refresh`, and `watch`.
+Git diff range used by `changed`, `candidates`, `refresh`, `watch`, and the `stale-content` check. The value must be a revision, `a..b`, or `a...b`. A value that starts with `-` is an error on load. Every revision in a range must exist, or the command fails with git's reason.
 ```
 default_diff = "main...HEAD"
 ```
 | Default | `"main...HEAD"` |
 |--------:|-----------------|
+
+If the value is `main...HEAD` and the branch `main` does not exist, the engine detects the base branch the same way `check` does (`origin/main`, `main`, `origin/master`, `master`). Any other value is used as written. Paths from `changed` and `candidates` are relative to the directory that holds `.wikirc`, even when that directory is a subdirectory of the git repository. `changed` also lists deleted files and the old path of renames. `candidates` lists only files that still exist, and lists a renamed file only by its new path.
 
 ### `log_lines`
 Number of log entries shown by `log-tail`.
@@ -85,7 +87,7 @@ duplicate_threshold = 0.7
 | Disable | Set to `0` |
 
 ### `stale_days`
-Days since a page's last git commit before it is flagged as stale by the `stale-content` lint checker (see [operations/lint.md](../operations/lint.md)). Falls back to filesystem mtime when git history is unavailable. When the repo has active source changes (`wiki-engine changed` returns files), severity upgrades from `info` to `warn`.
+Days since a page's last git commit before it is flagged as stale by the `stale-content` lint checker (see [operations/lint.md](../operations/lint.md)). Falls back to filesystem mtime outside a git repository. In a shallow clone the check is skipped and reports one `info` issue, because truncated history makes every page look fresh. When the repo has active source changes (`wiki-engine changed` returns files), severity upgrades from `info` to `warn`.
 
 ```
 stale_days = 30
@@ -144,13 +146,17 @@ watch_interval = 0
 ## Ignored Paths
 
 ### `ignore`
-Paths excluded from candidate filtering by `wiki-engine candidates` — the exclusion contract is described in [schema.md](schema.md). Three match modes:
+Paths excluded from candidate filtering by `wiki-engine candidates` — the exclusion contract is described in [schema.md](schema.md). Patterns use gitignore-like rules on the path relative to `.wikirc`:
 
 | Pattern | Matches |
 |---------|---------|
-| `"wiki/"` | Directory prefix — any path starting with `wiki/` |
-| `"*.log"` | Glob — matches file basename via `filepath.Match` |
-| `"bin/tool"` | Exact path match |
+| `"wiki/"` | Trailing `/`: the directory at the root and everything beneath it |
+| `"*.log"` or `"vendor"` | No `/`: any path segment, so any file or directory with that name at any depth |
+| `"docs/*.md"` | Contains `/`: the full path from the root, one `path.Match` glob per segment |
+| `"**/gen/"` | A `**` segment matches zero or more segments |
+| `"bin/tool"` | Exact path (and everything beneath it) |
+
+A match on a directory also ignores every path beneath it.
 
 ```
 ignore = [

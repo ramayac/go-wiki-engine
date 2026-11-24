@@ -1,10 +1,7 @@
 package upgrade
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"os/exec"
 	"strings"
 )
@@ -34,74 +31,66 @@ type VerificationReport struct {
 }
 
 // attestationVerifier verifies build provenance for a downloaded release asset
-// file on disk. Injectable so tests can exercise both verified and tampered
-// provenance paths without requiring network/GitHub CLI auth.
+// file on disk. Injectable so tests can exercise verified, unavailable, and
+// failed provenance paths without requiring network/GitHub CLI auth.
 var attestationVerifier = defaultVerifyAttestation
 
-// defaultVerifyAttestation verifies provenance when available:
-//  1. If the release endpoint serves an `<asset>.intoto.jsonl` / provenance
-//     bundle, validate its JSON structure and subject digest against computedHash.
-//  2. Otherwise, if `gh` CLI is installed and baseURL is GitHub, invoke
-//     `gh attestation verify <assetPath> --repo ramayac/go-wiki-engine`.
-//
-// Returns StatusVerified, StatusUnavailable (if neither source is present), or
-// StatusFailed with a non-nil error if verification fails.
-func defaultVerifyAttestation(baseURL, tag, assetName, assetPath, computedHash string) (VerificationStatus, string, error) {
-	// 1. Check for a release provenance bundle alongside the asset.
-	bundleURL := fmt.Sprintf("%s/releases/download/%s/%s.intoto.jsonl", baseURL, tag, assetName)
-	resp, err := upgradeHTTPClient.Get(bundleURL)
-	if err == nil {
-		defer func() { _ = resp.Body.Close() }()
-		if resp.StatusCode == http.StatusOK {
-			data, rerr := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
-			if rerr != nil {
-				return StatusFailed, "failed reading provenance bundle", rerr
-			}
-			if verr := verifyIntotoDigest(data, assetName, computedHash); verr != nil {
-				return StatusFailed, verr.Error(), verr
-			}
-			return StatusVerified, "verified in-toto provenance digest bundle", nil
-		}
+// ghAttestationVerify runs `gh attestation verify` for assetPath. found is false
+// when the gh CLI is not installed. Injectable so tests never execute gh.
+var ghAttestationVerify = func(assetPath string) (output string, found bool, err error) {
+	ghPath, lerr := exec.LookPath("gh")
+	if lerr != nil {
+		return "", false, nil
 	}
-
-	// 2. Fall back to `gh attestation verify` only against real GitHub URLs.
-	if strings.HasPrefix(baseURL, "https://github.com/") {
-		if ghPath, lerr := exec.LookPath("gh"); lerr == nil {
-			cmd := exec.Command(ghPath, "attestation", "verify", assetPath, "--repo", "ramayac/go-wiki-engine")
-			out, cerr := cmd.CombinedOutput()
-			if cerr != nil {
-				msg := strings.TrimSpace(string(out))
-				if strings.Contains(strings.ToLower(msg), "no attestations found") || strings.Contains(strings.ToLower(msg), "not logged into") {
-					return StatusUnavailable, msg, nil
-				}
-				return StatusFailed, msg, fmt.Errorf("gh attestation verify failed: %s", msg)
-			}
-			return StatusVerified, "verified via gh attestation verify", nil
-		}
-	}
-
-	return StatusUnavailable, "no provenance attestation available for this release", nil
+	out, cerr := exec.Command(ghPath, "attestation", "verify", assetPath,
+		"--repo", attestationRepo, "--signer-workflow", signerWorkflow).CombinedOutput()
+	return string(out), true, cerr
 }
 
-// verifyIntotoDigest validates an in-toto statement (or Sigstore bundle wrapping
-// a subject digest) against the expected asset name and SHA-256 digest.
-func verifyIntotoDigest(data []byte, assetName, computedHash string) error {
-	var doc struct {
-		Subject []struct {
-			Name   string            `json:"name"`
-			Digest map[string]string `json:"digest"`
-		} `json:"subject"`
+// defaultVerifyAttestation is the only source of StatusVerified: a successful
+// `gh attestation verify`, pinned to the repository and to the release workflow
+// that signs the assets. Files served by the release itself (for example an
+// `.intoto.jsonl` next to the asset) are never trusted, because whoever can
+// replace the asset can replace those files too.
+//
+// Outcomes:
+//   - gh missing, gh not logged in, "no attestations found", or a base URL that
+//     is not github.com: StatusUnavailable. The upgrade proceeds on the checksum
+//     only, unless --require-attestation is set.
+//   - Any other gh failure: StatusFailed with an error. The upgrade always stops.
+//   - gh exits 0: StatusVerified.
+func defaultVerifyAttestation(baseURL, assetPath string) (VerificationStatus, string, error) {
+	if !strings.HasPrefix(baseURL, "https://github.com/") {
+		return StatusUnavailable, "no provenance attestation available for this release", nil
 	}
-	if err := json.Unmarshal(data, &doc); err != nil {
-		return fmt.Errorf("invalid provenance JSON: %w", err)
+	out, found, err := ghAttestationVerify(assetPath)
+	if !found {
+		return StatusUnavailable, "gh CLI not found; cannot verify build provenance", nil
 	}
-	if len(doc.Subject) == 0 {
-		return fmt.Errorf("provenance statement has no subjects")
+	if err != nil {
+		msg := strings.TrimSpace(out)
+		if ghOutputMeansUnavailable(msg) {
+			return StatusUnavailable, msg, nil
+		}
+		return StatusFailed, msg, fmt.Errorf("gh attestation verify failed: %s", msg)
 	}
-	for _, s := range doc.Subject {
-		if s.Digest["sha256"] == computedHash && (s.Name == "" || s.Name == assetName) {
-			return nil
+	return StatusVerified, "verified via gh attestation verify", nil
+}
+
+// ghOutputMeansUnavailable reports whether gh output shows that no attestation
+// could be checked (no attestations published, or gh is not logged in). It
+// compares only the first lines of the trimmed output, ignoring case. Every
+// other message counts as a real verification failure.
+func ghOutputMeansUnavailable(msg string) bool {
+	lines := strings.Split(strings.TrimSpace(msg), "\n")
+	if len(lines) > 3 {
+		lines = lines[:3]
+	}
+	for _, line := range lines {
+		line = strings.ToLower(strings.TrimSpace(line))
+		if strings.Contains(line, "no attestations found") || strings.Contains(line, "not logged into") {
+			return true
 		}
 	}
-	return fmt.Errorf("provenance subject digest mismatch for %s (expected sha256 %s)", assetName, computedHash)
+	return false
 }

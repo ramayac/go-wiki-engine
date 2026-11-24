@@ -126,7 +126,7 @@ func (e *Engine) ImpactWithOptions(changedFiles []string, opts ImpactOptions) ([
 	for _, cf := range changedFiles {
 		hm := byChanged[cf]
 		var matches []ImpactMatch
-		var pages []string
+		pages := []string{}
 		for _, m := range hm {
 			matches = append(matches, m)
 			pages = append(pages, m.Page)

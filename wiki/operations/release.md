@@ -21,6 +21,13 @@ How to cut, publish, and verify a release of go-wiki-engine.
 - The runtime keeps minimal audited dependencies (Go standard library + `gopkg.in/yaml.v3`); CI runs `govulncheck` and Dependency Review.
 - All GitHub Actions in `.github/workflows/` are pinned by 40-character immutable commit SHA and release assets publish both per-platform checksums and SLSA build-provenance attestations.
 
+## What `wiki-engine upgrade` Verifies
+
+- **Integrity:** the SHA-256 of the asset must match `checksums.txt` from the same release. This does not prove authenticity, because a compromised release can replace both files.
+- **Authenticity:** only `gh attestation verify` proves it. The command pins `--repo ramayac/go-wiki-engine` and `--signer-workflow ramayac/go-wiki-engine/.github/workflows/release.yml`. `wiki-engine upgrade` trusts no provenance file served by the release.
+- **No `gh`, not logged in, or no attestation:** the upgrade proceeds on the checksum only. `--require-attestation` makes it fail. Any other `gh` failure always stops the upgrade.
+- **Tag and version:** the tag must match `vMAJOR.MINOR.PATCH[-pre]`. The upgrade refuses a tag lower than the running version. Keep the signer workflow file name and the tag format stable, or older binaries cannot verify or accept new releases.
+
 ## Pre-release Checklist
 
 1. All gates green: `make test`, `make lint`, `make audit`, `make integration`, `make golangci-lint`, `make govulncheck`, and `go test -race ./...`.
@@ -37,7 +44,7 @@ How to cut, publish, and verify a release of go-wiki-engine.
 ## Post-release Verification
 
 1. `go install github.com/ramayac/go-wiki-engine/cmd/wiki-engine@vX.Y.Z` — `wiki-engine version` must report vX.Y.Z.
-2. From an installed older binary, run `wiki-engine upgrade` (fail-closed checksum + provenance check) and confirm the replacement succeeds.
+2. From an installed older binary, run `wiki-engine upgrade --require-attestation` (needs a logged-in `gh`) and confirm the replacement succeeds. Plain `wiki-engine upgrade` checks only the SHA-256 when `gh` or the attestation is missing.
 3. Run `wiki-engine init` (or `wiki-engine sync-prompts`) in each initialized repo to reconcile prompts, symlinks, and root shims.
 
 ## Post-release Bookkeeping

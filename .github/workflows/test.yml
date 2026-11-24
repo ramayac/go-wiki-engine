@@ -53,7 +53,7 @@ jobs:
           out="$(go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./... 2>&1)" || code=$?
           echo "$out"
           if [ "${code:-0}" -ne 0 ]; then
-            if echo "$out" | grep -qE "gopkg\.in/yaml|github\.com/ramayac/go-wiki-engine"; then
+            if grep -qE "gopkg\.in/yaml|github\.com/ramayac/go-wiki-engine" <<<"$out"; then
               exit 1
             fi
           fi

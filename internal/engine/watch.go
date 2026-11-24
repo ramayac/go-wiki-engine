@@ -20,12 +20,10 @@ func (e *Engine) WatchOnce() (*WatchResult, error) {
 	}
 
 	changed := cs.NonWikiChanged(e.Cfg.WikiDir)
-	var candidates []string
-	for _, f := range changed {
-		if !e.isIgnored(f) {
-			candidates = append(candidates, f)
-		}
+	if changed == nil {
+		changed = []string{}
 	}
+	candidates := e.candidateFiles(cs)
 
 	lintRes := e.Lint()
 	return &WatchResult{

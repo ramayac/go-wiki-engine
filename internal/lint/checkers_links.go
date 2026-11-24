@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/ramayac/go-wiki-engine/internal/config"
 	"github.com/ramayac/go-wiki-engine/internal/model"
@@ -38,6 +40,7 @@ func (c *indexLinksChecker) Check(snap *model.WikiSnapshot, _ *config.Config) ([
 					File:     snap.Index.Path,
 					Line:     lk.Line,
 					Message:  fmt.Sprintf("broken index link: %s", lk.RawTarget),
+					linkKey:  brokenLinkKey(snap.Index.Path, lk.Line, lk.RawTarget),
 				})
 				continue
 			}
@@ -48,6 +51,7 @@ func (c *indexLinksChecker) Check(snap *model.WikiSnapshot, _ *config.Config) ([
 					File:     snap.Index.Path,
 					Line:     lk.Line,
 					Message:  fmt.Sprintf("broken index link: %s", lk.RawTarget),
+					linkKey:  brokenLinkKey(snap.Index.Path, lk.Line, lk.RawTarget),
 				})
 			}
 		} else {
@@ -58,6 +62,7 @@ func (c *indexLinksChecker) Check(snap *model.WikiSnapshot, _ *config.Config) ([
 					File:     snap.Index.Path,
 					Line:     lk.Line,
 					Message:  fmt.Sprintf("broken index link: %s", lk.RawTarget),
+					linkKey:  brokenLinkKey(snap.Index.Path, lk.Line, lk.RawTarget),
 				})
 				continue
 			}
@@ -68,6 +73,7 @@ func (c *indexLinksChecker) Check(snap *model.WikiSnapshot, _ *config.Config) ([
 					File:     snap.Index.Path,
 					Line:     lk.Line,
 					Message:  fmt.Sprintf("broken index link: %s", lk.RawTarget),
+					linkKey:  brokenLinkKey(snap.Index.Path, lk.Line, lk.RawTarget),
 				})
 			}
 		}
@@ -104,6 +110,7 @@ func (c *crossPageLinksChecker) Check(snap *model.WikiSnapshot, _ *config.Config
 					File:     p.Path,
 					Line:     lk.Line,
 					Message:  fmt.Sprintf("broken link: %s", lk.RawTarget),
+					linkKey:  brokenLinkKey(p.Path, lk.Line, lk.RawTarget),
 				})
 				continue
 			}
@@ -114,6 +121,7 @@ func (c *crossPageLinksChecker) Check(snap *model.WikiSnapshot, _ *config.Config
 					File:     p.Path,
 					Line:     lk.Line,
 					Message:  fmt.Sprintf("broken link: %s", lk.RawTarget),
+					linkKey:  brokenLinkKey(p.Path, lk.Line, lk.RawTarget),
 				})
 			}
 		}
@@ -130,8 +138,22 @@ var (
 	emptyLinkRe      = regexp.MustCompile(`\[([^\]]*)\]\(\s*\)`)
 	emptyTextRe      = regexp.MustCompile(`\[\s*\]\(([^)]+)\)`)
 	linkOpenRe       = regexp.MustCompile(`\[([^\]]+)\]\(([^)]*)`)
-	referenceLinkRe  = regexp.MustCompile(`\[[^\]]+\]\[[^\]]*\]`)
+	referenceLinkRe  = regexp.MustCompile(`\[([^\]]+)\]\[([^\]]*)\]`)
+	referenceDefRe   = regexp.MustCompile(`^\s{0,3}\[([^\]]+)\]:\s*\S`)
+	taskMarkerRe     = regexp.MustCompile(`^\s*[-*+] \[[ xX]\]`)
 )
+
+// referenceKey normalises a reference label the way Markdown matches them.
+func referenceKey(label string) string {
+	return strings.ToLower(strings.Join(strings.Fields(label), " "))
+}
+
+// followsIdentifier reports whether the byte at idx directly follows a letter,
+// digit, "_", ")" or "]". That shape is indexing prose such as m[i][j].
+func followsIdentifier(line string, idx int) bool {
+	r, _ := utf8.DecodeLastRuneInString(line[:idx])
+	return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' || r == ')' || r == ']'
+}
 
 func isInsideInlineCode(line string, start, end int) bool {
 	for _, loc := range inlineCodeSpanRe.FindAllStringIndex(line, -1) {
@@ -153,6 +175,15 @@ func (c *markdownFormatChecker) Check(snap *model.WikiSnapshot, _ *config.Config
 	for _, p := range snap.Pages {
 		inCodeBlock := false
 		fmEnd := p.BodyStartLine - 1
+		definedRefs := make(map[string]bool)
+		for i, line := range p.Lines {
+			if p.FMState == model.FrontMatterPresent && i+1 <= fmEnd {
+				continue
+			}
+			if m := referenceDefRe.FindStringSubmatch(line); m != nil {
+				definedRefs[referenceKey(m[1])] = true
+			}
+		}
 		for i, line := range p.Lines {
 			lineNo := i + 1
 			if p.FMState == model.FrontMatterPresent && lineNo <= fmEnd {
@@ -179,7 +210,14 @@ func (c *markdownFormatChecker) Check(snap *model.WikiSnapshot, _ *config.Config
 					Message:  fmt.Sprintf("non-standard wiki link format: %s (use [text](path) instead)", line[loc[0]:loc[1]]),
 				})
 			}
-			for _, loc := range spacedLinkRe.FindAllStringIndex(line, -1) {
+			// A GitHub task-list marker such as "- [ ] (optional)" is not a link.
+			spacedFrom := 0
+			if m := taskMarkerRe.FindString(line); m != "" {
+				spacedFrom = len(m)
+			}
+			for _, loc := range spacedLinkRe.FindAllStringIndex(line[spacedFrom:], -1) {
+				loc[0] += spacedFrom
+				loc[1] += spacedFrom
 				if isInsideInlineCode(line, loc[0], loc[1]) {
 					continue
 				}
@@ -230,8 +268,19 @@ func (c *markdownFormatChecker) Check(snap *model.WikiSnapshot, _ *config.Config
 					})
 				}
 			}
-			for _, loc := range referenceLinkRe.FindAllStringIndex(line, -1) {
+			for _, sm := range referenceLinkRe.FindAllStringSubmatchIndex(line, -1) {
+				loc := sm[:2]
 				if isInsideInlineCode(line, loc[0], loc[1]) {
+					continue
+				}
+				// An undefined [text][ref] that follows an identifier is prose
+				// such as m[i][j], not a link. A defined reference is a real
+				// reference link and stays reported.
+				label := line[sm[4]:sm[5]]
+				if label == "" {
+					label = line[sm[2]:sm[3]]
+				}
+				if !definedRefs[referenceKey(label)] && followsIdentifier(line, loc[0]) {
 					continue
 				}
 				issues = append(issues, Issue{
@@ -253,6 +302,7 @@ var (
 	htmlAnchorRe   = regexp.MustCompile(`</?[aA]\b`)
 	markdownLinkRe = regexp.MustCompile(`!?\[[^\]]*\]\([^)]+\)`)
 	bareURLRe      = regexp.MustCompile("https?://[^\\s`<>\\)]+")
+	autolinkRe     = regexp.MustCompile(`<https?://[^\s<>]+>`)
 )
 
 type bareURLChecker struct{}
@@ -281,6 +331,7 @@ func (c *bareURLChecker) Check(snap *model.WikiSnapshot, _ *config.Config) ([]Is
 			}
 			cleaned := inlineCodeSpanRe.ReplaceAllString(line, "")
 			cleaned = markdownLinkRe.ReplaceAllString(cleaned, "")
+			cleaned = autolinkRe.ReplaceAllString(cleaned, "")
 			if htmlAnchorRe.MatchString(cleaned) {
 				issues = append(issues, Issue{
 					Severity: SevError,

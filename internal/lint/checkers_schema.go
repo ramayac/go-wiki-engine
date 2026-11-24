@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/ramayac/go-wiki-engine/internal/config"
@@ -701,14 +702,32 @@ func (c *phaseConsistencyChecker) Check(snap *model.WikiSnapshot, _ *config.Conf
 			completed[p.num] = true
 		}
 	}
+	// A phase may start only after the nearest lower phase on the board is
+	// completed. Boards can start at 1 or skip numbers. A blocked phase can
+	// wait on an open predecessor, so only in-progress and completed phases count.
+	nums := make([]int, 0, len(phases))
 	for _, p := range phases {
-		if p.num > 0 && p.status != "not-started" && !completed[p.num-1] {
+		nums = append(nums, p.num)
+	}
+	sort.Ints(nums)
+	for _, p := range phases {
+		if p.status != "in-progress" && p.status != "completed" {
+			continue
+		}
+		prev := -1
+		for _, n := range nums {
+			if n >= p.num {
+				break
+			}
+			prev = n
+		}
+		if prev >= 0 && !completed[prev] {
 			issues = append(issues, Issue{
 				Severity: SevWarn,
 				Check:    c.Name(),
 				File:     snap.Phases.Path,
 				Line:     p.line,
-				Message:  fmt.Sprintf("phase %d is %s but phase %d is not completed", p.num, p.status, p.num-1),
+				Message:  fmt.Sprintf("phase %d is %s but phase %d is not completed", p.num, p.status, prev),
 			})
 		}
 	}
