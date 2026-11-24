@@ -336,3 +336,19 @@ func TestReferenceLinkDefinedStillReported(t *testing.T) {
 		t.Error("defined reference-style link no longer reported")
 	}
 }
+
+func TestMarkersIgnoreDefinedOpenMarkers(t *testing.T) {
+	root := setupLintWiki(t, map[string]string{
+		"wiki/why.md": plainPage("why", "# Why\n\n> Rationale: not recorded.\n\n> ⚠️ CONTRADICTION: the README says TODO: fix this.\n\n## Stops applying when\n\nNot known.\n"),
+	})
+	if msgs := issueMessages(runChecks(t, root, "markers")); msgs != "" {
+		t.Errorf("open markers must not be lint findings:\n%s", msgs)
+	}
+	// Placeholder markers keep their warning.
+	root = setupLintWiki(t, map[string]string{
+		"wiki/todo.md": plainPage("todo", "# Todo\n\nTODO: write this.\n"),
+	})
+	if msgs := issueMessages(runChecks(t, root, "markers")); !strings.Contains(msgs, "TODO: write this.") {
+		t.Errorf("TODO marker must stay a finding, got:\n%s", msgs)
+	}
+}

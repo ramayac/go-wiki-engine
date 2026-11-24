@@ -1,1 +1,0 @@
-../../.wiki-instructions/lint.md

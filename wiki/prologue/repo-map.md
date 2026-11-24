@@ -34,7 +34,7 @@ internal/model/         Typed page, YAML frontmatter (gopkg.in/yaml.v3), structu
 internal/git/           Unified Git change pipeline (merge-base, renames, working tree, untracked,
                         batched history, commit lookup)
 internal/engine/        Focused operations: context, search, summary, impact, check, graph, watch,
-                        diff, stats, refresh
+                        diff, stats, health, refresh
 internal/lint/          Single-read snapshot lint engine, grouped checkers, and idempotent lint --fix
 internal/scaffold/      Idempotent init/reconciliation, wiki rename, versioned root shims, sync-prompts
   files/                go:embed mirror of scaffold/
@@ -47,8 +47,8 @@ internal/audit/         Repo-wide reference, action-pin SHA, schema, prompt, and
 
 | Command | What it does |
 |---|---|
-| `init [wiki-dir] [--wiki-dir=<name>]` | Scaffold a new wiki, idempotently reconcile an existing managed wiki, or safely rename with `--wiki-dir` |
-| `sync-prompts` | Compatibility command to update `.wiki-instructions/`, `.github/`, `.claude/commands/`, and `.pi/skills/` |
+| `init [wiki-dir] [--wiki-dir=<name>]` | Scaffold a new wiki, idempotently reconcile an existing managed wiki, or safely rename with `--wiki-dir`. Also creates `<wiki_dir>/vocabulary.yaml` (never overwritten), installs the benchmark skill, and adds `.wiki-engine/` to an existing `.gitignore` |
+| `sync-prompts` | Compatibility command to update `.wiki-instructions/`, `.github/`, `.claude/commands/`, `.pi/skills/`, and `.claude/skills/wiki-benchmark/`. Deletes a retired prompt (`onboard`, `lint`, `refresh`, `watch`) when it is unchanged and moves an edited one to `<name>.bak`. Never overwrites the user-owned `questions.md` of the skill |
 | `schema [--type=<t>] [--section=<s>]` | Print the embedded v2 wiki schema, lifecycle rules, or page templates |
 | `list [--active]` | List all contained wiki files (or active pages only) |
 | `headings` | List all Markdown headings across wiki files |
@@ -58,7 +58,8 @@ internal/audit/         Repo-wide reference, action-pin SHA, schema, prompt, and
 | `candidates [diff-range] [--base=<ref>] [--no-working-tree]` | Changed files filtered by `.wikirc` ignore patterns |
 | `check [--base=<ref>] [--no-working-tree]` | Branch-aware citation and drift check (exit 0 ok/review, 1 breakage, 2 Git/setup error) |
 | `lint [--check=<a,b>] [--skip=<a,b>] [--fix]` | Single-read wiki lint with individual or grouped selectors (`schema`, `links`, `graph`, `freshness`, `security`) and idempotent `--fix` |
-| `stats` | Aggregate statistics: file count, heading count, total lines, last-updated date |
+| `stats` | Aggregate statistics: file count, heading count, total lines, last-updated date. Use `health` for maintenance signals |
+| `health` | Advisory maintenance signals, a superset of `stats`: sizes, log rotation, lifecycle counts, largest pages, aging `planned`/`wip` pages, `updated` behind git, duplicate titles, index-only pages, open markers. Exits `0` unless a runtime error occurs; `--json` carries `schema_version: "1"` |
 | `context [--minimal] [--summarize] [--active] [--sort=topo\|chrono] [--max-pages=<n>] [--max-bytes=<n>]` | Bounded wiki snapshot or active graph for agent context loading |
 | `graph [page-or-id] [--strict] [--dot] [--include-sources]` | Active wiki graph (ASCII tree, ID/path neighborhood, DOT export, opt-in source nodes, `schema_version: "2"`) |
 | `summary <page-or-id>` | First heading, first paragraph, and bounded preview of a page |
@@ -72,7 +73,7 @@ internal/audit/         Repo-wide reference, action-pin SHA, schema, prompt, and
 
 ## JSON & Exit-Code Contracts
 
-- Global JSON envelope (version `1`): `{"ok": bool, "data": ..., "error": "..."}`
+- Global JSON envelope (version `1`): `{"ok": bool, "meta": {...}, "data": ..., "error": "...", "error_code": "..."}`. The key table is `wiki-engine schema --section json`; [README.md](../../README.md#contracts--compatibility-policy) has the compatibility policy.
 - Graph JSON schema version: `2`
 - Frontmatter schema version: `2`
 - Exit codes: `0` success (including `check` review recommendations), `1` runtime or finding failure (lint, `graph --strict`, `refresh` lint, `check` breakage), `2` usage error (`check` also uses `2` for Git/setup errors). See [README.md](../../README.md#contracts--compatibility-policy).
@@ -88,6 +89,7 @@ make golangci-lint   # golangci-lint v2
 make govulncheck     # Pinned govulncheck vulnerability scan
 make sync-scaffold   # Copy scaffold/ → internal/scaffold/files/
 make integration     # End-to-end integration test suite
+make bench-test      # Python tests of the benchmark skill's headless runner
 ```
 
 Go module: `github.com/ramayac/go-wiki-engine` (Go stdlib + `gopkg.in/yaml.v3`).
@@ -99,3 +101,4 @@ Go module: `github.com/ramayac/go-wiki-engine` (Go stdlib + `gopkg.in/yaml.v3`).
 - [operations/ingest.md](../operations/ingest.md) — how architecture facts get updated.
 - [operations/release.md](../operations/release.md) — how releases are cut, attested, and verified.
 - [schema.md](schema.md) — the v2 schema contract this page satisfies.
+- [governance-parity.md](../decisions/governance-parity.md) — why the prompt set, `health`, vocabulary, benchmark skill, and JSON keys exist, with known limits and upgrade notes.

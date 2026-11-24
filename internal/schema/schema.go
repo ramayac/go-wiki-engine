@@ -245,11 +245,39 @@ var Sections = []string{
 	"types",
 	"sources",
 	"references",
+	"vocabulary",
 	"graph",
 	"templates",
+	"conventions",
 	"exit-codes",
 	"json",
 }
+
+// Conventions lists the writing rules for wiki pages. The marker lines appear
+// here, and not in a page template, so that a page does not copy one by default.
+var Conventions = []string{
+	"Rationale marker: record why, not what. When no source (the session, the commit messages, or the PR) states why something works the way it does, write `> Rationale: not recorded.` on its own line. Do not guess a reason. Do not stop to ask. When a source later states the reason, replace the marker line with it. `wiki-engine health` lists the live pages that still carry the marker.",
+	"Contradiction flag: when new information contradicts existing content, flag it on its own line with `> ⚠️ CONTRADICTION: <what conflicts and where>`. Replace the flag when the conflict is resolved. `wiki-engine health` lists the live pages that still carry a flag.",
+	"Open markers are advisory. A rationale marker or a contradiction flag is a valid state, so `wiki-engine lint` does not report it and `wiki-engine health` never fails a build. A marker in a code block or code span is an example, so `health` does not count it.",
+	"Documentation language: write wiki pages in ASD-STE100 Simplified Technical English. Use short, direct sentences. Use active voice. Put one instruction in each sentence. Use the same term for the same thing. Do not use idioms.",
+	"Data protection: never persist secrets, credentials, tokens, session IDs, personal or health identifiers, free-text personal data, or whole request or response payloads in wiki pages or in the log. Redact the value and keep only the technical fact.",
+	"Log rotation: when `wiki-engine health` reports `log_needs_rotation` (the log is 128 KiB or larger), move the oldest complete entries of `log.md` into `log-archive/<YYYY>.log` next to it, until the log is below 96 KiB. Archive files keep the entry format, are append-only, and use the `.log` extension so search, graph, and lint do not read them as pages.",
+}
+
+// jsonContractText is the body of `wiki-engine schema --section json`.
+const jsonContractText = "- `ok`: `true` when the command exits `0`; `false` for every non-zero exit.\n" +
+	"- `meta`: on every success, and on a failure that keeps `data`. Keys on every response: `schema_version` (envelope version) and `command`. Command keys are in the table below.\n" +
+	"- `data`: the command result. Its top-level type does not change (`search` is a list; `graph`, `check`, and `health` are objects). Kept on findings failures. Empty lists encode as `[]`, never `null`.\n" +
+	"- `error`, `error_code`: on failure only. `error_code` is `usage` (invalid invocation, exit 2; also `check` git and setup errors), `findings` (the command ran and found problems, exit 1: `lint`, `check` breakage, `graph --strict`, `refresh` and `watch` lint), or `runtime` (any other exit 1).\n" +
+	"- Compatibility: consumers must ignore unknown keys. New keys ship in minor releases. Removing or renaming a key, or changing its type, is a breaking change.\n\n" +
+	"| Command | `meta` keys | `data` keys (item keys for lists) |\n" +
+	"|---|---|---|\n" +
+	"| `search` (lines) | `query`, `mode` (`lines`), `total` (hits before `--limit`), `returned`, `limit` (`0` = none), `truncated`, `include_history` | per hit: `id`, `file`, `path` (= `file`), `title`, `type`, `tags`, `lifecycle`, `line`, `text` |\n" +
+	"| `search --ranked`, `relevant` | `search --ranked` sets the `search` keys with `mode` `ranked`; `relevant` sets the common keys only | per hit: `id`, `file`, `path` (= `file`), `title`, `type`, `tags`, `lifecycle`, `score`, `matched_terms`, `coverage`, `term_coverage` (= `coverage`), `section`, `start_line`, `context`, `why` |\n" +
+	"| `graph` | `root` (`index.md`, or the page file in neighborhood mode), `mode` (`full` or `neighborhood`), `include_sources` | `schema_version`, `nodes`, `edges`, `unlinked`, `stats`, `issues`; neighborhood: `node`, `backlinks`. Node keys: `id`, `kind`, `file`, `title`, `type`, `tags`, `lifecycle`, `status`, `description`, `links`, `depth`, `referrals` (inbound edge count, `0` allowed) |\n" +
+	"| `health` | common keys | `schema_version`, size and graph counts, `lifecycles`, `largest_pages`, `aging_work`, `updated_behind_git`, `duplicate_titles`, `index_only_pages`, `open_markers`, `thresholds` (`aging_days`, `drift_days`, `log_rotation_bytes`) |\n" +
+	"| `check` | `base`, `working_tree` | `base`, `merge_base`, `working_tree`, `changed_files`, `broken`, `warnings`, `pages_to_review`, `summary` (`broken`, `warnings`, `pages_to_review`, `changed_files`: integers), `exit_code` (`0` or `1`). `broken` and `warnings` entries: `page`, `kind`, `severity` (`broken` or `warning`), `message`, and `id`, `target`, `line` when known. `pages_to_review` entries: `page`, `kind` (`source_changed`), `severity` (`review`), `changed_files`, `match_reasons`, `id` |\n" +
+	"| other commands | common keys | unchanged |\n"
 
 // Get returns the canonical embedded schema document.
 func Get() Document {
@@ -293,6 +321,14 @@ sources:
 # My Concept
 
 Explain the stable system concept here.
+
+## Why
+
+Why it works this way, and which options the team rejected. Take the reason from the session, the commit messages, or the PR. If no source states the reason, write the rationale marker (run wiki-engine schema --section conventions).
+
+## Stops applying when
+
+A condition that someone can check: a version, a config value, a metric, or a process. If you do not know the condition, write "Not known."
 `,
 			},
 			{
@@ -318,6 +354,14 @@ sources:
 # My Entity
 
 Describe responsibilities, interfaces, and dependencies.
+
+## Why
+
+Why it works this way, and which options the team rejected. Take the reason from the session, the commit messages, or the PR. If no source states the reason, write the rationale marker (run wiki-engine schema --section conventions).
+
+## Stops applying when
+
+A condition that someone can check: a version, a config value, a metric, or a process. If you do not know the condition, write "Not known."
 `,
 			},
 			{
@@ -346,7 +390,15 @@ sources: []
 
 ## Root Cause
 
+Technical explanation.
+
 ## Remediation & Lessons
+
+What was done, and why this fix over the alternatives. Link to the PR.
+
+## Stops applying when
+
+A condition that someone can check: a version, a config value, a metric, or a process. If you do not know the condition, write "Not known."
 `,
 			},
 			{
@@ -375,6 +427,12 @@ sources: []
 ## Alternatives Considered
 
 ## Decision & Consequences
+
+What was chosen and why, and what this means going forward.
+
+## Stops applying when
+
+A condition that someone can check: a version, a config value, a metric, or a process. If you do not know the condition, write "Not known."
 `,
 			},
 			{
@@ -479,6 +537,7 @@ func renderSection(doc Document, section string) (string, error) {
 		fmt.Fprintf(&b, "Schema version: %s\n", doc.SchemaVersion)
 		fmt.Fprintf(&b, "Required fields: %s\n", strings.Join(doc.RequiredFields, ", "))
 		fmt.Fprintf(&b, "Optional fields: %s\n", strings.Join(doc.OptionalFields, ", "))
+		b.WriteString("Tags: free-form unless the wiki lists them in `vocabulary.yaml`. Run `wiki-engine schema --section vocabulary`.\n")
 		b.WriteString("Legacy compatibility: v1 `status: planned|current|legacy|deprecated` maps to `lifecycle` with a deprecation notice. Missing lifecycle never defaults to active.\n")
 	case "lifecycle":
 		b.WriteString("## Lifecycle\n\n")
@@ -505,6 +564,15 @@ func renderSection(doc Document, section string) (string, error) {
 		fmt.Fprintf(&b, "Structured reference types: %s\n", strings.Join(doc.ReferenceTypes, ", "))
 		fmt.Fprintf(&b, "Default issue key pattern: `%s`\n", doc.DefaultIssuePattern)
 		b.WriteString("External references must use `http://` or `https://`.\n")
+	case "vocabulary":
+		b.WriteString("## Vocabulary\n\n")
+		b.WriteString("`<wiki_dir>/vocabulary.yaml` is an optional, user-owned list of allowed page tags. `wiki-engine init` creates it with no entries and never overwrites it.\n")
+		b.WriteString("Format: YAML with any top-level keys (category names, for people only), each holding a list of tag strings. A bare list is also valid. The allowed set is the union of all listed tags.\n")
+		b.WriteString("```yaml\nconcerns:\n  - testing\n  - security\nareas:\n  - api\n```\n")
+		b.WriteString("Mode free-form: a missing, empty, or comments-only file lists no tags, and `lint` accepts any tag.\n")
+		b.WriteString("Mode controlled: once any tag is listed, the `vocabulary` check reports an error for every page tag that is not listed, on pages of every lifecycle. If a listed tag differs only by case or `-` versus `_`, the message adds a \"did you mean\" hint.\n")
+		b.WriteString("A malformed file, a non-string value, or a file that resolves outside the repository gives one error on `vocabulary.yaml`. It never falls back to free-form.\n")
+		b.WriteString("Select the check with `wiki-engine lint --check=vocabulary` or skip it with `--skip=vocabulary`. It belongs to the `schema` group.\n")
 	case "graph":
 		b.WriteString("## Graph\n\n")
 		fmt.Fprintf(&b, "Graph JSON schema version: %s\n", doc.GraphSchemaVersion)
@@ -513,15 +581,22 @@ func renderSection(doc Document, section string) (string, error) {
 	case "templates":
 		b.WriteString("## Templates\n\n")
 		b.WriteString("Run `wiki-engine schema --type <type>` to print a ready-to-use page template.\n")
+	case "conventions":
+		b.WriteString("## Conventions\n\n")
+		for _, c := range Conventions {
+			fmt.Fprintf(&b, "- %s\n", c)
+		}
 	case "exit-codes":
 		b.WriteString("## Exit Codes\n\n")
 		b.WriteString("- `0`: Success (including `check` with review recommendations only)\n")
-		b.WriteString("- `1`: Content/lint/check breakage or usage error\n")
-		b.WriteString("- `2`: Git, config, or setup error (e.g., `check` outside git or invalid base ref)\n")
+		b.WriteString("- `1`: Runtime or finding failure (lint, `graph --strict`, `refresh` lint, `check` breakage, git, config, or I/O errors)\n")
+		b.WriteString("- `2`: Usage error (unknown command or flag, bad argument or flag value); `check` also uses `2` for git and setup errors (e.g., outside git or invalid base ref)\n")
 	case "json":
 		b.WriteString("## JSON Contract\n\n")
-		fmt.Fprintf(&b, "Envelope version: %s (`{\"ok\": bool, \"data\": ..., \"error\": \"...\"}`)\n", doc.JSONEnvelopeVersion)
-		fmt.Fprintf(&b, "Graph schema version: %s\n", doc.GraphSchemaVersion)
+		fmt.Fprintf(&b, "Envelope version: %s\n", doc.JSONEnvelopeVersion)
+		b.WriteString("`{\"ok\": bool, \"meta\": {...}, \"data\": ..., \"error\": \"...\", \"error_code\": \"...\"}`\n")
+		fmt.Fprintf(&b, "Graph schema version: %s (the `schema_version` key inside graph `data`; additive node keys do not change it)\n\n", doc.GraphSchemaVersion)
+		b.WriteString(jsonContractText)
 	default:
 		return "", fmt.Errorf("unknown schema section %q (valid: %s)", section, strings.Join(Sections, ", "))
 	}

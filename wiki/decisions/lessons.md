@@ -8,7 +8,9 @@ description: "Lessons learned during design, testing, and implementation."
 
 Accumulated design insights from real usage sessions. Each entry records a gap that was discovered, the consequence, and what was built to close it.
 
-Related: [log.md](../prologue/log.md) — chronological record of every change; [todo.md](todo.md) — gaps still open; [repo-map.md](../prologue/repo-map.md) — the architecture these lessons shaped.
+Related: [log.md](../prologue/log.md) — chronological record of every change; [todo.md](todo.md) — gaps still open; [repo-map.md](../prologue/repo-map.md) — the architecture these lessons shaped
+
+> Note (2026-11-23): the prompts `wiki-onboard`, `wiki-lint`, `wiki-refresh`, and `wiki-watch` are retired. `/wiki-seed` replaces `wiki-onboard`. The entries below keep their original wording..
 
 ---
 

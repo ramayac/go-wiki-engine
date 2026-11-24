@@ -1,0 +1,40 @@
+{
+  "ok": true,
+  "meta": {
+    "command": "graph",
+    "include_sources": false,
+    "mode": "neighborhood",
+    "root": "auth.md",
+    "schema_version": "1"
+  },
+  "data": {
+    "node": {
+      "id": "auth",
+      "kind": "page",
+      "file": "auth.md",
+      "title": "Authentication",
+      "type": "concept",
+      "tags": [
+        "security",
+        "api"
+      ],
+      "lifecycle": "current",
+      "status": "current",
+      "description": "Authentication page",
+      "updated": "2026-01-01",
+      "links": [
+        "tokens.md"
+      ],
+      "sources": [
+        {
+          "file": "src/main.go"
+        }
+      ],
+      "depth": 1,
+      "referrals": 1
+    },
+    "backlinks": [
+      "index.md"
+    ]
+  }
+}

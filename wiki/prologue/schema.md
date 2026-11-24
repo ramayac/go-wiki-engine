@@ -37,6 +37,7 @@ Only [index.md](../index.md) and [README.md](../README.md) live at the wiki root
 |---|---|
 | `index.md` | Root catalog — reserved page ID `index`, graph BFS start point. |
 | `README.md` | Wiki rules and navigation. |
+| `vocabulary.yaml` | Optional list of allowed page tags. Created by `init`, never overwritten. Format: `wiki-engine schema --section vocabulary`. |
 | `prologue/` | Wiki-about-the-wiki files: `schema.md`, `repo-map.md`, `phases.md`, `log.md`, `config.md`. |
 | `operations/` | Repeatable workflow pages (`ingest.md`, `query.md`, `lint.md`). |
 | `decisions/`, `entities/`, `incidents/`, `architectures/`, … | Topic pages grouped by domain. |
@@ -67,7 +68,7 @@ description: "One-line summary of this page's purpose"
 superseded_by: ""               # Required when lifecycle is superseded
 created: "2026-01-15"
 updated: "2026-11-23"
-tags: [service]
+tags: [service]                 # Must be listed in vocabulary.yaml once that file lists any tag
 related: [architecture]         # Page IDs
 depends_on: [storage]           # Entity page IDs only
 sources:
@@ -95,6 +96,8 @@ v1 frontmatter (`status: planned|current|legacy|deprecated` and inline `referenc
 | `decision` | Choice, alternatives, and consequences | Requires `status` (`proposed` \| `accepted` \| `superseded`) |
 | `runbook` | Procedure with verification | Should cite source files or directories in `sources` |
 
+Page templates (`wiki-engine schema --type <type>`) ask `concept` and `entity` pages for a `## Why` section (the reason and the rejected options). They ask `concept`, `entity`, `incident`, and `decision` pages for a `## Stops applying when` section (a condition that someone can check, or "Not known."). A `decision` records its reason in its decision section, and an `incident` in its root cause. A `runbook` has neither section.
+
 ## Authority Lifecycle
 
 Page authority (`lifecycle`) is separate from decision/incident workflow (`status`):
@@ -108,6 +111,17 @@ Page authority (`lifecycle`) is separate from decision/incident workflow (`statu
 | `legacy` | Historical context | No (`--include-history`) | No | No | Yes |
 | `superseded` | Replaced by another page (`superseded_by` required) | No (`--include-history`) | No | No | Yes |
 
+## Conventions
+
+- **Rationale marker.** Record why, not what. When no source (the session, the commit messages, or the PR) states why something works the way it does, write `> Rationale: not recorded.` on its own line. Do not guess a reason. Do not stop to ask. When a source later states the reason, replace the marker line with it.
+- **Contradiction flag.** When new information contradicts existing content, flag it on its own line with `> ⚠️ CONTRADICTION: <what conflicts and where>`. Replace the flag when the conflict is resolved.
+- **Open markers are advisory.** `wiki-engine lint` does not report a rationale marker or a contradiction flag. `wiki-engine health` lists the live pages (`current`, `implemented`, `wip`, `planned`) that carry one, and never fails a build. A marker in a code block or code span is an example, so `health` does not count it. The markers appear here, and not in a page template, so that a page does not copy one by default.
+- **Documentation language.** Write wiki pages in ASD-STE100 Simplified Technical English. Use short, direct sentences. Use active voice. Put one instruction in each sentence. Use the same term for the same thing. Do not use idioms.
+- **Data protection.** Never persist secrets, credentials, tokens, session IDs, personal or health identifiers, free-text personal data, or whole request or response payloads in wiki pages or in the log. Redact the value and keep only the technical fact.
+- **Log rotation.** When `wiki-engine health` reports `log_needs_rotation` (the log is 128 KiB or larger), move the oldest complete entries of `log.md` into `log-archive/<YYYY>.log` next to it, until the log is below 96 KiB. Archive files keep the entry format, are append-only, and use the `.log` extension so search, graph, and lint do not read them as pages.
+
+`wiki-engine schema --section conventions` prints the same rules.
+
 ## Cross-Linking & Graph Rules
 
 - Every active page links to related pages via relative Markdown links, `related`, or `depends_on`.
@@ -117,7 +131,7 @@ Page authority (`lifecycle`) is separate from decision/incident workflow (`statu
 
 ## Exit Codes & JSON Contract
 
-- Global JSON envelope (version `1`): `{"ok": bool, "data": ..., "error": "..."}`
+- Global JSON envelope (version `1`): `{"ok": bool, "meta": {...}, "data": ..., "error": "...", "error_code": "usage|findings|runtime"}`. `meta` carries `schema_version`, `command`, and command keys. Consumers must ignore unknown keys. The per-command key table is `wiki-engine schema --section json`; tests pin it in `cmd/wiki-engine/testdata/golden/`.
 - Exit `0`: Success (including `wiki-engine check` with review recommendations only)
 - Exit `1`: Runtime or finding failure (lint, `graph --strict`, `refresh` lint, `check` breakage, git/config/I/O errors)
 - Exit `2`: Usage error (unknown command or flag, bad argument or flag value); `wiki-engine check` also uses `2` for git or setup errors (outside git, invalid base ref)

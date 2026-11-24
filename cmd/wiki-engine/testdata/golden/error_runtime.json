@@ -1,0 +1,5 @@
+{
+  "ok": false,
+  "error": "wiki directory not found: wiki (stat <ROOT>/wiki: no such file or directory)",
+  "error_code": "runtime"
+}

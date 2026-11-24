@@ -36,7 +36,10 @@ func TestInit(t *testing.T) {
 	prompts := []string{
 		".github/prompts/wiki-ingest.prompt.md",
 		".github/prompts/wiki-query.prompt.md",
-		".github/prompts/wiki-refresh.prompt.md",
+		".github/prompts/wiki-upgrade.prompt.md",
+		".github/prompts/wiki-seed.prompt.md",
+		".github/prompts/wiki-plan.prompt.md",
+		".github/prompts/wiki-save.prompt.md",
 		".github/instructions/wiki-maintainer.instructions.md",
 	}
 	for _, f := range prompts {
@@ -51,6 +54,192 @@ func TestInit(t *testing.T) {
 	}
 
 	assertPromptSymlinks(t, dest)
+}
+
+// newWorkflows are the prompts that the governance-parity work added.
+var newWorkflows = []string{"seed", "plan", "save"}
+
+func TestInitCreatesNewWorkflowsInAllToolLayers(t *testing.T) {
+	dest := t.TempDir()
+	if err := Init(dest, "wiki"); err != nil {
+		t.Fatalf("Init failed: %v", err)
+	}
+	for _, w := range newWorkflows {
+		canonical := filepath.Join(dest, ".wiki-instructions", w+".md")
+		data, err := os.ReadFile(canonical)
+		if err != nil {
+			t.Fatalf("missing canonical prompt %s: %v", w, err)
+		}
+		if !strings.Contains(string(data), `name: "Wiki `) || !strings.Contains(string(data), `agent: "agent"`) {
+			t.Errorf("%s.md lacks the shared front matter", w)
+		}
+		for _, link := range []string{
+			".claude/commands/wiki-" + w + ".md",
+			".github/prompts/wiki-" + w + ".prompt.md",
+		} {
+			p := filepath.Join(dest, link)
+			got, err := os.ReadFile(p)
+			if err != nil {
+				t.Errorf("missing %s: %v", link, err)
+				continue
+			}
+			if string(got) != string(data) {
+				t.Errorf("%s does not match .wiki-instructions/%s.md", link, w)
+			}
+			if runtime.GOOS != "windows" {
+				if fi, err := os.Lstat(p); err != nil || fi.Mode()&os.ModeSymlink == 0 {
+					t.Errorf("%s should be a symlink", link)
+				}
+			}
+		}
+	}
+	skill, err := os.ReadFile(filepath.Join(dest, ".pi", "skills", "wiki", "SKILL.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"/wiki-seed", "/wiki-save", "/wiki-plan", "health", "vocabulary.yaml"} {
+		if !strings.Contains(string(skill), want) {
+			t.Errorf("pi skill does not mention %q", want)
+		}
+	}
+}
+
+func TestSyncPromptsNewWorkflowsIdempotent(t *testing.T) {
+	dest := t.TempDir()
+	if _, _, err := SyncPrompts(dest); err != nil {
+		t.Fatal(err)
+	}
+	snapshot := func() map[string]string {
+		out := map[string]string{}
+		_ = filepath.Walk(dest, func(p string, info os.FileInfo, err error) error {
+			if err != nil || info.IsDir() {
+				return err
+			}
+			data, rerr := os.ReadFile(p)
+			if rerr != nil {
+				return rerr
+			}
+			rel, _ := filepath.Rel(dest, p)
+			out[rel] = string(data)
+			return nil
+		})
+		return out
+	}
+	first := snapshot()
+	for _, w := range newWorkflows {
+		if _, ok := first[filepath.Join(".claude", "commands", "wiki-"+w+".md")]; !ok {
+			t.Fatalf("sync-prompts did not create the %s command", w)
+		}
+	}
+	if _, removed, err := SyncPrompts(dest); err != nil || len(removed) != 0 {
+		t.Fatalf("second SyncPrompts: err=%v removed=%v", err, removed)
+	}
+	second := snapshot()
+	if len(first) != len(second) {
+		t.Fatalf("file count changed on second sync: %d vs %d", len(first), len(second))
+	}
+	for k, v := range first {
+		if second[k] != v {
+			t.Errorf("%s changed on second sync", k)
+		}
+	}
+	if len(second) > 0 {
+		if _, err := os.Lstat(filepath.Join(dest, ".gitignore")); !os.IsNotExist(err) {
+			t.Error("sync-prompts must not create .gitignore")
+		}
+	}
+}
+
+func TestInitAddsHandoffDirToWikircIgnore(t *testing.T) {
+	dest := t.TempDir()
+	if err := Init(dest, "wiki"); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(dest, ".wikirc"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `".wiki-engine/"`) {
+		t.Errorf("scaffold .wikirc ignore list lacks .wiki-engine/:\n%s", data)
+	}
+}
+
+func TestInitGitignoreHandoffEntry(t *testing.T) {
+	gitignore := func(dest string) string {
+		data, err := os.ReadFile(filepath.Join(dest, ".gitignore"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(data)
+	}
+
+	t.Run("never creates a gitignore", func(t *testing.T) {
+		dest := t.TempDir()
+		if err := Init(dest, "wiki"); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := os.Lstat(filepath.Join(dest, ".gitignore")); !os.IsNotExist(err) {
+			t.Errorf(".gitignore should not exist, stat err = %v", err)
+		}
+	})
+
+	t.Run("appends once and keeps user lines", func(t *testing.T) {
+		dest := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dest, ".gitignore"), []byte("bin/\n*.log"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := Init(dest, "wiki"); err != nil {
+			t.Fatal(err)
+		}
+		if err := Init(dest, "wiki"); err != nil {
+			t.Fatal(err)
+		}
+		if got := gitignore(dest); got != "bin/\n*.log\n.wiki-engine/\n" {
+			t.Errorf(".gitignore = %q", got)
+		}
+	})
+
+	t.Run("respects an existing entry", func(t *testing.T) {
+		for _, entry := range []string{".wiki-engine", ".wiki-engine/", "/.wiki-engine/"} {
+			dest := t.TempDir()
+			want := "bin/\n" + entry + "\n"
+			if err := os.WriteFile(filepath.Join(dest, ".gitignore"), []byte(want), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			res, err := Reconcile(dest, ReconcileOptions{WikiDir: "wiki"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := gitignore(dest); got != want {
+				t.Errorf("entry %q: .gitignore changed to %q", entry, got)
+			}
+			for _, u := range res.Updated {
+				if u == ".gitignore" {
+					t.Errorf("entry %q: .gitignore reported as updated", entry)
+				}
+			}
+		}
+	})
+
+	t.Run("refuses a symlink that leaves the repo", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("symlinks need privileges on windows")
+		}
+		dest, outside := t.TempDir(), t.TempDir()
+		target := filepath.Join(outside, "ignore")
+		if err := os.WriteFile(target, []byte("x\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(target, filepath.Join(dest, ".gitignore")); err != nil {
+			t.Fatal(err)
+		}
+		if err := Init(dest, "wiki"); err == nil {
+			t.Error("Init should refuse to write through a .gitignore symlink that leaves the repo")
+		}
+		if data, _ := os.ReadFile(target); string(data) != "x\n" {
+			t.Errorf("outside file was modified: %q", data)
+		}
+	})
 }
 
 func TestInitReconcilesIdempotently(t *testing.T) {
@@ -298,8 +487,8 @@ func assertPromptSymlinks(t *testing.T, dest string) {
 	}
 	for _, f := range []string{
 		".github/prompts/wiki-ingest.prompt.md",
-		".github/prompts/wiki-watch.prompt.md",
-		".claude/commands/wiki-watch.md",
+		".github/prompts/wiki-query.prompt.md",
+		".claude/commands/wiki-upgrade.md",
 		".github/instructions/wiki-maintainer.instructions.md",
 	} {
 		p := filepath.Join(dest, f)
@@ -311,5 +500,89 @@ func assertPromptSymlinks(t *testing.T, dest string) {
 		if fi.Mode()&os.ModeSymlink == 0 {
 			t.Errorf("%s should be a symlink, got mode %s", f, fi.Mode())
 		}
+	}
+}
+
+func TestInitCreatesVocabularyAndPreservesEdits(t *testing.T) {
+	dest := t.TempDir()
+	if err := Init(dest, "wiki"); err != nil {
+		t.Fatalf("Init failed: %v", err)
+	}
+	path := filepath.Join(dest, "wiki", "vocabulary.yaml")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("init must create vocabulary.yaml: %v", err)
+	}
+	if !strings.Contains(string(data), "free-form") || !strings.Contains(string(data), "wiki-engine lint") {
+		t.Errorf("scaffold header missing the free-form explanation:\n%s", data)
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if trimmed := strings.TrimSpace(line); trimmed != "" && !strings.HasPrefix(trimmed, "#") {
+			t.Errorf("scaffold vocabulary.yaml must hold only comments, got %q", line)
+		}
+	}
+
+	edited := "concerns:\n  - testing\n"
+	if err := os.WriteFile(path, []byte(edited), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	res, err := Reconcile(dest, ReconcileOptions{})
+	if err != nil {
+		t.Fatalf("Reconcile failed: %v", err)
+	}
+	got, _ := os.ReadFile(path)
+	if string(got) != edited {
+		t.Errorf("re-running init overwrote the user vocabulary:\n%s", got)
+	}
+	preserved := false
+	for _, p := range res.Preserved {
+		preserved = preserved || p == "wiki/vocabulary.yaml"
+	}
+	if !preserved {
+		t.Errorf("vocabulary.yaml not reported as preserved: %v", res.Preserved)
+	}
+}
+
+func TestInitCreatesVocabularyInCustomDirAndRenameCarriesIt(t *testing.T) {
+	dest := t.TempDir()
+	if err := Init(dest, "docs"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dest, "docs", "vocabulary.yaml")); err != nil {
+		t.Fatalf("vocabulary.yaml missing in custom wiki dir: %v", err)
+	}
+	edited := "areas:\n  - api\n"
+	if err := os.WriteFile(filepath.Join(dest, "docs", "vocabulary.yaml"), []byte(edited), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Reconcile(dest, ReconcileOptions{RenameTo: "knowledge"}); err != nil {
+		t.Fatalf("rename failed: %v", err)
+	}
+	got, err := os.ReadFile(filepath.Join(dest, "knowledge", "vocabulary.yaml"))
+	if err != nil || string(got) != edited {
+		t.Errorf("rename must carry the vocabulary unchanged: %q, %v", got, err)
+	}
+	if _, err := os.Stat(filepath.Join(dest, "docs")); !os.IsNotExist(err) {
+		t.Error("old directory still exists after rename")
+	}
+}
+
+func TestInitRefusesVocabularySymlinkOutsideRepo(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlinks need privileges on Windows")
+	}
+	dest := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dest, "wiki"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	outside := filepath.Join(t.TempDir(), "outside.yaml") // does not exist: dangling link
+	if err := os.Symlink(outside, filepath.Join(dest, "wiki", "vocabulary.yaml")); err != nil {
+		t.Fatal(err)
+	}
+	if err := Init(dest, "wiki"); err == nil {
+		t.Fatal("init must refuse a vocabulary.yaml symlink that leaves the repo")
+	}
+	if _, err := os.Lstat(outside); !os.IsNotExist(err) {
+		t.Error("init wrote through the symlink")
 	}
 }
