@@ -25,18 +25,14 @@ func (c *markersChecker) Category() Category { return CategorySnapshot }
 func (c *markersChecker) Check(snap *model.WikiSnapshot, _ *config.Config) ([]Issue, error) {
 	var issues []Issue
 	for _, p := range snap.Pages {
-		inCodeBlock := false
+		var fence model.FenceTracker
 		fmEnd := p.BodyStartLine - 1
 		for i, line := range p.Lines {
 			lineNo := i + 1
 			if p.FMState == model.FrontMatterPresent && lineNo <= fmEnd {
 				continue
 			}
-			if strings.HasPrefix(strings.TrimSpace(line), "```") {
-				inCodeBlock = !inCodeBlock
-				continue
-			}
-			if inCodeBlock {
+			if fence.Skip(line) || fence.InFence() {
 				continue
 			}
 			// An open CONTRADICTION flag or rationale marker is a defined
@@ -112,20 +108,17 @@ func (c *duplicateContentChecker) Check(snap *model.WikiSnapshot, cfg *config.Co
 		a, b string
 	}
 	var dups []duplicate
-	for i := 0; i < len(pages); i++ {
-		for j := i + 1; j < len(pages); j++ {
-			inter := shared[pair{i, j}]
-			if inter == 0 {
-				continue
-			}
-			union := len(pages[i].words) + len(pages[j].words) - inter
-			if union == 0 {
-				continue
-			}
-			sim := float64(inter) / float64(union)
-			if sim >= threshold {
-				dups = append(dups, duplicate{sim: sim, a: pages[i].file, b: pages[j].file})
-			}
+	for pr, inter := range shared {
+		if inter == 0 {
+			continue
+		}
+		union := len(pages[pr.i].words) + len(pages[pr.j].words) - inter
+		if union == 0 {
+			continue
+		}
+		sim := float64(inter) / float64(union)
+		if sim >= threshold {
+			dups = append(dups, duplicate{sim: sim, a: pages[pr.i].file, b: pages[pr.j].file})
 		}
 	}
 
@@ -165,7 +158,7 @@ func (c *duplicateContentChecker) Check(snap *model.WikiSnapshot, cfg *config.Co
 // fenced code blocks, and HTML template comments (Phase 9).
 func extractBodyWordSet(p *model.Page) map[string]struct{} {
 	words := make(map[string]struct{})
-	inCodeBlock := false
+	var fence model.FenceTracker
 	inComment := false
 	fmEnd := p.BodyStartLine - 1
 
@@ -174,14 +167,10 @@ func extractBodyWordSet(p *model.Page) map[string]struct{} {
 		if p.FMState == model.FrontMatterPresent && lineNo <= fmEnd {
 			continue
 		}
+		if fence.Skip(line) || fence.InFence() {
+			continue
+		}
 		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "```") {
-			inCodeBlock = !inCodeBlock
-			continue
-		}
-		if inCodeBlock {
-			continue
-		}
 		if strings.Contains(trimmed, "<!--") {
 			inComment = true
 		}
