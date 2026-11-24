@@ -92,8 +92,10 @@ var (
 	timeRe = regexp.MustCompile(`\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[0-9:.+Z-]*`)
 )
 
-// normalize replaces temp paths, commit hashes, and timestamps.
+// normalize replaces temp paths, commit hashes, timestamps, and OS-specific
+// stat error phrasing so golden comparisons are portable across OSes.
 func normalize(root, out string) string {
+	out = strings.ReplaceAll(out, "\r\n", "\n")
 	roots := []string{root}
 	if real, err := filepath.EvalSymlinks(root); err == nil && real != root {
 		roots = append(roots, real)
@@ -101,7 +103,15 @@ func normalize(root, out string) string {
 	// Longest first: the real path ("/private/var/...") contains the short one.
 	for i := len(roots) - 1; i >= 0; i-- {
 		out = strings.ReplaceAll(out, roots[i], "<ROOT>")
+		if escaped := strings.ReplaceAll(roots[i], `\`, `\\`); escaped != roots[i] {
+			out = strings.ReplaceAll(out, escaped, "<ROOT>")
+		}
+		if slashed := filepath.ToSlash(roots[i]); slashed != roots[i] {
+			out = strings.ReplaceAll(out, slashed, "<ROOT>")
+		}
 	}
+	// Windows os.Stat produces CreateFile ...\\wiki: The system cannot find the file specified.
+	out = strings.ReplaceAll(out, `CreateFile <ROOT>\\wiki: The system cannot find the file specified.`, `stat <ROOT>/wiki: no such file or directory`)
 	out = shaRe.ReplaceAllString(out, "<SHA>")
 	return timeRe.ReplaceAllString(out, "<TIME>")
 }
@@ -123,8 +133,10 @@ func checkGolden(t *testing.T, name, got string) {
 	if err != nil {
 		t.Fatalf("missing golden file %s (run with -update): %v", path, err)
 	}
-	if string(want) != got {
-		t.Errorf("%s differs from golden %s (run with -update after review)\n--- got ---\n%s\n--- want ---\n%s", name, path, got, want)
+	wantNorm := strings.ReplaceAll(string(want), "\r\n", "\n")
+	gotNorm := strings.ReplaceAll(got, "\r\n", "\n")
+	if wantNorm != gotNorm {
+		t.Errorf("%s differs from golden %s (run with -update after review)\n--- got ---\n%s\n--- want ---\n%s", name, path, gotNorm, wantNorm)
 	}
 }
 
